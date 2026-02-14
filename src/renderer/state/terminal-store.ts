@@ -1,0 +1,966 @@
+import { create } from 'zustand';
+import { v4 as uuidv4 } from 'uuid';
+import type {
+  TerminalId,
+  LayoutNode,
+  LayoutSplitNode,
+  LayoutLeafNode,
+  LayoutState,
+  FloatingPanelState,
+  TerminalInstance,
+  AppConfig,
+  SplitDirection,
+} from './types';
+
+// ── Pure tree helper functions ───────────────────────────────────────
+
+/**
+ * Remove a leaf from the tree. If the leaf is inside a split, promote its
+ * sibling to replace the split node. Returns null if the tree becomes empty.
+ */
+export function removeLeaf(
+  root: LayoutNode,
+  terminalId: TerminalId,
+): LayoutNode | null {
+  if (root.kind === 'leaf') {
+    return root.terminalId === terminalId ? null : root;
+  }
+
+  const firstResult = removeLeaf(root.first, terminalId);
+  const secondResult = removeLeaf(root.second, terminalId);
+
+  // The leaf was not found in either subtree — return unchanged
+  if (firstResult === root.first && secondResult === root.second) {
+    return root;
+  }
+
+  // Leaf was in the first subtree
+  if (firstResult === null) return secondResult;
+  // Leaf was in the second subtree
+  if (secondResult === null) return firstResult;
+
+  // Leaf was removed deeper, but both children still exist
+  return { ...root, first: firstResult, second: secondResult };
+}
+
+/**
+ * Insert a new leaf beside the target leaf. Creates a split node wrapping the
+ * existing target and the new terminal.
+ */
+export function insertLeaf(
+  root: LayoutNode,
+  targetId: TerminalId,
+  newId: TerminalId,
+  side: 'left' | 'right' | 'top' | 'bottom',
+): LayoutNode {
+  if (root.kind === 'leaf') {
+    if (root.terminalId !== targetId) return root;
+
+    const direction: SplitDirection =
+      side === 'left' || side === 'right' ? 'horizontal' : 'vertical';
+    const newLeaf: LayoutLeafNode = { kind: 'leaf', terminalId: newId };
+    const isNewFirst = side === 'left' || side === 'top';
+
+    const splitNode: LayoutSplitNode = {
+      kind: 'split',
+      id: uuidv4(),
+      direction,
+      splitRatio: 0.5,
+      first: isNewFirst ? newLeaf : root,
+      second: isNewFirst ? root : newLeaf,
+    };
+    return splitNode;
+  }
+
+  const newFirst = insertLeaf(root.first, targetId, newId, side);
+  const newSecond = insertLeaf(root.second, targetId, newId, side);
+
+  if (newFirst === root.first && newSecond === root.second) return root;
+  return { ...root, first: newFirst, second: newSecond };
+}
+
+/**
+ * In-order traversal of the layout tree returning terminal IDs from left to
+ * right (first to second).
+ */
+export function getLeafOrder(root: LayoutNode): TerminalId[] {
+  if (root.kind === 'leaf') return [root.terminalId];
+  return [...getLeafOrder(root.first), ...getLeafOrder(root.second)];
+}
+
+/**
+ * Find the path from the root to a specific leaf node. Returns an array of
+ * 'first'|'second' steps, or null if not found.
+ */
+export function findLeafPath(
+  root: LayoutNode,
+  terminalId: TerminalId,
+): ('first' | 'second')[] | null {
+  if (root.kind === 'leaf') {
+    return root.terminalId === terminalId ? [] : null;
+  }
+
+  const firstPath = findLeafPath(root.first, terminalId);
+  if (firstPath !== null) return ['first', ...firstPath];
+
+  const secondPath = findLeafPath(root.second, terminalId);
+  if (secondPath !== null) return ['second', ...secondPath];
+
+  return null;
+}
+
+/**
+ * Immutably update the splitRatio of a split node identified by its id.
+ * Returns the tree unchanged if the node is not found.
+ */
+export function updateSplitRatio(
+  root: LayoutNode,
+  splitNodeId: string,
+  ratio: number,
+): LayoutNode {
+  if (root.kind === 'leaf') return root;
+
+  if (root.id === splitNodeId) {
+    return { ...root, splitRatio: Math.max(0.1, Math.min(0.9, ratio)) };
+  }
+
+  const newFirst = updateSplitRatio(root.first, splitNodeId, ratio);
+  const newSecond = updateSplitRatio(root.second, splitNodeId, ratio);
+
+  if (newFirst === root.first && newSecond === root.second) return root;
+  return { ...root, first: newFirst, second: newSecond };
+}
+
+/**
+ * Swap the terminal IDs of two leaf nodes in the tree.
+ */
+function swapLeaves(
+  root: LayoutNode,
+  idA: TerminalId,
+  idB: TerminalId,
+): LayoutNode {
+  if (root.kind === 'leaf') {
+    if (root.terminalId === idA) return { ...root, terminalId: idB };
+    if (root.terminalId === idB) return { ...root, terminalId: idA };
+    return root;
+  }
+
+  const newFirst = swapLeaves(root.first, idA, idB);
+  const newSecond = swapLeaves(root.second, idA, idB);
+
+  if (newFirst === root.first && newSecond === root.second) return root;
+  return { ...root, first: newFirst, second: newSecond };
+}
+
+/**
+ * Walk the tree to find a directional neighbor of the given terminal.
+ * Uses the path-based approach: walk up until we can step in the desired
+ * direction, then walk down to the nearest leaf on the opposite edge.
+ */
+function findDirectionalNeighbor(
+  root: LayoutNode,
+  terminalId: TerminalId,
+  direction: 'left' | 'right' | 'up' | 'down',
+): TerminalId | null {
+  const path = findLeafPath(root, terminalId);
+  if (path === null) return null;
+
+  // Determine which split axis and which step direction we need
+  const axis: SplitDirection =
+    direction === 'left' || direction === 'right' ? 'horizontal' : 'vertical';
+  const fromSide: 'first' | 'second' =
+    direction === 'right' || direction === 'down' ? 'first' : 'second';
+  const toSide: 'first' | 'second' =
+    fromSide === 'first' ? 'second' : 'first';
+
+  // Walk back up the path to find a split node where we can cross
+  let node: LayoutNode = root;
+  const nodes: LayoutSplitNode[] = [];
+
+  // Collect all split nodes along the path
+  for (const step of path) {
+    if (node.kind === 'split') {
+      nodes.push(node);
+      node = node[step];
+    }
+  }
+
+  // Walk backwards through the path to find a crossable split
+  for (let i = path.length - 1; i >= 0; i--) {
+    const splitNode = nodes[i];
+    if (splitNode.direction === axis && path[i] === fromSide) {
+      // We can cross into the toSide subtree
+      let target: LayoutNode = splitNode[toSide];
+      // Walk down to the nearest leaf on the edge closest to us
+      while (target.kind === 'split') {
+        if (target.direction === axis) {
+          target = target[fromSide];
+        } else {
+          // Perpendicular split — pick first by convention
+          target = target.first;
+        }
+      }
+      return target.terminalId;
+    }
+  }
+
+  return null;
+}
+
+// ── Store interface ──────────────────────────────────────────────────
+
+interface TerminalStore {
+  // State
+  terminals: Map<TerminalId, TerminalInstance>;
+  layout: LayoutState;
+  focusedTerminalId: TerminalId | null;
+  config: AppConfig | null;
+  isDragging: boolean;
+  draggedTerminalId: TerminalId | null;
+  nextZIndex: number;
+  showSwitcher: boolean;
+  showShortcuts: boolean;
+  showCommandPalette: boolean;
+  showSettings: boolean;
+  tabBarPosition: 'top' | 'left';
+  renamingTerminalId: TerminalId | null;
+  fontSize: number;
+
+  // Actions
+  loadConfig: () => Promise<void>;
+  createTerminal: (shellProfileId?: string) => Promise<void>;
+  closeTerminal: (id: TerminalId) => Promise<void>;
+  setFocus: (id: TerminalId) => void;
+  splitTerminal: (
+    targetId: TerminalId,
+    direction: SplitDirection,
+    newTerminalId?: TerminalId,
+  ) => Promise<void>;
+  setSplitRatio: (splitNodeId: string, ratio: number) => void;
+  swapTerminals: (idA: TerminalId, idB: TerminalId) => void;
+  moveToFloat: (id: TerminalId) => void;
+  moveToTiling: (id: TerminalId, targetId?: TerminalId, side?: 'left' | 'right' | 'top' | 'bottom') => void;
+  updateFloatingPanel: (id: TerminalId, partial: Partial<FloatingPanelState>) => void;
+  focusNext: () => void;
+  focusPrev: () => void;
+  focusDirection: (dir: 'left' | 'right' | 'up' | 'down') => void;
+  renameTerminal: (id: TerminalId, title: string) => void;
+  setDragging: (isDragging: boolean, terminalId?: TerminalId) => void;
+  toggleSwitcher: () => void;
+  toggleShortcuts: () => void;
+  toggleCommandPalette: () => void;
+  toggleSettings: () => void;
+  updateConfig: (update: Partial<AppConfig>) => Promise<void>;
+  toggleTabBarPosition: () => void;
+  startRenaming: (id: TerminalId | null) => void;
+  equalizeLayout: () => void;
+  moveTerminalDirection: (id: TerminalId, dir: 'up' | 'down' | 'left' | 'right') => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  zoomReset: () => void;
+  saveNamedLayout: (name: string) => Promise<void>;
+  loadNamedLayout: (name: string) => Promise<boolean>;
+  getLayoutNames: () => Promise<{ name: string; count: number }[]>;
+  saveSession: () => Promise<void>;
+  restoreSession: () => Promise<boolean>;
+}
+
+// ── Store implementation ─────────────────────────────────────────────
+
+export const useTerminalStore = create<TerminalStore>((set, get) => ({
+  // ── Initial state ────────────────────────────────────────────────
+  terminals: new Map(),
+  layout: { tilingRoot: null, floatingPanels: [] },
+  focusedTerminalId: null,
+  config: null,
+  isDragging: false,
+  draggedTerminalId: null,
+  nextZIndex: 100,
+  showSwitcher: false,
+  showShortcuts: false,
+  showCommandPalette: false,
+  showSettings: false,
+  tabBarPosition: 'top' as 'top' | 'left',
+  renamingTerminalId: null,
+  fontSize: 14,
+
+  // ── Actions ──────────────────────────────────────────────────────
+
+  loadConfig: async () => {
+    const config = (await window.terminalAPI.getConfig()) as unknown as AppConfig;
+    set({ config });
+  },
+
+  createTerminal: async (shellProfileId?: string) => {
+    const { config, terminals, layout, nextZIndex } = get();
+    if (!config) return;
+
+    const profileId = shellProfileId ?? config.defaultShellId;
+    const profile = config.shells.find((s) => s.id === profileId);
+    if (!profile) return;
+
+    const id = uuidv4();
+    const cwd = profile.cwd || (config as any).defaultCwd || 'C:\\Users';
+    const { pid } = await window.terminalAPI.createPty({
+      id,
+      shellPath: profile.path,
+      args: profile.args,
+      cwd,
+      env: profile.env,
+      cols: 80,
+      rows: 24,
+    });
+
+    const instance: TerminalInstance = {
+      id,
+      title: profile.name,
+      shellProfileId: profileId,
+      cwd,
+      customTitle: false,
+      mode: 'tiled',
+      pid,
+      lastProcess: '',
+      startupCommand: '',
+    };
+
+    const newTerminals = new Map(terminals);
+    newTerminals.set(id, instance);
+
+    const newLeaf: LayoutLeafNode = { kind: 'leaf', terminalId: id };
+    let newRoot: LayoutNode;
+
+    if (layout.tilingRoot === null) {
+      newRoot = newLeaf;
+    } else {
+      // Insert next to the currently focused terminal, or as a right split
+      const leafOrder = getLeafOrder(layout.tilingRoot);
+      const lastId = leafOrder[leafOrder.length - 1];
+      newRoot = insertLeaf(layout.tilingRoot, lastId, id, 'right');
+    }
+
+    set({
+      terminals: newTerminals,
+      layout: { ...layout, tilingRoot: newRoot },
+      focusedTerminalId: id,
+      nextZIndex,
+    });
+  },
+
+  closeTerminal: async (id: TerminalId) => {
+    const { terminals, layout, focusedTerminalId } = get();
+    const instance = terminals.get(id);
+    if (!instance) return;
+
+    await window.terminalAPI.killPty(id);
+
+    const newTerminals = new Map(terminals);
+    newTerminals.delete(id);
+
+    let newRoot = layout.tilingRoot;
+    let newFloating = layout.floatingPanels;
+
+    if (instance.mode === 'tiled' && newRoot) {
+      newRoot = removeLeaf(newRoot, id);
+    } else if (instance.mode === 'floating') {
+      newFloating = newFloating.filter((p) => p.terminalId !== id);
+    }
+
+    // Determine new focus
+    let newFocus: TerminalId | null = focusedTerminalId;
+    if (focusedTerminalId === id) {
+      if (newRoot) {
+        const order = getLeafOrder(newRoot);
+        newFocus = order.length > 0 ? order[0] : null;
+      } else if (newFloating.length > 0) {
+        newFocus = newFloating[newFloating.length - 1].terminalId;
+      } else {
+        newFocus = null;
+      }
+    }
+
+    set({
+      terminals: newTerminals,
+      layout: { tilingRoot: newRoot, floatingPanels: newFloating },
+      focusedTerminalId: newFocus,
+    });
+  },
+
+  setFocus: (id: TerminalId) => {
+    const { terminals, layout, nextZIndex } = get();
+    if (!terminals.has(id)) return;
+
+    const instance = terminals.get(id)!;
+    if (instance.mode === 'floating') {
+      // Bring floating panel to front
+      const newFloating = layout.floatingPanels.map((p) =>
+        p.terminalId === id ? { ...p, zIndex: nextZIndex } : p,
+      );
+      set({
+        focusedTerminalId: id,
+        layout: { ...layout, floatingPanels: newFloating },
+        nextZIndex: nextZIndex + 1,
+      });
+    } else {
+      set({ focusedTerminalId: id });
+    }
+  },
+
+  splitTerminal: async (
+    targetId: TerminalId,
+    direction: SplitDirection,
+    newTerminalId?: TerminalId,
+  ) => {
+    const { config, terminals, layout } = get();
+    if (!config || !layout.tilingRoot) return;
+
+    const targetInstance = terminals.get(targetId);
+    if (!targetInstance) return;
+
+    const id = newTerminalId ?? uuidv4();
+    const profile = config.shells.find(
+      (s) => s.id === targetInstance.shellProfileId,
+    );
+    if (!profile) return;
+
+    const { pid } = await window.terminalAPI.createPty({
+      id,
+      shellPath: profile.path,
+      args: profile.args,
+      cwd: targetInstance.cwd,
+      env: profile.env,
+      cols: 80,
+      rows: 24,
+    });
+
+    const instance: TerminalInstance = {
+      id,
+      title: profile.name,
+      shellProfileId: targetInstance.shellProfileId,
+      cwd: targetInstance.cwd,
+      customTitle: false,
+      mode: 'tiled',
+      pid,
+      lastProcess: '',
+      startupCommand: '',
+    };
+
+    const side: 'right' | 'bottom' =
+      direction === 'horizontal' ? 'right' : 'bottom';
+    const newRoot = insertLeaf(layout.tilingRoot, targetId, id, side);
+
+    const newTerminals = new Map(terminals);
+    newTerminals.set(id, instance);
+
+    set({
+      terminals: newTerminals,
+      layout: { ...layout, tilingRoot: newRoot },
+      focusedTerminalId: id,
+    });
+  },
+
+  setSplitRatio: (splitNodeId: string, ratio: number) => {
+    const { layout } = get();
+    if (!layout.tilingRoot) return;
+    const newRoot = updateSplitRatio(layout.tilingRoot, splitNodeId, ratio);
+    set({ layout: { ...layout, tilingRoot: newRoot } });
+  },
+
+  swapTerminals: (idA: TerminalId, idB: TerminalId) => {
+    const { layout } = get();
+    if (!layout.tilingRoot) return;
+    const newRoot = swapLeaves(layout.tilingRoot, idA, idB);
+    set({ layout: { ...layout, tilingRoot: newRoot } });
+  },
+
+  moveToFloat: (id: TerminalId) => {
+    const { terminals, layout, nextZIndex } = get();
+    const instance = terminals.get(id);
+    if (!instance || instance.mode === 'floating') return;
+
+    // Remove from tiling tree
+    let newRoot = layout.tilingRoot;
+    if (newRoot) {
+      newRoot = removeLeaf(newRoot, id);
+    }
+
+    // Add floating panel at center of screen
+    const panel: FloatingPanelState = {
+      terminalId: id,
+      x: 200,
+      y: 150,
+      width: 600,
+      height: 400,
+      zIndex: nextZIndex,
+    };
+
+    const updatedInstance: TerminalInstance = { ...instance, mode: 'floating' };
+    const newTerminals = new Map(terminals);
+    newTerminals.set(id, updatedInstance);
+
+    set({
+      terminals: newTerminals,
+      layout: {
+        tilingRoot: newRoot,
+        floatingPanels: [...layout.floatingPanels, panel],
+      },
+      nextZIndex: nextZIndex + 1,
+      focusedTerminalId: id,
+    });
+  },
+
+  moveToTiling: (
+    id: TerminalId,
+    targetId?: TerminalId,
+    side?: 'left' | 'right' | 'top' | 'bottom',
+  ) => {
+    const { terminals, layout } = get();
+    const instance = terminals.get(id);
+    if (!instance || instance.mode === 'tiled') return;
+
+    // Remove from floating panels
+    const newFloating = layout.floatingPanels.filter(
+      (p) => p.terminalId !== id,
+    );
+
+    // Insert into tiling tree
+    let newRoot: LayoutNode;
+    if (layout.tilingRoot === null) {
+      newRoot = { kind: 'leaf', terminalId: id };
+    } else if (targetId && side) {
+      newRoot = insertLeaf(layout.tilingRoot, targetId, id, side);
+    } else {
+      // Default: insert to the right of the last leaf
+      const order = getLeafOrder(layout.tilingRoot);
+      const lastId = order[order.length - 1];
+      newRoot = insertLeaf(layout.tilingRoot, lastId, id, 'right');
+    }
+
+    const updatedInstance: TerminalInstance = { ...instance, mode: 'tiled' };
+    const newTerminals = new Map(terminals);
+    newTerminals.set(id, updatedInstance);
+
+    set({
+      terminals: newTerminals,
+      layout: { tilingRoot: newRoot, floatingPanels: newFloating },
+      focusedTerminalId: id,
+    });
+  },
+
+  updateFloatingPanel: (
+    id: TerminalId,
+    partial: Partial<FloatingPanelState>,
+  ) => {
+    const { layout } = get();
+    const newFloating = layout.floatingPanels.map((p) =>
+      p.terminalId === id ? { ...p, ...partial } : p,
+    );
+    set({ layout: { ...layout, floatingPanels: newFloating } });
+  },
+
+  focusNext: () => {
+    const { layout, focusedTerminalId } = get();
+    if (!layout.tilingRoot) return;
+
+    const order = getLeafOrder(layout.tilingRoot);
+    if (order.length === 0) return;
+
+    if (!focusedTerminalId) {
+      set({ focusedTerminalId: order[0] });
+      return;
+    }
+
+    const idx = order.indexOf(focusedTerminalId);
+    const nextIdx = (idx + 1) % order.length;
+    set({ focusedTerminalId: order[nextIdx] });
+  },
+
+  focusPrev: () => {
+    const { layout, focusedTerminalId } = get();
+    if (!layout.tilingRoot) return;
+
+    const order = getLeafOrder(layout.tilingRoot);
+    if (order.length === 0) return;
+
+    if (!focusedTerminalId) {
+      set({ focusedTerminalId: order[order.length - 1] });
+      return;
+    }
+
+    const idx = order.indexOf(focusedTerminalId);
+    const prevIdx = (idx - 1 + order.length) % order.length;
+    set({ focusedTerminalId: order[prevIdx] });
+  },
+
+  focusDirection: (dir: 'left' | 'right' | 'up' | 'down') => {
+    const { layout, focusedTerminalId } = get();
+    if (!layout.tilingRoot || !focusedTerminalId) return;
+
+    const neighbor = findDirectionalNeighbor(
+      layout.tilingRoot,
+      focusedTerminalId,
+      dir,
+    );
+    if (neighbor) {
+      set({ focusedTerminalId: neighbor });
+    }
+  },
+
+  renameTerminal: (id: TerminalId, title: string, custom?: boolean) => {
+    const { terminals } = get();
+    const instance = terminals.get(id);
+    if (!instance) return;
+    const newTerminals = new Map(terminals);
+    newTerminals.set(id, { ...instance, title, customTitle: custom ?? instance.customTitle });
+    set({ terminals: newTerminals });
+  },
+
+  toggleSwitcher: () => {
+    set((state) => ({ showSwitcher: !state.showSwitcher }));
+  },
+
+  toggleShortcuts: () => {
+    set((state) => ({ showShortcuts: !state.showShortcuts }));
+  },
+
+  toggleCommandPalette: () => {
+    set((state) => ({ showCommandPalette: !state.showCommandPalette }));
+  },
+
+  toggleSettings: () => {
+    set((state) => ({ showSettings: !state.showSettings }));
+  },
+
+  updateConfig: async (update: Partial<AppConfig>) => {
+    const { config } = get();
+    if (!config) return;
+    const newConfig = { ...config, ...update };
+    for (const [key, value] of Object.entries(update)) {
+      await window.terminalAPI.setConfig(key, value);
+    }
+    set({ config: newConfig });
+  },
+
+  toggleTabBarPosition: () => {
+    set((state) => ({ tabBarPosition: state.tabBarPosition === 'top' ? 'left' : 'top' }));
+  },
+
+  startRenaming: (id: TerminalId | null) => {
+    set({ renamingTerminalId: id });
+  },
+
+  equalizeLayout: () => {
+    const { layout } = get();
+    if (!layout.tilingRoot || layout.tilingRoot.kind === 'leaf') return;
+
+    function countLeaves(node: LayoutNode): number {
+      if (node.kind === 'leaf') return 1;
+      return countLeaves(node.first) + countLeaves(node.second);
+    }
+
+    function equalize(node: LayoutNode): LayoutNode {
+      if (node.kind === 'leaf') return node;
+      const firstCount = countLeaves(node.first);
+      const secondCount = countLeaves(node.second);
+      const ratio = firstCount / (firstCount + secondCount);
+      return {
+        ...node,
+        splitRatio: ratio,
+        first: equalize(node.first),
+        second: equalize(node.second),
+      };
+    }
+
+    set({ layout: { ...layout, tilingRoot: equalize(layout.tilingRoot) } });
+  },
+
+  moveTerminalDirection: (id: TerminalId, dir: 'up' | 'down' | 'left' | 'right') => {
+    const { layout } = get();
+    if (!layout.tilingRoot) return;
+    const neighbor = findDirectionalNeighbor(layout.tilingRoot, id, dir);
+    if (neighbor) {
+      const newRoot = swapLeaves(layout.tilingRoot, id, neighbor);
+      set({ layout: { ...layout, tilingRoot: newRoot } });
+    }
+  },
+
+  zoomIn: () => {
+    set((state) => ({ fontSize: Math.min(state.fontSize + 1, 32) }));
+  },
+
+  zoomOut: () => {
+    set((state) => ({ fontSize: Math.max(state.fontSize - 1, 8) }));
+  },
+
+  zoomReset: () => {
+    const { config } = get();
+    set({ fontSize: config?.terminal?.fontSize ?? 14 });
+  },
+
+  saveNamedLayout: async (name: string) => {
+    const { terminals, layout } = get();
+
+    // Serialize layout tree with terminal info at each leaf
+    function serializeNode(node: LayoutNode): unknown {
+      if (node.kind === 'leaf') {
+        const t = terminals.get(node.terminalId);
+        return {
+          kind: 'leaf',
+          terminal: {
+            title: t?.title ?? 'Terminal',
+            shellProfileId: t?.shellProfileId ?? '',
+            cwd: t?.cwd ?? 'C:\\Users',
+            lastProcess: t?.lastProcess ?? '',
+            startupCommand: t?.startupCommand ?? '',
+          },
+        };
+      }
+      return {
+        kind: 'split',
+        direction: node.direction,
+        splitRatio: node.splitRatio,
+        first: serializeNode(node.first),
+        second: serializeNode(node.second),
+      };
+    }
+
+    const serialized = {
+      tree: layout.tilingRoot ? serializeNode(layout.tilingRoot) : null,
+      floating: layout.floatingPanels.map((p) => {
+        const t = terminals.get(p.terminalId);
+        return {
+          terminal: { title: t?.title ?? 'Terminal', shellProfileId: t?.shellProfileId ?? '', cwd: t?.cwd ?? 'C:\\Users', lastProcess: t?.lastProcess ?? '', startupCommand: t?.startupCommand ?? '' },
+          x: p.x, y: p.y, width: p.width, height: p.height,
+        };
+      }),
+    };
+
+    const existing = (await window.terminalAPI.loadSession() as Record<string, unknown> | null) ?? {};
+    const layouts = (existing.layouts as Record<string, unknown>) ?? {};
+    layouts[name] = serialized;
+    await window.terminalAPI.saveSession({ ...existing, layouts });
+  },
+
+  loadNamedLayout: async (name: string) => {
+    const session = await window.terminalAPI.loadSession() as { layouts?: Record<string, unknown> } | null;
+    const saved = session?.layouts?.[name] as { tree?: unknown; floating?: unknown[] } | undefined;
+    if (!saved) return false;
+
+    const { config } = get();
+    if (!config) return false;
+
+    // Close all existing terminals
+    const { terminals } = get();
+    for (const [id] of terminals) {
+      await window.terminalAPI.killPty(id);
+    }
+    set({ terminals: new Map(), layout: { tilingRoot: null, floatingPanels: [] }, focusedTerminalId: null });
+
+    // Helper to create a pty and terminal instance
+    async function createTerm(info: { title: string; shellProfileId: string; cwd: string }): Promise<{ id: TerminalId; instance: TerminalInstance } | null> {
+      const profile = config!.shells.find((s) => s.id === info.shellProfileId) ?? config!.shells[0];
+      if (!profile) return null;
+      const id = uuidv4();
+      try {
+        const { pid } = await window.terminalAPI.createPty({
+          id, shellPath: profile.path, args: profile.args, cwd: info.cwd || 'C:\\Users', env: profile.env, cols: 80, rows: 24,
+        });
+        return { id, instance: { id, title: info.title || profile.name, customTitle: !!info.title, shellProfileId: profile.id, cwd: info.cwd, mode: 'tiled' as const, pid, lastProcess: '', startupCommand: info.startupCommand || '' } };
+      } catch { return null; }
+    }
+
+    // Rebuild layout tree recursively
+    const newTerminals = new Map<TerminalId, TerminalInstance>();
+    let firstTerminalId: TerminalId | null = null;
+
+    async function rebuildNode(node: any): Promise<LayoutNode | null> {
+      if (node.kind === 'leaf') {
+        const result = await createTerm(node.terminal);
+        if (!result) return null;
+        newTerminals.set(result.id, result.instance);
+        if (!firstTerminalId) firstTerminalId = result.id;
+        return { kind: 'leaf', terminalId: result.id };
+      }
+      if (node.kind === 'split') {
+        const first = await rebuildNode(node.first);
+        const second = await rebuildNode(node.second);
+        if (!first && !second) return null;
+        if (!first) return second;
+        if (!second) return first;
+        return {
+          kind: 'split',
+          id: uuidv4(),
+          direction: node.direction,
+          splitRatio: node.splitRatio ?? 0.5,
+          first,
+          second,
+        };
+      }
+      return null;
+    }
+
+    let newRoot: LayoutNode | null = null;
+    if (saved.tree) {
+      newRoot = await rebuildNode(saved.tree);
+    }
+
+    // Restore floating panels
+    const newFloating: FloatingPanelState[] = [];
+    if (Array.isArray(saved.floating)) {
+      for (const f of saved.floating as any[]) {
+        const result = await createTerm(f.terminal);
+        if (result) {
+          result.instance.mode = 'floating';
+          newTerminals.set(result.id, result.instance);
+          newFloating.push({ terminalId: result.id, x: f.x ?? 200, y: f.y ?? 150, width: f.width ?? 600, height: f.height ?? 400, zIndex: 100 });
+          if (!firstTerminalId) firstTerminalId = result.id;
+        }
+      }
+    }
+
+    set({
+      terminals: newTerminals,
+      layout: { tilingRoot: newRoot, floatingPanels: newFloating },
+      focusedTerminalId: firstTerminalId,
+    });
+    return true;
+  },
+
+  getLayoutNames: async () => {
+    const session = await window.terminalAPI.loadSession() as { layouts?: Record<string, unknown> } | null;
+    const layouts = session?.layouts ?? {};
+
+    function countNodes(node: any): number {
+      if (!node) return 0;
+      if (node.kind === 'leaf') return 1;
+      if (node.kind === 'split') return countNodes(node.first) + countNodes(node.second);
+      return 0;
+    }
+
+    return Object.entries(layouts).map(([name, data]) => {
+      const d = data as { tree?: unknown; floating?: unknown[] };
+      const tiled = countNodes(d?.tree);
+      const floating = Array.isArray(d?.floating) ? d.floating.length : 0;
+      return { name, count: tiled + floating };
+    });
+  },
+
+  saveSession: async () => {
+    const { terminals, layout } = get();
+
+    function serializeNode(node: LayoutNode): unknown {
+      if (node.kind === 'leaf') {
+        const t = terminals.get(node.terminalId);
+        return { kind: 'leaf', terminal: { title: t?.title ?? 'Terminal', shellProfileId: t?.shellProfileId ?? '', cwd: t?.cwd ?? 'C:\\Users' } };
+      }
+      return { kind: 'split', direction: node.direction, splitRatio: node.splitRatio, first: serializeNode(node.first), second: serializeNode(node.second) };
+    }
+
+    // Preserve existing data (like saved layouts) when auto-saving session
+    const existing = (await window.terminalAPI.loadSession() as Record<string, unknown> | null) ?? {};
+    await window.terminalAPI.saveSession({
+      ...existing,
+      tree: layout.tilingRoot ? serializeNode(layout.tilingRoot) : null,
+      floating: layout.floatingPanels.map((p) => {
+        const t = terminals.get(p.terminalId);
+        return { terminal: { title: t?.title ?? 'Terminal', shellProfileId: t?.shellProfileId ?? '', cwd: t?.cwd ?? 'C:\\Users' }, x: p.x, y: p.y, width: p.width, height: p.height };
+      }),
+    });
+  },
+
+  restoreSession: async () => {
+    const session = (await window.terminalAPI.loadSession()) as Record<string, unknown> | null;
+    if (!session) return false;
+
+    const { config } = get();
+    if (!config) return false;
+
+    // New tree format
+    if (session.tree || session.floating) {
+      async function createTerm(info: { title: string; shellProfileId: string; cwd: string }): Promise<{ id: TerminalId; instance: TerminalInstance } | null> {
+        const profile = config!.shells.find((s) => s.id === info.shellProfileId) ?? config!.shells[0];
+        if (!profile) return null;
+        const id = uuidv4();
+        try {
+          const { pid } = await window.terminalAPI.createPty({
+            id, shellPath: profile.path, args: profile.args, cwd: info.cwd || 'C:\\Users', env: profile.env, cols: 80, rows: 24,
+          });
+          return { id, instance: { id, title: info.title || profile.name, customTitle: !!info.title, shellProfileId: profile.id, cwd: info.cwd, mode: 'tiled' as const, pid, lastProcess: '', startupCommand: info.startupCommand || '' } };
+        } catch { return null; }
+      }
+
+      const newTerminals = new Map<TerminalId, TerminalInstance>();
+      let firstId: TerminalId | null = null;
+
+      async function rebuildNode(node: any): Promise<LayoutNode | null> {
+        if (node.kind === 'leaf') {
+          const result = await createTerm(node.terminal);
+          if (!result) return null;
+          newTerminals.set(result.id, result.instance);
+          if (!firstId) firstId = result.id;
+          return { kind: 'leaf', terminalId: result.id };
+        }
+        if (node.kind === 'split') {
+          const first = await rebuildNode(node.first);
+          const second = await rebuildNode(node.second);
+          if (!first && !second) return null;
+          if (!first) return second;
+          if (!second) return first;
+          return { kind: 'split', id: uuidv4(), direction: node.direction, splitRatio: node.splitRatio ?? 0.5, first, second };
+        }
+        return null;
+      }
+
+      let newRoot: LayoutNode | null = null;
+      if (session.tree) newRoot = await rebuildNode(session.tree);
+
+      const newFloating: FloatingPanelState[] = [];
+      if (Array.isArray(session.floating)) {
+        for (const f of session.floating as any[]) {
+          const result = await createTerm(f.terminal);
+          if (result) {
+            result.instance.mode = 'floating';
+            newTerminals.set(result.id, result.instance);
+            newFloating.push({ terminalId: result.id, x: f.x ?? 200, y: f.y ?? 150, width: f.width ?? 600, height: f.height ?? 400, zIndex: 100 });
+            if (!firstId) firstId = result.id;
+          }
+        }
+      }
+
+      if (newTerminals.size === 0) return false;
+      set({ terminals: newTerminals, layout: { tilingRoot: newRoot, floatingPanels: newFloating }, focusedTerminalId: firstId });
+      return true;
+    }
+
+    // Legacy flat format fallback
+    const legacyTerminals = (session as any).terminals as { title: string; shellProfileId: string; cwd: string }[] | undefined;
+    if (!legacyTerminals?.length) return false;
+
+    for (const saved of legacyTerminals) {
+      const profile = config.shells.find((s) => s.id === saved.shellProfileId) ?? config.shells[0];
+      if (!profile) continue;
+      const id = uuidv4();
+      try {
+        const { pid } = await window.terminalAPI.createPty({ id, shellPath: profile.path, args: profile.args, cwd: saved.cwd || 'C:\\Users', env: profile.env, cols: 80, rows: 24 });
+        const instance: TerminalInstance = { id, title: saved.title || profile.name, shellProfileId: profile.id, cwd: saved.cwd, mode: 'tiled', pid };
+        const { terminals, layout } = get();
+        const newTerminals = new Map(terminals);
+        newTerminals.set(id, instance);
+        const newLeaf: LayoutLeafNode = { kind: 'leaf', terminalId: id };
+        let newRoot: LayoutNode;
+        if (layout.tilingRoot === null) { newRoot = newLeaf; } else {
+          const order = getLeafOrder(layout.tilingRoot);
+          newRoot = insertLeaf(layout.tilingRoot, order[order.length - 1], id, 'right');
+        }
+        set({ terminals: newTerminals, layout: { ...layout, tilingRoot: newRoot }, focusedTerminalId: id });
+      } catch { /* skip */ }
+    }
+    return true;
+  },
+
+  setDragging: (isDragging: boolean, terminalId?: TerminalId) => {
+    set({
+      isDragging,
+      draggedTerminalId: isDragging ? (terminalId ?? null) : null,
+    });
+  },
+}));
