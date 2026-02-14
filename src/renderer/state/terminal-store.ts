@@ -300,7 +300,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     if (!profile) return;
 
     const id = uuidv4();
-    const cwd = profile.cwd || (config as any).defaultCwd || 'C:\\Users';
+    const cwd = profile.cwd || (config as any).defaultCwd || (navigator.platform.startsWith('Win') ? 'C:\\Users' : process.env.HOME || '/');
     const { pid } = await window.terminalAPI.createPty({
       id,
       shellPath: profile.path,

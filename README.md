@@ -1,10 +1,10 @@
 # TermMight
 
-A powerful multi-terminal app for Windows with tiling layouts, floating panels, and a keyboard-driven workflow.
+A powerful cross-platform multi-terminal app with tiling layouts, floating panels, and a keyboard-driven workflow.
 
 Built with Electron, React, TypeScript, xterm.js, and node-pty.
 
-![TermMight](https://img.shields.io/badge/platform-Windows-blue) ![Electron](https://img.shields.io/badge/Electron-30-47848F) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
+![Windows](https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white) ![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black) ![Electron](https://img.shields.io/badge/Electron-30-47848F) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
 
 ## Features
 
@@ -89,8 +89,9 @@ Right-click any tab for:
 
 - Node.js 18+
 - npm
-- Windows 10/11
-- Visual Studio Build Tools (for node-pty native compilation)
+- **Windows**: Visual Studio Build Tools (for node-pty native compilation)
+- **macOS**: Xcode Command Line Tools (`xcode-select --install`)
+- **Linux**: `build-essential`, `python3`, `libx11-dev`, `libxkbfile-dev`
 
 ### Install & Run
 
@@ -107,9 +108,22 @@ npm start
 npm run build
 ```
 
-Output:
-- `out/make/squirrel.windows/x64/termmight-1.0.0 Setup.exe` -- installer
-- `out/make/zip/win32/x64/termmight-win32-x64-1.0.0.zip` -- portable
+Output per platform:
+- **Windows**: `out/make/squirrel.windows/x64/termmight-1.0.0 Setup.exe`
+- **macOS**: `out/make/termmight-1.0.0.dmg`
+- **Linux**: `out/make/deb/x64/termmight_1.0.0_amd64.deb` and `.rpm`
+- **All**: portable `.zip`
+
+### CI/CD
+
+Push a tag to trigger cross-platform builds on GitHub Actions:
+
+```bash
+git tag v1.0.0
+git push --tags
+```
+
+This builds for Windows, macOS, and Linux, and creates a GitHub Release with all artifacts.
 
 ## Architecture
 

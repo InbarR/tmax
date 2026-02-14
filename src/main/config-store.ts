@@ -51,28 +51,42 @@ export interface AppConfig {
   terminal: TerminalDefaults;
 }
 
+function getDefaultShells(): { shells: ShellProfile[]; defaultShellId: string } {
+  if (process.platform === 'win32') {
+    return {
+      shells: [
+        { id: 'powershell', name: 'PowerShell', path: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', args: [] },
+        { id: 'cmd', name: 'CMD', path: 'cmd.exe', args: [] },
+        { id: 'wsl', name: 'WSL', path: 'wsl.exe', args: [] },
+      ],
+      defaultShellId: 'powershell',
+    };
+  }
+  if (process.platform === 'darwin') {
+    return {
+      shells: [
+        { id: 'zsh', name: 'zsh', path: '/bin/zsh', args: ['-l'] },
+        { id: 'bash', name: 'bash', path: '/bin/bash', args: ['-l'] },
+      ],
+      defaultShellId: 'zsh',
+    };
+  }
+  // Linux
+  return {
+    shells: [
+      { id: 'bash', name: 'bash', path: '/bin/bash', args: [] },
+      { id: 'zsh', name: 'zsh', path: '/usr/bin/zsh', args: [] },
+      { id: 'fish', name: 'fish', path: '/usr/bin/fish', args: [] },
+    ],
+    defaultShellId: 'bash',
+  };
+}
+
+const platformShells = getDefaultShells();
+
 const defaultConfig: AppConfig = {
-  shells: [
-    {
-      id: 'powershell',
-      name: 'PowerShell',
-      path: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
-      args: [],
-    },
-    {
-      id: 'cmd',
-      name: 'CMD',
-      path: 'cmd.exe',
-      args: [],
-    },
-    {
-      id: 'wsl',
-      name: 'WSL',
-      path: 'wsl.exe',
-      args: [],
-    },
-  ],
-  defaultShellId: 'powershell',
+  shells: platformShells.shells,
+  defaultShellId: platformShells.defaultShellId,
   keybindings: [
     { action: 'createTerminal', key: 'Ctrl+Shift+N' },
     { action: 'closeTerminal', key: 'Ctrl+Shift+W' },

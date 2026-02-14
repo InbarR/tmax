@@ -2,7 +2,13 @@
  * Patches node-pty native build files to work on Windows without Spectre-mitigated
  * libraries and without relying on GetCommitHash.bat.
  * Run this after `npm install` and before `electron-forge start`.
+ * Skipped on non-Windows platforms.
  */
+if (process.platform !== 'win32') {
+  console.log('Skipping node-pty patch (not Windows).');
+  process.exit(0);
+}
+
 const fs = require('fs');
 const path = require('path');
 

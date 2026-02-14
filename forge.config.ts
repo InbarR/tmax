@@ -3,12 +3,44 @@ import { VitePlugin } from "@electron-forge/plugin-vite";
 import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-natives";
 import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
+import { MakerDeb } from "@electron-forge/maker-deb";
+import { MakerRpm } from "@electron-forge/maker-rpm";
+import { MakerDMG } from "@electron-forge/maker-dmg";
 
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    name: "TermMight",
+    executableName: "termmight",
   },
-  makers: [new MakerSquirrel({ authors: 'TermMight', description: 'Powerful multi-terminal app' }), new MakerZIP({})],
+  makers: [
+    // Windows
+    new MakerSquirrel({ authors: "TermMight", description: "Powerful multi-terminal app" }),
+    // macOS
+    new MakerDMG({ format: "ULFO" }),
+    // Linux
+    new MakerDeb({
+      options: {
+        name: "termmight",
+        productName: "TermMight",
+        maintainer: "TermMight",
+        homepage: "https://github.com/InbarR/TermMight",
+        description: "Powerful multi-terminal app with tiling and floating panels",
+        categories: ["Utility", "TerminalEmulator"],
+      },
+    }),
+    new MakerRpm({
+      options: {
+        name: "termmight",
+        productName: "TermMight",
+        homepage: "https://github.com/InbarR/TermMight",
+        description: "Powerful multi-terminal app with tiling and floating panels",
+        categories: ["Utility", "TerminalEmulator"],
+      },
+    }),
+    // All platforms
+    new MakerZIP({}),
+  ],
   plugins: [
     new AutoUnpackNativesPlugin({}),
     new VitePlugin({
