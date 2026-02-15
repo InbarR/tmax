@@ -6,6 +6,8 @@ Built with Electron, React, TypeScript, xterm.js, and node-pty.
 
 ![Windows](https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white) ![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black) ![Electron](https://img.shields.io/badge/Electron-30-47848F) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
 
+![TermMight Screenshot](assets/screenshot.png)
+
 ## Features
 
 **Multiple Terminals in One View**
