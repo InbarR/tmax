@@ -16,6 +16,7 @@ import StatusBar from './components/StatusBar';
 import ShortcutsHelp from './components/ShortcutsHelp';
 import Settings from './components/Settings';
 import CommandPalette from './components/CommandPalette';
+import DirPicker from './components/DirPicker';
 
 const App: React.FC = () => {
   const loadConfig = useTerminalStore((s) => s.loadConfig);
@@ -41,6 +42,7 @@ const App: React.FC = () => {
     async function init() {
       try {
         await loadConfig();
+        await useTerminalStore.getState().loadDirs();
         if (cancelled) return;
         if (useTerminalStore.getState().terminals.size === 0) {
           const restored = await useTerminalStore.getState().restoreSession();
@@ -111,6 +113,7 @@ const App: React.FC = () => {
         <StatusBar />
         <TerminalSwitcher />
         <CommandPalette />
+        <DirPicker />
         <Settings />
         {showShortcuts && (
           <ShortcutsHelp onClose={() => useTerminalStore.getState().toggleShortcuts()} />

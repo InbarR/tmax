@@ -28,7 +28,22 @@ const StatusBar: React.FC = () => {
       </div>
       <div className="status-section status-center">
         {focused && (
-          <span className="status-dim">{focused.cwd}</span>
+          <span
+            className="status-cwd"
+            onClick={() => {
+              if (focused.cwd) {
+                window.terminalAPI.openConfigFile?.();
+                // Use shell to open folder in explorer
+                const id = useTerminalStore.getState().focusedTerminalId;
+                if (id) {
+                  window.terminalAPI.writePty(id, `explorer "${focused.cwd}"\r`);
+                }
+              }
+            }}
+            title="Click to open in Explorer"
+          >
+            {focused.cwd}
+          </span>
         )}
       </div>
       <div className="status-section status-right">

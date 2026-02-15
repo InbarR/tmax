@@ -58,6 +58,7 @@ const DEFAULT_BINDINGS: Record<string, string> = {
   'Ctrl+Shift+R': 'renameTerminal',
   'Ctrl+Shift+/': 'showShortcuts',
   'Ctrl+Shift+G': 'switchTerminal',
+  'Ctrl+Shift+D': 'dirPicker',
   'Ctrl+Shift+P': 'commandPalette',
   'Ctrl+Alt+ArrowUp': 'splitVerticalUp',
   'Ctrl+Alt+ArrowDown': 'splitVertical',
@@ -186,6 +187,9 @@ function dispatchAction(action: string): void {
       break;
     case 'openSettings':
       store.toggleSettings();
+      break;
+    case 'dirPicker':
+      store.toggleDirPicker();
       break;
     case 'equalizeLayout':
       store.equalizeLayout();

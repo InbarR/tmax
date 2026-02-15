@@ -225,6 +225,9 @@ interface TerminalStore {
   tabBarPosition: 'top' | 'left';
   renamingTerminalId: TerminalId | null;
   fontSize: number;
+  favoriteDirs: string[];
+  recentDirs: string[];
+  showDirPicker: boolean;
 
   // Actions
   loadConfig: () => Promise<void>;
@@ -263,6 +266,13 @@ interface TerminalStore {
   getLayoutNames: () => Promise<{ name: string; count: number }[]>;
   saveSession: () => Promise<void>;
   restoreSession: () => Promise<boolean>;
+  addFavoriteDir: (dir: string) => void;
+  removeFavoriteDir: (dir: string) => void;
+  addRecentDir: (dir: string) => void;
+  cdToDir: (dir: string) => void;
+  toggleDirPicker: () => void;
+  loadDirs: () => Promise<void>;
+  saveDirs: () => Promise<void>;
 }
 
 // ── Store implementation ─────────────────────────────────────────────
@@ -280,6 +290,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   showShortcuts: false,
   showCommandPalette: false,
   showSettings: false,
+  showDirPicker: false,
+  favoriteDirs: [],
+  recentDirs: [],
   tabBarPosition: 'top' as 'top' | 'left',
   renamingTerminalId: null,
   fontSize: 14,
@@ -842,6 +855,55 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       const floating = Array.isArray(d?.floating) ? d.floating.length : 0;
       return { name, count: tiled + floating };
     });
+  },
+
+  addFavoriteDir: (dir: string) => {
+    const { favoriteDirs } = get();
+    if (favoriteDirs.includes(dir)) return;
+    const updated = [...favoriteDirs, dir];
+    set({ favoriteDirs: updated });
+    get().saveDirs();
+  },
+
+  removeFavoriteDir: (dir: string) => {
+    const updated = get().favoriteDirs.filter((d) => d !== dir);
+    set({ favoriteDirs: updated });
+    get().saveDirs();
+  },
+
+  addRecentDir: (dir: string) => {
+    const { recentDirs } = get();
+    const filtered = recentDirs.filter((d) => d !== dir);
+    const updated = [dir, ...filtered].slice(0, 10);
+    set({ recentDirs: updated });
+    get().saveDirs();
+  },
+
+  cdToDir: (dir: string) => {
+    const { focusedTerminalId } = get();
+    if (!focusedTerminalId) return;
+    window.terminalAPI.writePty(focusedTerminalId, `cd "${dir}"\r`);
+    get().addRecentDir(dir);
+  },
+
+  toggleDirPicker: () => {
+    set((state) => ({ showDirPicker: !state.showDirPicker }));
+  },
+
+  loadDirs: async () => {
+    const session = (await window.terminalAPI.loadSession()) as Record<string, unknown> | null;
+    if (session) {
+      set({
+        favoriteDirs: (session.favoriteDirs as string[]) ?? [],
+        recentDirs: (session.recentDirs as string[]) ?? [],
+      });
+    }
+  },
+
+  saveDirs: async () => {
+    const { favoriteDirs, recentDirs } = get();
+    const existing = (await window.terminalAPI.loadSession() as Record<string, unknown> | null) ?? {};
+    await window.terminalAPI.saveSession({ ...existing, favoriteDirs, recentDirs });
   },
 
   saveSession: async () => {

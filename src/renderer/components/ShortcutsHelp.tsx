@@ -11,6 +11,7 @@ const shortcuts = [
     { key: 'Ctrl+Shift+R', action: 'Rename terminal' },
     { key: 'Ctrl+Shift+G', action: 'Jump to terminal by name' },
     { key: 'Ctrl+Shift+P', action: 'Command palette' },
+    { key: 'Ctrl+Shift+D', action: 'Go to directory (favorites & recent)' },
   ]},
   { category: 'Navigation', items: [
     { key: 'Shift+Arrow', action: 'Move focus between panes' },

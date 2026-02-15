@@ -80,6 +80,19 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       (id: string, data: string) => {
         if (id === terminalId) {
           term.write(data);
+          // Parse cwd from PowerShell prompt "PS C:\path>" or cmd prompt "C:\path>"
+          const psMatch = data.match(/PS ([A-Z]:\\[^>]*?)>/i);
+          const cmdMatch = data.match(/^([A-Z]:\\[^>]*?)>/im);
+          const dir = psMatch?.[1] || cmdMatch?.[1];
+          if (dir) {
+            const store = useTerminalStore.getState();
+            const terminal = store.terminals.get(terminalId);
+            if (terminal && terminal.cwd !== dir) {
+              const newTerminals = new Map(store.terminals);
+              newTerminals.set(terminalId, { ...terminal, cwd: dir });
+              useTerminalStore.setState({ terminals: newTerminals });
+            }
+          }
         }
       }
     );
@@ -96,10 +109,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     // Send startup command if set (for layout restore)
     const termInstance = useTerminalStore.getState().terminals.get(terminalId);
     if (termInstance?.startupCommand) {
-      // Small delay to let shell initialize
       setTimeout(() => {
         window.terminalAPI.writePty(terminalId, termInstance.startupCommand + '\r');
-      }, 500);
+      }, 1500);
     }
 
     // Auto-rename tab when shell sends title via OSC sequence (skip custom titles)
@@ -107,13 +119,19 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       const store = useTerminalStore.getState();
       const terminal = store.terminals.get(terminalId);
 
-      // Track last process name
+      // Track last process name and cwd
       if (terminal && rawTitle) {
         let processName = rawTitle;
         const sep = processName.includes('\\') ? '\\' : '/';
         processName = (processName.split(sep).pop() || processName).replace(/\.(exe|cmd|bat|com)$/i, '');
+        const updates: Partial<typeof terminal> = { lastProcess: processName };
+        // If the title looks like a path, update cwd and track in recents
+        if (rawTitle.match(/^[A-Z]:\\/i) || rawTitle.startsWith('/')) {
+          updates.cwd = rawTitle;
+          store.addRecentDir(rawTitle);
+        }
         const newTerminals = new Map(store.terminals);
-        newTerminals.set(terminalId, { ...terminal, lastProcess: processName });
+        newTerminals.set(terminalId, { ...terminal, ...updates });
         useTerminalStore.setState({ terminals: newTerminals });
       }
 
