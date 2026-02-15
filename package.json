@@ -1,8 +1,8 @@
 {
-  "name": "termmight",
+  "name": "tmax",
   "version": "1.0.0",
   "description": "Powerful multi-terminal app with tiling, floating panels, and keyboard-driven workflow",
-  "author": "TermMight",
+  "author": "tmax",
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",

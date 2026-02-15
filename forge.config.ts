@@ -10,30 +10,30 @@ import { MakerDMG } from "@electron-forge/maker-dmg";
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    name: "TermMight",
-    executableName: "termmight",
+    name: "tmax",
+    executableName: "tmax",
   },
   makers: [
     // Windows
-    new MakerSquirrel({ authors: "TermMight", description: "Powerful multi-terminal app" }),
+    new MakerSquirrel({ authors: "tmax", description: "Powerful multi-terminal app" }),
     // macOS
     new MakerDMG({ format: "ULFO" }),
     // Linux
     new MakerDeb({
       options: {
-        name: "termmight",
-        productName: "TermMight",
-        maintainer: "TermMight",
-        homepage: "https://github.com/InbarR/TermMight",
+        name: "tmax",
+        productName: "tmax",
+        maintainer: "tmax",
+        homepage: "https://github.com/InbarR/tmax",
         description: "Powerful multi-terminal app with tiling and floating panels",
         categories: ["Utility", "TerminalEmulator"],
       },
     }),
     new MakerRpm({
       options: {
-        name: "termmight",
-        productName: "TermMight",
-        homepage: "https://github.com/InbarR/TermMight",
+        name: "tmax",
+        productName: "tmax",
+        homepage: "https://github.com/InbarR/tmax",
         description: "Powerful multi-terminal app with tiling and floating panels",
         categories: ["Utility", "TerminalEmulator"],
       },

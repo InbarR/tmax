@@ -1,4 +1,4 @@
-# TermMight
+# tmax
 
 A powerful cross-platform multi-terminal app with tiling layouts, floating panels, and a keyboard-driven workflow.
 
@@ -6,7 +6,7 @@ Built with Electron, React, TypeScript, xterm.js, and node-pty.
 
 ![Windows](https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white) ![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black) ![Electron](https://img.shields.io/badge/Electron-30-47848F) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
 
-![TermMight Screenshot](assets/screenshot.png)
+![tmax Screenshot](assets/screenshot.png)
 
 ## Features
 
@@ -98,8 +98,8 @@ Right-click any tab for:
 ### Install & Run
 
 ```bash
-git clone https://github.com/InbarR/TermMight.git
-cd TermMight
+git clone https://github.com/InbarR/tmax.git
+cd tmax
 npm install
 npm start
 ```
@@ -111,9 +111,9 @@ npm run build
 ```
 
 Output per platform:
-- **Windows**: `out/make/squirrel.windows/x64/termmight-1.0.0 Setup.exe`
-- **macOS**: `out/make/termmight-1.0.0.dmg`
-- **Linux**: `out/make/deb/x64/termmight_1.0.0_amd64.deb` and `.rpm`
+- **Windows**: `out/make/squirrel.windows/x64/tmax-1.0.0 Setup.exe`
+- **macOS**: `out/make/tmax-1.0.0.dmg`
+- **Linux**: `out/make/deb/x64/tmax_1.0.0_amd64.deb` and `.rpm`
 - **All**: portable `.zip`
 
 ### CI/CD
@@ -157,7 +157,7 @@ src/
 
 Settings are stored at:
 ```
-%APPDATA%/termmight/termmight-config.json
+%APPDATA%/tmax/tmax-config.json
 ```
 
 You can edit this file directly or use the Settings UI (`Ctrl+,`).

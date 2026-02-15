@@ -138,7 +138,7 @@ export class ConfigStore {
 
   constructor() {
     this.store = new Store<AppConfig>({
-      name: 'termmight-config',
+      name: 'tmax-config',
       defaults: defaultConfig,
     });
   }

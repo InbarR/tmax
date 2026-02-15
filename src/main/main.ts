@@ -11,7 +11,7 @@ declare const MAIN_WINDOW_VITE_NAME: string;
 let mainWindow: BrowserWindow | null = null;
 let ptyManager: PtyManager | null = null;
 let configStore: ConfigStore | null = null;
-const sessionStore = new Store({ name: 'termmight-session' });
+const sessionStore = new Store({ name: 'tmax-session' });
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -20,7 +20,7 @@ function createWindow(): void {
     x: 100,
     y: 100,
     show: false,
-    title: 'TermMight',
+    title: 'tmax',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
