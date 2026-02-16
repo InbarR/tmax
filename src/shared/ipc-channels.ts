@@ -10,6 +10,7 @@ export const IPC = {
   SESSION_SAVE: 'session:save',
   SESSION_LOAD: 'session:load',
   CONFIG_OPEN: 'config:open',
+  OPEN_PATH: 'shell:openPath',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

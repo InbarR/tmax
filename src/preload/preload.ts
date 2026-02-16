@@ -69,6 +69,10 @@ const terminalAPI: TerminalAPI = {
     return ipcRenderer.invoke(IPC.CONFIG_OPEN);
   },
 
+  openPath(filePath: string) {
+    return ipcRenderer.invoke(IPC.OPEN_PATH, filePath);
+  },
+
   saveSession(data: unknown) {
     return ipcRenderer.invoke(IPC.SESSION_SAVE, data);
   },

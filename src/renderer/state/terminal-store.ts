@@ -269,6 +269,7 @@ interface TerminalStore {
   addFavoriteDir: (dir: string) => void;
   removeFavoriteDir: (dir: string) => void;
   addRecentDir: (dir: string) => void;
+  removeRecentDir: (dir: string) => void;
   cdToDir: (dir: string) => void;
   toggleDirPicker: () => void;
   loadDirs: () => Promise<void>;
@@ -875,6 +876,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const { recentDirs } = get();
     const filtered = recentDirs.filter((d) => d !== dir);
     const updated = [dir, ...filtered].slice(0, 10);
+    set({ recentDirs: updated });
+    get().saveDirs();
+  },
+
+  removeRecentDir: (dir: string) => {
+    const updated = get().recentDirs.filter((d) => d !== dir);
     set({ recentDirs: updated });
     get().saveDirs();
   },

@@ -137,6 +137,10 @@ function registerIpcHandlers(): void {
     shell.openPath(configPath);
   });
 
+  ipcMain.handle(IPC.OPEN_PATH, (_event, filePath: string) => {
+    shell.openPath(filePath);
+  });
+
   ipcMain.handle(IPC.SESSION_LOAD, () => {
     return sessionStore.get('session', null);
   });

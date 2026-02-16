@@ -16,7 +16,7 @@ import StatusBar from './components/StatusBar';
 import ShortcutsHelp from './components/ShortcutsHelp';
 import Settings from './components/Settings';
 import CommandPalette from './components/CommandPalette';
-import DirPicker from './components/DirPicker';
+import DirPanel from './components/DirPanel';
 
 const App: React.FC = () => {
   const loadConfig = useTerminalStore((s) => s.loadConfig);
@@ -98,9 +98,11 @@ const App: React.FC = () => {
     >
       <div className={`app-shell ${tabBarPosition === 'left' ? 'tab-bar-left' : ''}`}>
         <TabBar vertical={tabBarPosition === 'left'} />
-        <div className="layout-area">
-          <TilingLayout />
-          <FloatingLayer />
+        <div className="main-area">
+          <DirPanel />
+          <div className="layout-area">
+            <TilingLayout />
+            <FloatingLayer />
           <DragOverlay>
             {activeId && draggedTerminal ? (
               <div className="drag-overlay-tab">
@@ -108,12 +110,12 @@ const App: React.FC = () => {
               </div>
             ) : null}
           </DragOverlay>
-          <DropZoneOverlay />
+            <DropZoneOverlay />
+          </div>
         </div>
         <StatusBar />
         <TerminalSwitcher />
         <CommandPalette />
-        <DirPicker />
         <Settings />
         {showShortcuts && (
           <ShortcutsHelp onClose={() => useTerminalStore.getState().toggleShortcuts()} />

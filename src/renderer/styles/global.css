@@ -211,6 +211,14 @@ body,
   border-bottom: 1px solid var(--border-color);
 }
 
+/* ===== Main Area (dir panel + layout) ===== */
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
 /* ===== Layout Area ===== */
 .layout-area {
   flex: 1;
@@ -689,6 +697,22 @@ body,
   color: var(--text-secondary);
 }
 
+.status-cwd {
+  color: var(--text-secondary);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.status-cwd:hover {
+  color: var(--focus-border);
+  background: rgba(137, 180, 250, 0.1);
+  text-decoration: underline;
+}
+
 .status-help-btn {
   width: 18px;
   height: 18px;
@@ -791,6 +815,181 @@ body,
   font-size: 13px;
 }
 
+/* ===== Dir Side Panel ===== */
+.dir-panel {
+  width: 260px;
+  min-width: 260px;
+  height: 100%;
+  background: #1e1e2e;
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.dir-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.dir-panel-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.dir-panel-close:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dir-panel-search {
+  width: 100%;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+}
+
+.dir-panel-search:focus {
+  background: #363649;
+}
+
+.dir-panel-search::placeholder {
+  color: var(--text-secondary);
+}
+
+.dir-panel-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.dir-panel-section {
+  padding: 8px 12px 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.dir-panel-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  cursor: pointer;
+  gap: 6px;
+  border-left: 2px solid transparent;
+}
+
+.dir-panel-item:hover,
+.dir-panel-item.selected {
+  background: rgba(137, 180, 250, 0.08);
+  border-left-color: var(--focus-border);
+}
+
+.dir-panel-item-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dir-panel-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dir-panel-path {
+  font-size: 10px;
+  color: #585b70;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dir-panel-item .dir-star {
+  font-size: 12px;
+  width: 16px;
+}
+
+.dir-panel-item .dir-remove-btn {
+  opacity: 0;
+  font-size: 10px;
+  padding: 1px 4px;
+}
+
+.dir-panel-item:hover .dir-remove-btn {
+  opacity: 1;
+}
+
+.dir-panel-empty {
+  padding: 16px 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.dir-panel-footer {
+  border-top: 1px solid var(--border-color);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dir-panel-action {
+  width: 100%;
+  padding: 4px;
+  background: transparent;
+  border: 1px dashed var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.dir-panel-action:hover {
+  border-color: var(--focus-border);
+  color: var(--text-primary);
+}
+
+.dir-panel-footer .dir-add-row {
+  display: flex;
+  gap: 4px;
+}
+
+.dir-panel-footer .dir-add-row .dir-panel-search {
+  border-bottom: none;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+}
+
+.dir-panel-footer .dir-add-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
 /* ===== Dir Picker ===== */
 .dir-section-label {
   padding: 6px 16px 2px;
@@ -853,6 +1052,34 @@ body,
 .dir-add-fav-btn:hover {
   border-color: var(--focus-border);
   color: var(--text-primary);
+}
+
+.dir-remove-btn {
+  opacity: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.palette-item:hover .dir-remove-btn {
+  opacity: 1;
+}
+
+.dir-remove-btn:hover {
+  color: #f38ba8;
+  background: rgba(243, 139, 168, 0.15);
+}
+
+.dir-hint {
+  font-size: 10px;
+  color: #585b70;
+  text-align: center;
+  padding: 4px 0 2px;
 }
 
 .dir-footer-buttons {

@@ -32,17 +32,12 @@ const StatusBar: React.FC = () => {
             className="status-cwd"
             onClick={() => {
               if (focused.cwd) {
-                window.terminalAPI.openConfigFile?.();
-                // Use shell to open folder in explorer
-                const id = useTerminalStore.getState().focusedTerminalId;
-                if (id) {
-                  window.terminalAPI.writePty(id, `explorer "${focused.cwd}"\r`);
-                }
+                window.terminalAPI.openPath(focused.cwd);
               }
             }}
-            title="Click to open in Explorer"
+            title="Open folder"
           >
-            {focused.cwd}
+            &#128193; {focused.cwd}
           </span>
         )}
       </div>
