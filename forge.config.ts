@@ -12,10 +12,11 @@ const config: ForgeConfig = {
     asar: true,
     name: "tmax",
     executableName: "tmax",
+    icon: "./assets/icon",
   },
   makers: [
     // Windows
-    new MakerSquirrel({ authors: "tmax", description: "Powerful multi-terminal app" }),
+    new MakerSquirrel({ authors: "tmax", description: "Powerful multi-terminal app", setupIcon: "./assets/icon.ico", iconUrl: "https://raw.githubusercontent.com/InbarR/tmax/main/assets/icon.ico" }),
     // macOS
     new MakerDMG({ format: "ULFO" }),
     // Linux

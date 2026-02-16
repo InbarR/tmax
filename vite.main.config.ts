@@ -5,8 +5,6 @@ export default defineConfig({
     rollupOptions: {
       external: [
         "node-pty",
-        "electron-store",
-        "conf",
       ],
     },
   },

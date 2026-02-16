@@ -21,6 +21,7 @@ function createWindow(): void {
     y: 100,
     show: false,
     title: 'tmax',
+    icon: path.join(__dirname, '../../assets/icon.png'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
