@@ -52,7 +52,8 @@ const DEFAULT_BINDINGS: Record<string, string> = {
   'Ctrl+=': 'zoomIn',
   'Ctrl+-': 'zoomOut',
   'Ctrl+0': 'zoomReset',
-  'Ctrl+Shift+F': 'toggleFloat',
+  'Ctrl+Shift+F': 'toggleFocusMode',
+  'Ctrl+Shift+H': 'toggleDormant',
   'Ctrl+Shift+E': 'equalizeLayout',
   'Ctrl+,': 'openSettings',
   'Ctrl+Shift+R': 'renameTerminal',
@@ -60,6 +61,8 @@ const DEFAULT_BINDINGS: Record<string, string> = {
   'Ctrl+Shift+G': 'switchTerminal',
   'Ctrl+Shift+D': 'dirPicker',
   'Ctrl+Shift+P': 'commandPalette',
+  'Ctrl+Tab': 'focusNext',
+  'Ctrl+Shift+Tab': 'focusPrev',
   'Ctrl+Alt+ArrowUp': 'splitVerticalUp',
   'Ctrl+Alt+ArrowDown': 'splitVertical',
   'Ctrl+Alt+ArrowLeft': 'splitHorizontalLeft',
@@ -150,12 +153,16 @@ function dispatchAction(action: string): void {
       store.focusDirection('right');
       break;
     case 'splitHorizontal':
+      if (focusedId) store.splitTerminal(focusedId, 'horizontal' as SplitDirection, undefined, 'right');
+      break;
     case 'splitHorizontalLeft':
-      if (focusedId) store.splitTerminal(focusedId, 'horizontal' as SplitDirection);
+      if (focusedId) store.splitTerminal(focusedId, 'horizontal' as SplitDirection, undefined, 'left');
       break;
     case 'splitVertical':
+      if (focusedId) store.splitTerminal(focusedId, 'vertical' as SplitDirection, undefined, 'bottom');
+      break;
     case 'splitVerticalUp':
-      if (focusedId) store.splitTerminal(focusedId, 'vertical' as SplitDirection);
+      if (focusedId) store.splitTerminal(focusedId, 'vertical' as SplitDirection, undefined, 'top');
       break;
     case 'toggleFloat':
       if (focusedId) {
@@ -193,6 +200,19 @@ function dispatchAction(action: string): void {
       break;
     case 'equalizeLayout':
       store.equalizeLayout();
+      break;
+    case 'toggleFocusMode':
+      store.toggleFocusMode();
+      break;
+    case 'toggleDormant':
+      if (focusedId) {
+        const t = store.terminals.get(focusedId);
+        if (t?.mode === 'dormant') {
+          store.wakeFromDormant(focusedId);
+        } else {
+          store.moveToDormant(focusedId);
+        }
+      }
       break;
     case 'commandPalette':
       store.toggleCommandPalette();

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 import type { FloatingPanelState } from '../state/types';
 import TerminalPanel from './TerminalPanel';
@@ -16,8 +16,8 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({ panel }) => {
   const terminals = useTerminalStore((s) => s.terminals);
   const isFocused = focusedTerminalId === panel.terminalId;
   const terminal = terminals.get(panel.terminalId);
-  const [maximized, setMaximized] = useState(false);
-  const savedBounds = useRef({ x: panel.x, y: panel.y, width: panel.width, height: panel.height });
+  const maximized = panel.maximized ?? false;
+  const savedBounds = useRef({ x: 200, y: 150, width: 600, height: 400 });
 
   const handleFocus = useCallback(() => {
     useTerminalStore.getState().setFocus(panel.terminalId);
@@ -34,14 +34,12 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({ panel }) => {
   const handleMaximize = useCallback(() => {
     const store = useTerminalStore.getState();
     if (maximized) {
-      // Restore
-      store.updateFloatingPanel(panel.terminalId, savedBounds.current);
-      setMaximized(false);
+      // Restore to saved bounds
+      store.updateFloatingPanel(panel.terminalId, { ...savedBounds.current, maximized: false });
     } else {
       // Save current bounds and maximize
       savedBounds.current = { x: panel.x, y: panel.y, width: panel.width, height: panel.height };
-      store.updateFloatingPanel(panel.terminalId, { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight - 60 });
-      setMaximized(true);
+      store.updateFloatingPanel(panel.terminalId, { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight - 60, maximized: true });
     }
   }, [panel.terminalId, panel.x, panel.y, panel.width, panel.height, maximized]);
 

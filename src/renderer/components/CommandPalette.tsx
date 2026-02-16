@@ -28,12 +28,7 @@ const CommandPalette: React.FC = () => {
       { id: 'jumpToTerminal', label: 'Jump to Terminal', shortcut: 'Ctrl+Shift+G', action: () => store().toggleSwitcher() },
       { id: 'splitRight', label: 'Split Right', shortcut: 'Ctrl+Shift+\u2192', action: () => { const id = focusedId(); if (id) store().splitTerminal(id, 'horizontal'); } },
       { id: 'splitDown', label: 'Split Down', shortcut: 'Ctrl+Shift+\u2193', action: () => { const id = focusedId(); if (id) store().splitTerminal(id, 'vertical'); } },
-      { id: 'toggleFloat', label: 'Toggle Float / Dock', shortcut: 'Ctrl+Shift+F', action: () => {
-        const id = focusedId();
-        if (!id) return;
-        const t = store().terminals.get(id);
-        if (t?.mode === 'tiled') store().moveToFloat(id); else store().moveToTiling(id);
-      }},
+      { id: 'toggleFocusMode', label: 'Toggle Focus Mode (Maximize Terminal)', shortcut: 'Ctrl+Shift+F', action: () => { const id = focusedId(); if (id) store().toggleFocusMode(id); } },
       { id: 'equalize', label: 'Equalize Pane Sizes', shortcut: 'Ctrl+Shift+E', action: () => store().equalizeLayout() },
       { id: 'zoomIn', label: 'Zoom In', shortcut: 'Ctrl+=', action: () => store().zoomIn() },
       { id: 'zoomOut', label: 'Zoom Out', shortcut: 'Ctrl+-', action: () => store().zoomOut() },
@@ -102,7 +97,10 @@ const CommandPalette: React.FC = () => {
   const filtered = useMemo(() => {
     if (!query) return commands;
     const q = query.toLowerCase();
-    return commands.filter((c) => c.label.toLowerCase().includes(q));
+    return commands.filter((c) =>
+      c.label.toLowerCase().includes(q) ||
+      (c.shortcut && c.shortcut.toLowerCase().includes(q))
+    );
   }, [commands, query]);
 
   useEffect(() => {

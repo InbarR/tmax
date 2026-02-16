@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron';
 import path from 'node:path';
 import Store from 'electron-store';
 import { PtyManager } from './pty-manager';
@@ -12,6 +12,15 @@ let mainWindow: BrowserWindow | null = null;
 let ptyManager: PtyManager | null = null;
 let configStore: ConfigStore | null = null;
 const sessionStore = new Store({ name: 'tmax-session' });
+const detachedWindows = new Map<string, BrowserWindow>();
+
+function broadcastPtyEvent(channel: string, id: string, ...args: unknown[]) {
+  mainWindow?.webContents.send(channel, id, ...args);
+  const detachedWin = detachedWindows.get(id);
+  if (detachedWin && !detachedWin.isDestroyed()) {
+    detachedWin.webContents.send(channel, id, ...args);
+  }
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -22,6 +31,7 @@ function createWindow(): void {
     show: false,
     title: 'tmax',
     icon: path.join(__dirname, '../../assets/icon.png'),
+    autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -29,6 +39,8 @@ function createWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
+
+  mainWindow.setMenuBarVisibility(false);
 
   mainWindow.once('ready-to-show', () => {
     console.log('Window ready-to-show, displaying...');
@@ -39,7 +51,7 @@ function createWindow(): void {
     mainWindow!.focus();
   });
 
-  // Prevent Chromium's built-in zoom (Ctrl+=/-, Ctrl+0, Ctrl+mousewheel)
+  // Prevent Chromium's built-in zoom — reset zoom level after any zoom attempt
   mainWindow.webContents.on('before-input-event', (_event, input) => {
     if (input.control && !input.shift && !input.alt) {
       if (input.key === '=' || input.key === '+' || input.key === '-' || input.key === '0') {
@@ -50,6 +62,10 @@ function createWindow(): void {
 
   mainWindow.on('closed', () => {
     console.log('Window closed');
+    for (const [, win] of detachedWindows) {
+      if (!win.isDestroyed()) win.close();
+    }
+    detachedWindows.clear();
     mainWindow = null;
   });
 
@@ -83,10 +99,10 @@ function createWindow(): void {
 function setupPtyManager(): void {
   ptyManager = new PtyManager({
     onData(id: string, data: string) {
-      mainWindow?.webContents.send(IPC.PTY_DATA, id, data);
+      broadcastPtyEvent(IPC.PTY_DATA, id, data);
     },
     onExit(id: string, exitCode: number | undefined) {
-      mainWindow?.webContents.send(IPC.PTY_EXIT, id, exitCode);
+      broadcastPtyEvent(IPC.PTY_EXIT, id, exitCode);
     },
   });
 }
@@ -145,6 +161,58 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IPC.SESSION_LOAD, () => {
     return sessionStore.get('session', null);
   });
+
+  ipcMain.handle(IPC.DETACH_CREATE, (_event, terminalId: string) => {
+    if (detachedWindows.has(terminalId)) {
+      const existing = detachedWindows.get(terminalId)!;
+      if (!existing.isDestroyed()) {
+        existing.focus();
+        return;
+      }
+    }
+
+    const detachedWin = new BrowserWindow({
+      width: 800,
+      height: 600,
+      title: 'tmax - Terminal',
+      autoHideMenuBar: true,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+        preload: path.join(__dirname, 'preload.js'),
+      },
+    });
+
+    detachedWin.setMenuBarVisibility(false);
+    detachedWindows.set(terminalId, detachedWin);
+
+    detachedWin.on('closed', () => {
+      detachedWindows.delete(terminalId);
+      mainWindow?.webContents.send(IPC.DETACH_CLOSED, terminalId);
+    });
+
+    if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+      detachedWin.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}?detachedTerminalId=${terminalId}`);
+    } else {
+      const filePath = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
+      detachedWin.loadFile(filePath, { query: { detachedTerminalId: terminalId } });
+    }
+  });
+
+  ipcMain.handle(IPC.DETACH_CLOSE, (_event, terminalId: string) => {
+    const win = detachedWindows.get(terminalId);
+    if (win && !win.isDestroyed()) {
+      win.close();
+    }
+  });
+
+  ipcMain.handle(IPC.DETACH_FOCUS, (_event, terminalId: string) => {
+    const win = detachedWindows.get(terminalId);
+    if (win && !win.isDestroyed()) {
+      win.focus();
+    }
+  });
 }
 
 process.on('uncaughtException', (error) => {
@@ -153,6 +221,7 @@ process.on('uncaughtException', (error) => {
 
 app.whenReady().then(() => {
   try {
+    Menu.setApplicationMenu(null);
     setupConfigStore();
     console.log('Config store ready');
     setupPtyManager();

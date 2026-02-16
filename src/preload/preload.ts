@@ -80,6 +80,28 @@ const terminalAPI: TerminalAPI = {
   loadSession(): Promise<unknown> {
     return ipcRenderer.invoke(IPC.SESSION_LOAD);
   },
+
+  detachTerminal(id: string) {
+    return ipcRenderer.invoke(IPC.DETACH_CREATE, id);
+  },
+
+  closeDetached(id: string) {
+    return ipcRenderer.invoke(IPC.DETACH_CLOSE, id);
+  },
+
+  focusDetached(id: string) {
+    return ipcRenderer.invoke(IPC.DETACH_FOCUS, id);
+  },
+
+  onDetachedClosed(cb: (id: string) => void): () => void {
+    const listener = (_event: Electron.IpcRendererEvent, id: string) => {
+      cb(id);
+    };
+    ipcRenderer.on(IPC.DETACH_CLOSED, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.DETACH_CLOSED, listener);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld('terminalAPI', terminalAPI);

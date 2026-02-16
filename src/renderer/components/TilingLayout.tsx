@@ -62,11 +62,20 @@ const TilingNode: React.FC<TilingNodeProps> = ({ node }) => {
 
 const TilingLayout: React.FC = () => {
   const tilingRoot = useTerminalStore((s) => s.layout.tilingRoot);
+  const focusModeTerminalId = useTerminalStore((s) => s.focusModeTerminalId);
 
   if (!tilingRoot) {
     return (
       <div className="empty-state">
         Press Ctrl+Shift+N to create a new terminal
+      </div>
+    );
+  }
+
+  if (focusModeTerminalId) {
+    return (
+      <div className="tiling-leaf">
+        <TerminalPanel terminalId={focusModeTerminalId} />
       </div>
     );
   }

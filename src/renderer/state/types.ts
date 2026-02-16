@@ -31,6 +31,7 @@ export interface FloatingPanelState {
   width: number;
   height: number;
   zIndex: number;
+  maximized?: boolean;
 }
 
 // ── Layout root ──────────────────────────────────────────────────────
@@ -48,7 +49,8 @@ export interface TerminalInstance {
   customTitle: boolean;
   shellProfileId: string;
   cwd: string;
-  mode: 'tiled' | 'floating';
+  mode: 'tiled' | 'floating' | 'dormant' | 'detached';
+  tabColor?: string;
   pid: number;
   lastProcess: string;
   startupCommand: string;

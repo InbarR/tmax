@@ -1,6 +1,6 @@
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { VitePlugin } from "@electron-forge/plugin-vite";
-import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-natives";
+// import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-natives";
 import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import { MakerDeb } from "@electron-forge/maker-deb";
@@ -8,8 +8,24 @@ import { MakerRpm } from "@electron-forge/maker-rpm";
 import { MakerDMG } from "@electron-forge/maker-dmg";
 
 const config: ForgeConfig = {
+  hooks: {
+    postPackage: async (_config, options) => {
+      // Copy node-pty native module into packaged app
+      const path = require('path');
+      const fs = require('fs-extra');
+      const appDir = path.join(options.outputPaths[0], 'resources', 'app');
+      const src = path.join(__dirname, 'node_modules', 'node-pty');
+      const dest = path.join(appDir, 'node_modules', 'node-pty');
+      await fs.copy(src, dest);
+      // Also copy node-addon-api (node-pty dependency)
+      const napiSrc = path.join(__dirname, 'node_modules', 'node-addon-api');
+      const napiDest = path.join(appDir, 'node_modules', 'node-addon-api');
+      if (fs.existsSync(napiSrc)) await fs.copy(napiSrc, napiDest);
+      console.log('Copied node-pty to packaged app');
+    },
+  },
   packagerConfig: {
-    asar: true,
+    asar: false,
     name: "tmax",
     executableName: "tmax",
     icon: "./assets/icon",
@@ -43,7 +59,6 @@ const config: ForgeConfig = {
     new MakerZIP({}),
   ],
   plugins: [
-    new AutoUnpackNativesPlugin({}),
     new VitePlugin({
       build: [
         {

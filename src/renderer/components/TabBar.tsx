@@ -52,9 +52,18 @@ const Tab: React.FC<TabProps> = ({
     if (e.key === 'Escape') useTerminalStore.getState().startRenaming(null);
   }, [handleRenameSubmit]);
 
+  const terminals = useTerminalStore((s) => s.terminals);
+  const terminal = terminals.get(terminalId);
+  const isDormant = terminal?.mode === 'dormant';
+  const isDetached = terminal?.mode === 'detached';
+  const tabColor = terminal?.tabColor;
+  const isSelected = useTerminalStore((s) => !!s.selectedTerminalIds[terminalId]);
+  const className = `tab${isActive ? ' active' : ''}${isDormant ? ' dormant' : ''}${isDetached ? ' detached' : ''}${isSelected ? ' selected' : ''}`;
+
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.5 : 1,
+    ...(tabColor ? { background: `${tabColor}55`, borderBottom: `2px solid ${tabColor}` } : {}),
   };
 
   const handleMouseDown = useCallback(
@@ -75,14 +84,19 @@ const Tab: React.FC<TabProps> = ({
     [onClose]
   );
 
-  const className = `tab${isActive ? ' active' : ''}`;
-
   return (
     <div
       ref={setNodeRef}
       className={className}
       style={style}
-      onClick={onActivate}
+      onClick={(e) => {
+        if (e.ctrlKey) {
+          useTerminalStore.getState().toggleSelectTerminal(terminalId);
+        } else {
+          useTerminalStore.getState().clearSelection();
+          onActivate();
+        }
+      }}
       onMouseDown={handleMouseDown}
       onContextMenu={onContextMenu}
       onDoubleClick={() => useTerminalStore.getState().startRenaming(terminalId)}
@@ -145,7 +159,6 @@ const TabBar: React.FC<{ vertical?: boolean }> = ({ vertical }) => {
           onContextMenu={(e) => handleContextMenu(e, id)}
         />
       ))}
-      <span className="tab-count">{terminalEntries.length}</span>
       <button className="tab-add" onClick={handleCreate} title="New Terminal">
         +
       </button>

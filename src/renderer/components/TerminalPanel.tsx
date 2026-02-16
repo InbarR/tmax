@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
+import { SearchAddon } from '@xterm/addon-search';
 import { useTerminalStore } from '../state/terminal-store';
 import '@xterm/xterm/css/xterm.css';
 
@@ -13,6 +14,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const searchAddonRef = useRef<SearchAddon | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResult, setSearchResult] = useState<{ resultIndex: number; resultCount: number } | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const config = useTerminalStore((s) => s.config);
   const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
@@ -53,9 +59,53 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
 
     const fitAddon = new FitAddon();
     const webLinksAddon = new WebLinksAddon();
+    const searchAddon = new SearchAddon();
 
     term.loadAddon(fitAddon);
     term.loadAddon(webLinksAddon);
+    term.loadAddon(searchAddon);
+
+    searchAddonRef.current = searchAddon;
+
+    searchAddon.onDidChangeResults((e) => {
+      if (e) {
+        setSearchResult({ resultIndex: e.resultIndex, resultCount: e.resultCount });
+      } else {
+        setSearchResult(null);
+      }
+    });
+
+    // Keyboard shortcuts handled inside terminal
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown') return true;
+      // Ctrl+F: open search
+      if (event.ctrlKey && !event.shiftKey && (event.key === 'f' || event.key === 'F')) {
+        setShowSearch(true);
+        requestAnimationFrame(() => searchInputRef.current?.focus());
+        return false;
+      }
+      // Ctrl+V or Ctrl+Shift+V: paste
+      if (event.ctrlKey && (event.key === 'v' || event.key === 'V')) {
+        navigator.clipboard.readText().then((text) => {
+          if (text) window.terminalAPI.writePty(terminalId, text);
+        }).catch(() => {});
+        return false;
+      }
+      // Ctrl+C with selection: copy instead of SIGINT
+      if (event.ctrlKey && !event.shiftKey && event.key === 'c' && term.hasSelection()) {
+        navigator.clipboard.writeText(term.getSelection());
+        term.clearSelection();
+        return false;
+      }
+      // Ctrl+Shift+C: always copy selection
+      if (event.ctrlKey && event.shiftKey && event.key === 'C') {
+        const sel = term.getSelection();
+        if (sel) navigator.clipboard.writeText(sel);
+        return false;
+      }
+      return true;
+    });
+
     term.open(containerRef.current);
 
     terminalRef.current = term;
@@ -97,11 +147,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       }
     );
 
-    // Handle PTY exit
+    // Handle PTY exit — auto-close after brief delay
     const unsubscribePtyExit = window.terminalAPI.onPtyExit(
       (id: string, _exitCode: number | undefined) => {
         if (id === terminalId) {
           term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n');
+          setTimeout(() => {
+            useTerminalStore.getState().closeTerminal(terminalId);
+          }, 500);
         }
       }
     );
@@ -198,35 +251,94 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       term.dispose();
       terminalRef.current = null;
       fitAddonRef.current = null;
+      searchAddonRef.current = null;
     };
   }, [terminalId, handleFocus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // React to fontSize changes from zoom
   useEffect(() => {
-    if (terminalRef.current && fitAddonRef.current) {
-      terminalRef.current.options.fontSize = fontSize;
-      try {
+    try {
+      if (terminalRef.current && fitAddonRef.current) {
+        terminalRef.current.options.fontSize = fontSize;
         fitAddonRef.current.fit();
         const { cols, rows } = terminalRef.current;
         window.terminalAPI.resizePty(terminalId, cols, rows);
-      } catch {
-        // ignore
       }
-    }
+    } catch { /* terminal may be disposed */ }
   }, [fontSize, terminalId]);
 
   // Programmatic focus when this terminal becomes focused in the store
   useEffect(() => {
-    if (isFocused && terminalRef.current) {
-      terminalRef.current.focus();
-    }
+    try {
+      if (isFocused && terminalRef.current) {
+        terminalRef.current.focus();
+      }
+    } catch { /* terminal may be disposed */ }
   }, [isFocused]);
+
+  // Apply tab color or default color as terminal background tint via CSS overlay
+  const tabColor = useTerminalStore((s) => s.terminals.get(terminalId)?.tabColor);
+  const defaultTabColor = useTerminalStore((s) => (s.config as any)?.defaultTabColor);
+  const bgTint = tabColor || defaultTabColor;
+
+  const handleSearch = useCallback((query: string, backward?: boolean) => {
+    if (!searchAddonRef.current || !query) return;
+    const opts = { decorations: { matchOverviewRuler: '#888', activeMatchColorOverviewRuler: '#fff', matchBackground: '#585b70', activeMatchBackground: '#89b4fa' } };
+    if (backward) {
+      searchAddonRef.current.findPrevious(query, opts);
+    } else {
+      searchAddonRef.current.findNext(query, opts);
+    }
+  }, []);
+
+  const handleCloseSearch = useCallback(() => {
+    setShowSearch(false);
+    setSearchQuery('');
+    setSearchResult(null);
+    searchAddonRef.current?.clearDecorations();
+    terminalRef.current?.focus();
+  }, []);
 
   const className = `terminal-panel${isFocused ? ' focused' : ''}`;
 
   return (
     <div className={className} onMouseDown={handleFocus}>
+      {showSearch && (
+        <div className="terminal-search-bar">
+          <input
+            ref={searchInputRef}
+            type="text"
+            className="terminal-search-input"
+            placeholder="Find..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              handleSearch(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === 'Enter') {
+                handleSearch(searchQuery, e.shiftKey);
+              }
+              if (e.key === 'Escape') {
+                handleCloseSearch();
+              }
+            }}
+          />
+          {searchQuery && searchResult && (
+            <span className="terminal-search-count">
+              {searchResult.resultCount > 0
+                ? `${searchResult.resultIndex + 1}/${searchResult.resultCount}`
+                : 'No results'}
+            </span>
+          )}
+          <button className="terminal-search-btn" onClick={() => handleSearch(searchQuery, true)} title="Previous">&#9650;</button>
+          <button className="terminal-search-btn" onClick={() => handleSearch(searchQuery)} title="Next">&#9660;</button>
+          <button className="terminal-search-btn" onClick={handleCloseSearch} title="Close">&#10005;</button>
+        </div>
+      )}
       <div ref={containerRef} className="xterm-container" />
+      {bgTint && <div className="terminal-color-overlay" style={{ background: bgTint + '18' }} />}
     </div>
   );
 };

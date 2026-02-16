@@ -76,11 +76,17 @@ const App: React.FC = () => {
       }
     }, 5000);
 
+    // Listen for detached windows being closed
+    const unsubDetached = window.terminalAPI.onDetachedClosed?.((id: string) => {
+      useTerminalStore.getState().reattachTerminal(id);
+    });
+
     return () => {
       cancelled = true;
       document.removeEventListener('wheel', handleGlobalWheel);
       window.removeEventListener('beforeunload', handleBeforeUnload);
       clearInterval(autoSaveInterval);
+      unsubDetached?.();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

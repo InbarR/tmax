@@ -224,6 +224,8 @@ interface TerminalStore {
   showSettings: boolean;
   tabBarPosition: 'top' | 'left';
   renamingTerminalId: TerminalId | null;
+  focusModeTerminalId: TerminalId | null;
+  selectedTerminalIds: Record<TerminalId, true>;
   fontSize: number;
   favoriteDirs: string[];
   recentDirs: string[];
@@ -238,16 +240,22 @@ interface TerminalStore {
     targetId: TerminalId,
     direction: SplitDirection,
     newTerminalId?: TerminalId,
+    insertSide?: 'left' | 'right' | 'top' | 'bottom',
   ) => Promise<void>;
   setSplitRatio: (splitNodeId: string, ratio: number) => void;
   swapTerminals: (idA: TerminalId, idB: TerminalId) => void;
   moveToFloat: (id: TerminalId) => void;
   moveToTiling: (id: TerminalId, targetId?: TerminalId, side?: 'left' | 'right' | 'top' | 'bottom') => void;
+  moveToDormant: (id: TerminalId) => void;
+  wakeFromDormant: (id: TerminalId) => void;
+  detachTerminal: (id: TerminalId) => Promise<void>;
+  reattachTerminal: (id: TerminalId) => void;
   updateFloatingPanel: (id: TerminalId, partial: Partial<FloatingPanelState>) => void;
   focusNext: () => void;
   focusPrev: () => void;
   focusDirection: (dir: 'left' | 'right' | 'up' | 'down') => void;
   renameTerminal: (id: TerminalId, title: string) => void;
+  setTabColor: (id: TerminalId, color: string | undefined) => void;
   setDragging: (isDragging: boolean, terminalId?: TerminalId) => void;
   toggleSwitcher: () => void;
   toggleShortcuts: () => void;
@@ -256,6 +264,9 @@ interface TerminalStore {
   updateConfig: (update: Partial<AppConfig>) => Promise<void>;
   toggleTabBarPosition: () => void;
   startRenaming: (id: TerminalId | null) => void;
+  toggleFocusMode: (id?: TerminalId) => void;
+  toggleSelectTerminal: (id: TerminalId) => void;
+  clearSelection: () => void;
   equalizeLayout: () => void;
   moveTerminalDirection: (id: TerminalId, dir: 'up' | 'down' | 'left' | 'right') => void;
   zoomIn: () => void;
@@ -296,6 +307,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   recentDirs: [],
   tabBarPosition: 'top' as 'top' | 'left',
   renamingTerminalId: null,
+  focusModeTerminalId: null,
+  selectedTerminalIds: {} as Record<TerminalId, true>,
   fontSize: 14,
 
   // ── Actions ──────────────────────────────────────────────────────
@@ -365,6 +378,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const instance = terminals.get(id);
     if (!instance) return;
 
+    if (instance.mode === 'detached') {
+      await window.terminalAPI.closeDetached(id);
+    }
     await window.terminalAPI.killPty(id);
 
     const newTerminals = new Map(terminals);
@@ -392,20 +408,33 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       }
     }
 
+    const newFocusMode = get().focusModeTerminalId === id ? null : get().focusModeTerminalId;
+
     set({
       terminals: newTerminals,
       layout: { tilingRoot: newRoot, floatingPanels: newFloating },
       focusedTerminalId: newFocus,
+      focusModeTerminalId: newFocusMode,
     });
   },
 
   setFocus: (id: TerminalId) => {
-    const { terminals, layout, nextZIndex } = get();
+    const { terminals, layout, nextZIndex, focusModeTerminalId } = get();
     if (!terminals.has(id)) return;
 
     const instance = terminals.get(id)!;
+    if (instance.mode === 'dormant') {
+      // Just select the tab, don't wake — use context menu "Wake" to restore
+      set({ focusedTerminalId: id });
+      return;
+    }
+    if (instance.mode === 'detached') {
+      // Select the tab and focus the detached window
+      set({ focusedTerminalId: id });
+      window.terminalAPI.focusDetached(id);
+      return;
+    }
     if (instance.mode === 'floating') {
-      // Bring floating panel to front
       const newFloating = layout.floatingPanels.map((p) =>
         p.terminalId === id ? { ...p, zIndex: nextZIndex } : p,
       );
@@ -414,6 +443,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         layout: { ...layout, floatingPanels: newFloating },
         nextZIndex: nextZIndex + 1,
       });
+    } else if (focusModeTerminalId && instance.mode === 'tiled' && id !== focusModeTerminalId) {
+      // Exit focus mode when switching to a different tiled terminal
+      set({ focusedTerminalId: id, focusModeTerminalId: null });
     } else {
       set({ focusedTerminalId: id });
     }
@@ -423,6 +455,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     targetId: TerminalId,
     direction: SplitDirection,
     newTerminalId?: TerminalId,
+    insertSide?: 'left' | 'right' | 'top' | 'bottom',
   ) => {
     const { config, terminals, layout } = get();
     if (!config || !layout.tilingRoot) return;
@@ -458,8 +491,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       startupCommand: '',
     };
 
-    const side: 'right' | 'bottom' =
-      direction === 'horizontal' ? 'right' : 'bottom';
+    const side = insertSide ?? (direction === 'horizontal' ? 'right' : 'bottom');
     const newRoot = insertLeaf(layout.tilingRoot, targetId, id, side);
 
     const newTerminals = new Map(terminals);
@@ -497,14 +529,15 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       newRoot = removeLeaf(newRoot, id);
     }
 
-    // Add floating panel at center of screen
+    // Add floating panel maximized to fill the layout area
     const panel: FloatingPanelState = {
       terminalId: id,
-      x: 200,
-      y: 150,
-      width: 600,
-      height: 400,
+      x: 0,
+      y: 0,
+      width: window.innerWidth,
+      height: window.innerHeight - 60,
       zIndex: nextZIndex,
+      maximized: true,
     };
 
     const updatedInstance: TerminalInstance = { ...instance, mode: 'floating' };
@@ -519,6 +552,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       },
       nextZIndex: nextZIndex + 1,
       focusedTerminalId: id,
+      focusModeTerminalId: get().focusModeTerminalId === id ? null : get().focusModeTerminalId,
     });
   },
 
@@ -560,6 +594,155 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     });
   },
 
+  moveToDormant: (id: TerminalId) => {
+    const { terminals, layout, focusedTerminalId } = get();
+    const instance = terminals.get(id);
+    if (!instance || instance.mode === 'dormant') return;
+
+    let newRoot = layout.tilingRoot;
+    let newFloating = layout.floatingPanels;
+
+    if (instance.mode === 'tiled' && newRoot) {
+      newRoot = removeLeaf(newRoot, id);
+    } else if (instance.mode === 'floating') {
+      newFloating = newFloating.filter((p) => p.terminalId !== id);
+    }
+
+    const updatedInstance: TerminalInstance = { ...instance, mode: 'dormant' };
+    const newTerminals = new Map(terminals);
+    newTerminals.set(id, updatedInstance);
+
+    // Move focus to another terminal if this one was focused
+    let newFocus = focusedTerminalId;
+    if (focusedTerminalId === id) {
+      const tiledOrder = newRoot ? getLeafOrder(newRoot) : [];
+      const floatingIds = newFloating.map((p) => p.terminalId);
+      const allVisible = [...tiledOrder, ...floatingIds];
+      newFocus = allVisible.length > 0 ? allVisible[0] : null;
+    }
+
+    set({
+      terminals: newTerminals,
+      layout: { tilingRoot: newRoot, floatingPanels: newFloating },
+      focusedTerminalId: newFocus,
+      focusModeTerminalId: get().focusModeTerminalId === id ? null : get().focusModeTerminalId,
+    });
+  },
+
+  wakeFromDormant: (id: TerminalId) => {
+    const { terminals, layout } = get();
+    const instance = terminals.get(id);
+    if (!instance || instance.mode !== 'dormant') return;
+
+    let newRoot: LayoutNode;
+    if (layout.tilingRoot === null) {
+      newRoot = { kind: 'leaf', terminalId: id };
+    } else {
+      // Insert based on tab order: find the nearest tiled neighbor
+      const tabOrder = Array.from(terminals.keys());
+      const myIdx = tabOrder.indexOf(id);
+      const tiledLeaves = new Set(getLeafOrder(layout.tilingRoot));
+
+      // Look left in tab order for a tiled neighbor to insert after
+      let insertAfterId: TerminalId | null = null;
+      for (let i = myIdx - 1; i >= 0; i--) {
+        if (tiledLeaves.has(tabOrder[i])) {
+          insertAfterId = tabOrder[i];
+          break;
+        }
+      }
+
+      if (insertAfterId) {
+        newRoot = insertLeaf(layout.tilingRoot, insertAfterId, id, 'right');
+      } else {
+        // No tiled tab before us — look right for one to insert before
+        let insertBeforeId: TerminalId | null = null;
+        for (let i = myIdx + 1; i < tabOrder.length; i++) {
+          if (tiledLeaves.has(tabOrder[i])) {
+            insertBeforeId = tabOrder[i];
+            break;
+          }
+        }
+        if (insertBeforeId) {
+          newRoot = insertLeaf(layout.tilingRoot, insertBeforeId, id, 'left');
+        } else {
+          // Fallback: insert at the end
+          const order = getLeafOrder(layout.tilingRoot);
+          newRoot = insertLeaf(layout.tilingRoot, order[order.length - 1], id, 'right');
+        }
+      }
+    }
+
+    const updatedInstance: TerminalInstance = { ...instance, mode: 'tiled' };
+    const newTerminals = new Map(terminals);
+    newTerminals.set(id, updatedInstance);
+
+    set({
+      terminals: newTerminals,
+      layout: { ...layout, tilingRoot: newRoot },
+      focusedTerminalId: id,
+    });
+  },
+
+  detachTerminal: async (id: TerminalId) => {
+    const { terminals, layout } = get();
+    const instance = terminals.get(id);
+    if (!instance || instance.mode === 'detached') return;
+
+    let newRoot = layout.tilingRoot;
+    let newFloating = layout.floatingPanels;
+
+    if (instance.mode === 'tiled' && newRoot) {
+      newRoot = removeLeaf(newRoot, id);
+    } else if (instance.mode === 'floating') {
+      newFloating = newFloating.filter((p) => p.terminalId !== id);
+    }
+
+    const updatedInstance: TerminalInstance = { ...instance, mode: 'detached' };
+    const newTerminals = new Map(terminals);
+    newTerminals.set(id, updatedInstance);
+
+    await window.terminalAPI.detachTerminal(id);
+
+    // Move focus to another visible terminal
+    const tiledOrder = newRoot ? getLeafOrder(newRoot) : [];
+    const floatingIds = newFloating.map((p) => p.terminalId);
+    const allVisible = [...tiledOrder, ...floatingIds];
+    const newFocus = allVisible.length > 0 ? allVisible[0] : null;
+
+    set({
+      terminals: newTerminals,
+      layout: { tilingRoot: newRoot, floatingPanels: newFloating },
+      focusedTerminalId: newFocus,
+      focusModeTerminalId: get().focusModeTerminalId === id ? null : get().focusModeTerminalId,
+    });
+  },
+
+  reattachTerminal: (id: TerminalId) => {
+    const { terminals, layout } = get();
+    const instance = terminals.get(id);
+    if (!instance || instance.mode !== 'detached') return;
+
+    const updatedInstance: TerminalInstance = { ...instance, mode: 'tiled' };
+    const newTerminals = new Map(terminals);
+    newTerminals.set(id, updatedInstance);
+
+    let newRoot: LayoutNode;
+    if (layout.tilingRoot === null) {
+      newRoot = { kind: 'leaf', terminalId: id };
+    } else {
+      const order = getLeafOrder(layout.tilingRoot);
+      const lastId = order[order.length - 1];
+      newRoot = insertLeaf(layout.tilingRoot, lastId, id, 'right');
+    }
+
+    set({
+      terminals: newTerminals,
+      layout: { ...layout, tilingRoot: newRoot },
+      focusedTerminalId: id,
+    });
+  },
+
   updateFloatingPanel: (
     id: TerminalId,
     partial: Partial<FloatingPanelState>,
@@ -572,37 +755,41 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   focusNext: () => {
-    const { layout, focusedTerminalId } = get();
-    if (!layout.tilingRoot) return;
+    const { terminals, focusedTerminalId } = get();
 
-    const order = getLeafOrder(layout.tilingRoot);
+    // Use Map insertion order (same as tab bar), skip dormant
+    const order = Array.from(terminals.entries())
+      .filter(([, t]) => t.mode !== 'dormant' && t.mode !== 'detached')
+      .map(([id]) => id);
     if (order.length === 0) return;
 
     if (!focusedTerminalId) {
-      set({ focusedTerminalId: order[0] });
+      get().setFocus(order[0]);
       return;
     }
 
     const idx = order.indexOf(focusedTerminalId);
     const nextIdx = (idx + 1) % order.length;
-    set({ focusedTerminalId: order[nextIdx] });
+    get().setFocus(order[nextIdx]);
   },
 
   focusPrev: () => {
-    const { layout, focusedTerminalId } = get();
-    if (!layout.tilingRoot) return;
+    const { terminals, focusedTerminalId } = get();
 
-    const order = getLeafOrder(layout.tilingRoot);
+    // Use Map insertion order (same as tab bar), skip dormant
+    const order = Array.from(terminals.entries())
+      .filter(([, t]) => t.mode !== 'dormant' && t.mode !== 'detached')
+      .map(([id]) => id);
     if (order.length === 0) return;
 
     if (!focusedTerminalId) {
-      set({ focusedTerminalId: order[order.length - 1] });
+      get().setFocus(order[order.length - 1]);
       return;
     }
 
     const idx = order.indexOf(focusedTerminalId);
     const prevIdx = (idx - 1 + order.length) % order.length;
-    set({ focusedTerminalId: order[prevIdx] });
+    get().setFocus(order[prevIdx]);
   },
 
   focusDirection: (dir: 'left' | 'right' | 'up' | 'down') => {
@@ -625,6 +812,15 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     if (!instance) return;
     const newTerminals = new Map(terminals);
     newTerminals.set(id, { ...instance, title, customTitle: custom ?? instance.customTitle });
+    set({ terminals: newTerminals });
+  },
+
+  setTabColor: (id: TerminalId, color: string | undefined) => {
+    const { terminals } = get();
+    const instance = terminals.get(id);
+    if (!instance) return;
+    const newTerminals = new Map(terminals);
+    newTerminals.set(id, { ...instance, tabColor: color });
     set({ terminals: newTerminals });
   },
 
@@ -660,6 +856,33 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   startRenaming: (id: TerminalId | null) => {
     set({ renamingTerminalId: id });
+  },
+
+  toggleFocusMode: (id?: TerminalId) => {
+    const { focusModeTerminalId, focusedTerminalId } = get();
+    const targetId = id ?? focusedTerminalId;
+    if (!targetId) return;
+
+    if (focusModeTerminalId === targetId) {
+      set({ focusModeTerminalId: null });
+    } else {
+      set({ focusModeTerminalId: targetId, focusedTerminalId: targetId });
+    }
+  },
+
+  toggleSelectTerminal: (id: TerminalId) => {
+    const { selectedTerminalIds } = get();
+    const next = { ...selectedTerminalIds };
+    if (next[id]) {
+      delete next[id];
+    } else {
+      next[id] = true;
+    }
+    set({ selectedTerminalIds: next });
+  },
+
+  clearSelection: () => {
+    set({ selectedTerminalIds: {} });
   },
 
   equalizeLayout: () => {

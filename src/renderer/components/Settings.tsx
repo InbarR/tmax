@@ -57,6 +57,10 @@ const TerminalSettings: React.FC = () => {
   const fontSize = useTerminalStore((s) => s.fontSize);
   const update = useTerminalStore((s) => s.updateConfig);
 
+  const applyDefaultColor = (color: string) => {
+    update({ defaultTabColor: color } as any);
+  };
+
   return (
     <div className="settings-section">
       <SettingRow label="Font Size" description="Terminal font size in pixels">
@@ -81,6 +85,20 @@ const TerminalSettings: React.FC = () => {
         <input type="text" className="settings-input" value={(config as any).defaultCwd || ''}
           placeholder="e.g. C:\Projects"
           onChange={(e) => update({ defaultCwd: e.target.value } as any)} />
+      </SettingRow>
+      <SettingRow label="Default Tab Color" description="Background tint for all terminals without a custom color">
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input type="color" className="theme-color-picker"
+            value={(config as any).defaultTabColor || '#1e1e2e'}
+            onChange={(e) => { applyDefaultColor(e.target.value); }} />
+          <input type="text" className="settings-input small"
+            value={(config as any).defaultTabColor || ''}
+            placeholder="e.g. #f38ba8"
+            onChange={(e) => { applyDefaultColor(e.target.value); }} />
+          <button className="settings-reset-btn" onClick={() => { applyDefaultColor(''); }}>
+            Reset
+          </button>
+        </div>
       </SettingRow>
     </div>
   );

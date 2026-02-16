@@ -8,6 +8,8 @@ const StatusBar: React.FC = () => {
   const layout = useTerminalStore((s) => s.layout);
 
   const fontSize = useTerminalStore((s) => s.fontSize);
+  const config = useTerminalStore((s) => s.config);
+  const focusModeTerminalId = useTerminalStore((s) => s.focusModeTerminalId);
   const focused = focusedId ? terminals.get(focusedId) : null;
   const totalCount = terminals.size;
   const tiledCount = layout.tilingRoot ? getLeafOrder(layout.tilingRoot).length : 0;
@@ -20,7 +22,10 @@ const StatusBar: React.FC = () => {
           <>
             <span className="status-indicator" />
             <span className="status-label">{focused.title}</span>
-            <span className="status-dim">{focused.mode === 'floating' ? '(floating)' : ''}</span>
+            <span className="status-dim">
+              {focused.mode === 'floating' ? '(floating)' : ''}
+              {focusModeTerminalId === focusedId ? '(focus mode)' : ''}
+            </span>
           </>
         ) : (
           <span className="status-dim">No terminal focused</span>
@@ -46,7 +51,8 @@ const StatusBar: React.FC = () => {
           {totalCount} terminal{totalCount !== 1 ? 's' : ''}
           {floatingCount > 0 ? ` (${tiledCount} tiled, ${floatingCount} floating)` : ''}
         </span>
-        <span className="status-dim">{fontSize}px</span>
+        <span className="status-dim">{Math.round((fontSize / (config?.terminal?.fontSize ?? 14)) * 100)}%</span>
+        <span className="status-dim">v1.0.0</span>
         <button
           className="status-help-btn"
           onClick={() => useTerminalStore.getState().toggleShortcuts()}

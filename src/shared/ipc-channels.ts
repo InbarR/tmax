@@ -11,6 +11,10 @@ export const IPC = {
   SESSION_LOAD: 'session:load',
   CONFIG_OPEN: 'config:open',
   OPEN_PATH: 'shell:openPath',
+  DETACH_CREATE: 'detach:create',
+  DETACH_CLOSE: 'detach:close',
+  DETACH_CLOSED: 'detach:closed',
+  DETACH_FOCUS: 'detach:focus',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

@@ -71,8 +71,14 @@ export function useDragTerminal(): UseDragTerminalResult {
             if (direction) {
               // Remove dragged from current position and insert at target
               const terminal = store.terminals.get(draggedId);
-              if (terminal && terminal.mode === 'tiled') {
+              if (terminal?.mode === 'detached') {
+                // Reattach detached terminal first
+                window.terminalAPI.closeDetached(draggedId);
+                store.reattachTerminal(draggedId);
+              } else if (terminal?.mode === 'tiled') {
                 store.moveToFloat(draggedId);
+              } else if (terminal?.mode === 'dormant') {
+                store.wakeFromDormant(draggedId);
               }
               store.moveToTiling(draggedId, targetId, side as 'left' | 'right' | 'top' | 'bottom');
             }
