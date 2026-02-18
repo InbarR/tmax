@@ -89,6 +89,7 @@ const Tab: React.FC<TabProps> = ({
       ref={setNodeRef}
       className={className}
       style={style}
+      data-tab-id={terminalId}
       onClick={(e) => {
         if (e.ctrlKey) {
           useTerminalStore.getState().toggleSelectTerminal(terminalId);
@@ -128,7 +129,24 @@ const TabBar: React.FC<{ vertical?: boolean }> = ({ vertical }) => {
   const terminals = useTerminalStore((s) => s.terminals);
   const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
   const renamingId = useTerminalStore((s) => s.renamingTerminalId);
+  const tabMenuTerminalId = useTerminalStore((s) => s.tabMenuTerminalId);
   const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null);
+
+  // Open/toggle context menu from keyboard shortcut
+  useEffect(() => {
+    if (!tabMenuTerminalId) return;
+    useTerminalStore.setState({ tabMenuTerminalId: null });
+    // Toggle: close if already open for the same terminal
+    if (contextMenu && contextMenu.terminalId === tabMenuTerminalId) {
+      setContextMenu(null);
+      return;
+    }
+    const tabEl = document.querySelector(`[data-tab-id="${tabMenuTerminalId}"]`);
+    if (tabEl) {
+      const rect = tabEl.getBoundingClientRect();
+      setContextMenu({ x: rect.left, y: rect.bottom, terminalId: tabMenuTerminalId });
+    }
+  }, [tabMenuTerminalId]);
 
   const handleCreate = useCallback(() => {
     useTerminalStore.getState().createTerminal();

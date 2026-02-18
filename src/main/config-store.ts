@@ -51,15 +51,35 @@ export interface AppConfig {
   terminal: TerminalDefaults;
 }
 
+function findPwsh(): string | null {
+  if (process.platform !== 'win32') return null;
+  const fs = require('fs');
+  // Common install locations for PowerShell 7+
+  const candidates = [
+    process.env.ProgramFiles && `${process.env.ProgramFiles}\\PowerShell\\7\\pwsh.exe`,
+    'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+  ];
+  for (const p of candidates) {
+    if (p && fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
 function getDefaultShells(): { shells: ShellProfile[]; defaultShellId: string } {
   if (process.platform === 'win32') {
+    const pwshPath = findPwsh();
+    const shells: ShellProfile[] = [];
+    if (pwshPath) {
+      shells.push({ id: 'pwsh', name: 'PowerShell 7', path: pwshPath, args: ['-NoLogo'] });
+    }
+    shells.push(
+      { id: 'powershell', name: 'Windows PowerShell', path: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', args: [] },
+      { id: 'cmd', name: 'CMD', path: 'cmd.exe', args: [] },
+      { id: 'wsl', name: 'WSL', path: 'wsl.exe', args: [] },
+    );
     return {
-      shells: [
-        { id: 'powershell', name: 'PowerShell', path: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', args: [] },
-        { id: 'cmd', name: 'CMD', path: 'cmd.exe', args: [] },
-        { id: 'wsl', name: 'WSL', path: 'wsl.exe', args: [] },
-      ],
-      defaultShellId: 'powershell',
+      shells,
+      defaultShellId: pwshPath ? 'pwsh' : 'powershell',
     };
   }
   if (process.platform === 'darwin') {
@@ -107,6 +127,10 @@ const defaultConfig: AppConfig = {
     { action: 'resizeDown', key: 'Ctrl+Shift+Alt+ArrowDown' },
     { action: 'resizeLeft', key: 'Ctrl+Shift+Alt+ArrowLeft' },
     { action: 'resizeRight', key: 'Ctrl+Shift+Alt+ArrowRight' },
+    { action: 'resizeRight', key: 'Ctrl+ArrowRight' },
+    { action: 'resizeLeft', key: 'Ctrl+ArrowLeft' },
+    { action: 'resizeDown', key: 'Ctrl+ArrowDown' },
+    { action: 'resizeUp', key: 'Ctrl+ArrowUp' },
   ],
   theme: {
     background: '#1e1e2e',
@@ -145,6 +169,19 @@ export class ConfigStore {
       name: 'tmax-config',
       defaults: defaultConfig,
     });
+    this.migratePwsh();
+  }
+
+  /** If PowerShell 7 is installed but not in the saved shells, inject it at the top */
+  private migratePwsh(): void {
+    if (process.platform !== 'win32') return;
+    const pwshPath = findPwsh();
+    if (!pwshPath) return;
+    const shells = this.store.get('shells') as ShellProfile[];
+    if (shells.some((s) => s.id === 'pwsh')) return;
+    shells.unshift({ id: 'pwsh', name: 'PowerShell 7', path: pwshPath, args: ['-NoLogo'] });
+    this.store.set('shells', shells);
+    this.store.set('defaultShellId', 'pwsh');
   }
 
   get<K extends keyof AppConfig>(key: K): AppConfig[K] {

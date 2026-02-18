@@ -31,13 +31,18 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, onClose }) =>
       }
     }
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
     }
     document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
+    // Use capture phase so Escape is caught before xterm.js swallows it
+    document.addEventListener('keydown', handleKey, true);
     return () => {
       document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
+      document.removeEventListener('keydown', handleKey, true);
     };
   }, [onClose]);
 
@@ -180,7 +185,7 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, onClose }) =>
             {terminal?.mode === 'detached' ? 'Reattach' : 'Detach to Window'}
           </button>
           <button className="context-menu-item" onClick={handleToggleDormant}>
-            {isDormant ? 'Wake' : 'Hide (Dormant)'}
+            {isDormant ? 'Wake' : 'Hide (Dormant)'} <span className="shortcut">Ctrl+Shift+H</span>
           </button>
           <div className="context-menu-separator" />
           {showColorPicker ? (

@@ -213,6 +213,8 @@ function registerIpcHandlers(): void {
       win.focus();
     }
   });
+
+
 }
 
 process.on('uncaughtException', (error) => {

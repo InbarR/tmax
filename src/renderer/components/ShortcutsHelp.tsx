@@ -11,6 +11,7 @@ const shortcuts = [
     { key: 'Ctrl+Shift+R', action: 'Rename terminal' },
     { key: 'Ctrl+Shift+G', action: 'Jump to terminal by name' },
     { key: 'Ctrl+Shift+P', action: 'Command palette' },
+    { key: 'Ctrl+Shift+M', action: 'Open tab menu' },
     { key: 'Ctrl+Shift+D', action: 'Go to directory (favorites & recent)' },
   ]},
   { category: 'Navigation', items: [
@@ -20,7 +21,7 @@ const shortcuts = [
   { category: 'Layout', items: [
     { key: 'Ctrl+Alt+Arrow', action: 'Split in direction' },
     { key: 'Ctrl+Shift+F', action: 'Toggle float / dock' },
-    { key: 'Ctrl+Shift+Alt+Arrow', action: 'Resize pane' },
+    { key: 'Ctrl+Arrow / Ctrl+Shift+Alt+Arrow', action: 'Resize pane' },
     { key: 'Ctrl+Shift+E', action: 'Equalize all pane sizes' },
   ]},
   { category: 'Zoom', items: [

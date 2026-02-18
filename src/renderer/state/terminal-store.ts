@@ -230,6 +230,7 @@ interface TerminalStore {
   favoriteDirs: string[];
   recentDirs: string[];
   showDirPicker: boolean;
+  tabMenuTerminalId: TerminalId | null;
 
   // Actions
   loadConfig: () => Promise<void>;
@@ -283,9 +284,13 @@ interface TerminalStore {
   removeRecentDir: (dir: string) => void;
   cdToDir: (dir: string) => void;
   toggleDirPicker: () => void;
+  openTabMenu: (id?: TerminalId) => void;
   loadDirs: () => Promise<void>;
   saveDirs: () => Promise<void>;
 }
+
+// Cached session extras (layouts, etc.) so saveSession doesn't need async load
+let _sessionExtras: Record<string, unknown> = {};
 
 // ── Store implementation ─────────────────────────────────────────────
 
@@ -303,6 +308,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   showCommandPalette: false,
   showSettings: false,
   showDirPicker: false,
+  tabMenuTerminalId: null,
   favoriteDirs: [],
   recentDirs: [],
   tabBarPosition: 'top' as 'top' | 'left',
@@ -971,15 +977,14 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       }),
     };
 
-    const existing = (await window.terminalAPI.loadSession() as Record<string, unknown> | null) ?? {};
-    const layouts = (existing.layouts as Record<string, unknown>) ?? {};
+    const layouts = (_sessionExtras.layouts as Record<string, unknown>) ?? {};
     layouts[name] = serialized;
-    await window.terminalAPI.saveSession({ ...existing, layouts });
+    _sessionExtras = { ..._sessionExtras, layouts };
+    await window.terminalAPI.saveSession(_sessionExtras);
   },
 
   loadNamedLayout: async (name: string) => {
-    const session = await window.terminalAPI.loadSession() as { layouts?: Record<string, unknown> } | null;
-    const saved = session?.layouts?.[name] as { tree?: unknown; floating?: unknown[] } | undefined;
+    const saved = (_sessionExtras.layouts as Record<string, unknown>)?.[name] as { tree?: unknown; floating?: unknown[] } | undefined;
     if (!saved) return false;
 
     const { config } = get();
@@ -1063,8 +1068,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   getLayoutNames: async () => {
-    const session = await window.terminalAPI.loadSession() as { layouts?: Record<string, unknown> } | null;
-    const layouts = session?.layouts ?? {};
+    const layouts = (_sessionExtras.layouts as Record<string, unknown>) ?? {};
 
     function countNodes(node: any): number {
       if (!node) return 0;
@@ -1120,9 +1124,15 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set((state) => ({ showDirPicker: !state.showDirPicker }));
   },
 
+  openTabMenu: (id?: TerminalId) => {
+    const targetId = id ?? get().focusedTerminalId;
+    if (targetId) set({ tabMenuTerminalId: targetId });
+  },
+
   loadDirs: async () => {
     const session = (await window.terminalAPI.loadSession()) as Record<string, unknown> | null;
     if (session) {
+      _sessionExtras = { ..._sessionExtras, ...session };
       set({
         favoriteDirs: (session.favoriteDirs as string[]) ?? [],
         recentDirs: (session.recentDirs as string[]) ?? [],
@@ -1131,13 +1141,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   saveDirs: async () => {
-    const { favoriteDirs, recentDirs } = get();
-    const existing = (await window.terminalAPI.loadSession() as Record<string, unknown> | null) ?? {};
-    await window.terminalAPI.saveSession({ ...existing, favoriteDirs, recentDirs });
+    // Just trigger a full save — avoids race conditions with separate saves
+    get().saveSession();
   },
 
   saveSession: async () => {
-    const { terminals, layout } = get();
+    const { terminals, layout, favoriteDirs, recentDirs } = get();
 
     function serializeNode(node: LayoutNode): unknown {
       if (node.kind === 'leaf') {
@@ -1147,21 +1156,26 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       return { kind: 'split', direction: node.direction, splitRatio: node.splitRatio, first: serializeNode(node.first), second: serializeNode(node.second) };
     }
 
-    // Preserve existing data (like saved layouts) when auto-saving session
-    const existing = (await window.terminalAPI.loadSession() as Record<string, unknown> | null) ?? {};
-    await window.terminalAPI.saveSession({
-      ...existing,
+    // Merge with cached extras (saved layouts, etc.) — no async load needed
+    const data = {
+      ..._sessionExtras,
+      favoriteDirs,
+      recentDirs,
       tree: layout.tilingRoot ? serializeNode(layout.tilingRoot) : null,
       floating: layout.floatingPanels.map((p) => {
         const t = terminals.get(p.terminalId);
         return { terminal: { title: t?.title ?? 'Terminal', shellProfileId: t?.shellProfileId ?? '', cwd: t?.cwd ?? 'C:\\Users' }, x: p.x, y: p.y, width: p.width, height: p.height };
       }),
-    });
+    };
+    _sessionExtras = data;
+    await window.terminalAPI.saveSession(data);
   },
 
   restoreSession: async () => {
     const session = (await window.terminalAPI.loadSession()) as Record<string, unknown> | null;
     if (!session) return false;
+    // Cache session extras (layouts, etc.) so saveSession doesn't need async load
+    _sessionExtras = { ...session };
 
     const { config } = get();
     if (!config) return false;

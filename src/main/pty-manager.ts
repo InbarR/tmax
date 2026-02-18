@@ -24,12 +24,14 @@ export class PtyManager {
   }
 
   create(opts: PtyCreateOpts): { id: string; pid: number } {
+    const baseEnv = opts.env ?? (process.env as Record<string, string>);
     const ptyProcess = spawn(opts.shellPath, opts.args, {
       name: 'xterm-256color',
       cols: opts.cols,
       rows: opts.rows,
       cwd: opts.cwd,
-      env: opts.env ?? (process.env as Record<string, string>),
+      useConpty: true,
+      env: { ...baseEnv, TERM_PROGRAM: 'tmax', COLORTERM: 'truecolor' },
     });
 
     this.ptys.set(opts.id, ptyProcess);

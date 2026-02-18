@@ -102,6 +102,7 @@ const terminalAPI: TerminalAPI = {
       ipcRenderer.removeListener(IPC.DETACH_CLOSED, listener);
     };
   },
+
 };
 
 contextBridge.exposeInMainWorld('terminalAPI', terminalAPI);
