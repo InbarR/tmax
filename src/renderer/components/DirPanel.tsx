@@ -8,6 +8,10 @@ interface DirContextMenu {
   isFav: boolean;
 }
 
+const MIN_WIDTH = 180;
+const MAX_WIDTH = 600;
+const DEFAULT_WIDTH = 260;
+
 const DirPanel: React.FC = () => {
   const show = useTerminalStore((s) => s.showDirPicker);
   const favoriteDirs = useTerminalStore((s) => s.favoriteDirs);
@@ -21,6 +25,29 @@ const DirPanel: React.FC = () => {
   const favInputRef = useRef<HTMLInputElement>(null);
   const ctxRef = useRef<HTMLDivElement>(null);
   const [favValue, setFavValue] = useState('');
+  const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const [resizing, setResizing] = useState(false);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = width;
+    setResizing(true);
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startWidth + moveEvent.clientX - startX));
+      setWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setResizing(false);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [width]);
 
   const allDirs = useMemo(() => {
     const favSet = new Set(favoriteDirs);
@@ -132,7 +159,8 @@ const DirPanel: React.FC = () => {
   if (!show) return null;
 
   return (
-    <div className="dir-panel">
+    <div className={`dir-panel${resizing ? ' resizing' : ''}`} style={{ width, minWidth: width }}>
+      <div className="dir-panel-resize" onMouseDown={handleResizeStart} />
       <div className="dir-panel-header">
         <span>Directories</span>
         <button className="dir-panel-close" onClick={() => useTerminalStore.getState().toggleDirPicker()}>&#10005;</button>

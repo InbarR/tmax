@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, clipboard } from 'electron';
 import { IPC } from '../shared/ipc-channels';
 
 export interface TerminalAPI {
@@ -18,6 +18,8 @@ export interface TerminalAPI {
   onPtyExit(cb: (id: string, exitCode: number | undefined) => void): () => void;
   getConfig(): Promise<Record<string, unknown>>;
   setConfig(key: string, value: unknown): Promise<void>;
+  clipboardRead(): string;
+  clipboardWrite(text: string): void;
 }
 
 const terminalAPI: TerminalAPI = {
@@ -63,6 +65,14 @@ const terminalAPI: TerminalAPI = {
 
   setConfig(key, value) {
     return ipcRenderer.invoke(IPC.CONFIG_SET, key, value);
+  },
+
+  clipboardRead() {
+    return clipboard.readText();
+  },
+
+  clipboardWrite(text: string) {
+    clipboard.writeText(text);
   },
 
   openConfigFile() {

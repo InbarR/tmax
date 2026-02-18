@@ -86,21 +86,21 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       }
       // Ctrl+V or Ctrl+Shift+V: paste
       if (event.ctrlKey && (event.key === 'v' || event.key === 'V')) {
-        navigator.clipboard.readText().then((text) => {
-          if (text) window.terminalAPI.writePty(terminalId, text);
-        }).catch(() => {});
+        event.preventDefault(); // Stop browser native paste (would cause double paste)
+        const text = window.terminalAPI.clipboardRead();
+        if (text) window.terminalAPI.writePty(terminalId, text);
         return false;
       }
       // Ctrl+C with selection: copy instead of SIGINT
-      if (event.ctrlKey && !event.shiftKey && event.key === 'c' && term.hasSelection()) {
-        navigator.clipboard.writeText(term.getSelection());
+      if (event.ctrlKey && !event.shiftKey && (event.key === 'c' || event.key === 'C') && term.hasSelection()) {
+        window.terminalAPI.clipboardWrite(term.getSelection());
         term.clearSelection();
         return false;
       }
       // Ctrl+Shift+C: always copy selection
-      if (event.ctrlKey && event.shiftKey && event.key === 'C') {
+      if (event.ctrlKey && event.shiftKey && (event.key === 'c' || event.key === 'C')) {
         const sel = term.getSelection();
-        if (sel) navigator.clipboard.writeText(sel);
+        if (sel) window.terminalAPI.clipboardWrite(sel);
         return false;
       }
       // Ctrl+Enter / Shift+Enter: send win32-input-mode key events
@@ -245,6 +245,23 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       }
     };
     containerRef.current.addEventListener('wheel', handleWheel, { passive: false });
+
+    // Right-click: copy if selection, paste if no selection
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      if (term.hasSelection()) {
+        window.terminalAPI.clipboardWrite(term.getSelection());
+        term.clearSelection();
+      } else {
+        const text = window.terminalAPI.clipboardRead();
+        if (text) window.terminalAPI.writePty(terminalId, text);
+      }
+    };
+    // Use capture phase to intercept before any other handler
+    containerRef.current.addEventListener('contextmenu', handleContextMenu, true);
+
     const containerEl = containerRef.current;
 
     return () => {
@@ -256,6 +273,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
         textareaEl.removeEventListener('focus', handleFocus);
       }
       containerEl.removeEventListener('wheel', handleWheel);
+      containerEl.removeEventListener('contextmenu', handleContextMenu, true);
       titleDisposable.dispose();
       term.dispose();
       terminalRef.current = null;

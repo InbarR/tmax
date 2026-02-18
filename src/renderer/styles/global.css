@@ -968,8 +968,7 @@ body,
 
 /* ===== Dir Side Panel ===== */
 .dir-panel {
-  width: 260px;
-  min-width: 260px;
+  position: relative;
   height: 100%;
   background: #1e1e2e;
   border-right: 1px solid var(--border-color);
@@ -977,6 +976,26 @@ body,
   flex-direction: column;
   overflow: hidden;
   flex-shrink: 0;
+}
+
+.dir-panel-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.dir-panel-resize:hover,
+.dir-panel.resizing .dir-panel-resize {
+  background: var(--accent-color, #89b4fa);
+  opacity: 0.5;
+}
+
+.dir-panel.resizing {
+  user-select: none;
 }
 
 .dir-panel-header {
