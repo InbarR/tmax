@@ -12,6 +12,43 @@ import type {
   SplitDirection,
 } from './types';
 
+// ── Theme → CSS variable sync ────────────────────────────────────────
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : null;
+}
+
+function luminance(hex: string): number {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 0;
+  return (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+}
+
+function adjustBrightness(hex: string, amount: number): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
+  return `#${[clamp(rgb.r + amount), clamp(rgb.g + amount), clamp(rgb.b + amount)].map(c => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+export function applyThemeToChromeVars(theme: Record<string, string>): void {
+  const bg = theme.background || '#1e1e2e';
+  const fg = theme.foreground || '#cdd6f4';
+  const isLight = luminance(bg) > 0.5;
+  const step = isLight ? -15 : 15;
+
+  const root = document.documentElement;
+  root.style.setProperty('--bg-primary', bg);
+  root.style.setProperty('--bg-secondary', adjustBrightness(bg, step));
+  root.style.setProperty('--border-color', adjustBrightness(bg, step * 2));
+  root.style.setProperty('--tab-bg', adjustBrightness(bg, step));
+  root.style.setProperty('--tab-active', adjustBrightness(bg, step * 2));
+  root.style.setProperty('--text-primary', fg);
+  root.style.setProperty('--text-secondary', adjustBrightness(fg, isLight ? 60 : -60));
+  root.style.setProperty('--focus-border', theme.blue || '#89b4fa');
+}
+
 // ── Pure tree helper functions ───────────────────────────────────────
 
 /**
@@ -245,6 +282,7 @@ interface TerminalStore {
   ) => Promise<void>;
   setSplitRatio: (splitNodeId: string, ratio: number) => void;
   swapTerminals: (idA: TerminalId, idB: TerminalId) => void;
+  reorderTerminals: (draggedId: TerminalId, overId: TerminalId) => void;
   moveToFloat: (id: TerminalId) => void;
   moveToTiling: (id: TerminalId, targetId?: TerminalId, side?: 'left' | 'right' | 'top' | 'bottom') => void;
   moveToDormant: (id: TerminalId) => void;
@@ -321,6 +359,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   loadConfig: async () => {
     const config = (await window.terminalAPI.getConfig()) as unknown as AppConfig;
+    if (config?.theme) applyThemeToChromeVars(config.theme);
     set({ config });
   },
 
@@ -522,6 +561,45 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     if (!layout.tilingRoot) return;
     const newRoot = swapLeaves(layout.tilingRoot, idA, idB);
     set({ layout: { ...layout, tilingRoot: newRoot } });
+  },
+
+  reorderTerminals: (draggedId: TerminalId, overId: TerminalId) => {
+    if (draggedId === overId) return;
+    const { terminals, layout } = get();
+    const entries = Array.from(terminals.entries());
+    const fromIndex = entries.findIndex(([id]) => id === draggedId);
+    const toIndex = entries.findIndex(([id]) => id === overId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const [moved] = entries.splice(fromIndex, 1);
+    entries.splice(toIndex, 0, moved);
+
+    // Reassign leaf positions so pane order matches new tab order
+    let newRoot = layout.tilingRoot;
+    if (newRoot) {
+      const currentLeafSet = new Set(getLeafOrder(newRoot));
+      const newTiledOrder = entries
+        .filter(([id]) => currentLeafSet.has(id))
+        .map(([id]) => id);
+
+      let leafIdx = 0;
+      function reassignLeaves(node: LayoutNode): LayoutNode {
+        if (node.kind === 'leaf') {
+          const newId = newTiledOrder[leafIdx++];
+          return newId === node.terminalId ? node : { ...node, terminalId: newId };
+        }
+        const newFirst = reassignLeaves(node.first);
+        const newSecond = reassignLeaves(node.second);
+        if (newFirst === node.first && newSecond === node.second) return node;
+        return { ...node, first: newFirst, second: newSecond };
+      }
+      newRoot = reassignLeaves(newRoot);
+    }
+
+    set({
+      terminals: new Map(entries),
+      layout: { ...layout, tilingRoot: newRoot },
+    });
   },
 
   moveToFloat: (id: TerminalId) => {
@@ -853,6 +931,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     for (const [key, value] of Object.entries(update)) {
       await window.terminalAPI.setConfig(key, value);
     }
+    if (update.theme) applyThemeToChromeVars(newConfig.theme);
     set({ config: newConfig });
   },
 
@@ -1100,6 +1179,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   addRecentDir: (dir: string) => {
+    // Only add actual directories, not executable paths
+    if (/\.(exe|cmd|bat|com|ps1|sh|msi|dll)$/i.test(dir)) return;
     const { recentDirs } = get();
     const filtered = recentDirs.filter((d) => d !== dir);
     const updated = [dir, ...filtered].slice(0, 10);
@@ -1133,9 +1214,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const session = (await window.terminalAPI.loadSession()) as Record<string, unknown> | null;
     if (session) {
       _sessionExtras = { ..._sessionExtras, ...session };
+      const isNotExe = (d: string) => !/\.(exe|cmd|bat|com|ps1|sh|msi|dll)$/i.test(d);
       set({
-        favoriteDirs: (session.favoriteDirs as string[]) ?? [],
-        recentDirs: (session.recentDirs as string[]) ?? [],
+        favoriteDirs: ((session.favoriteDirs as string[]) ?? []).filter(isNotExe),
+        recentDirs: ((session.recentDirs as string[]) ?? []).filter(isNotExe),
       });
     }
   },
@@ -1186,11 +1268,16 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         const profile = config!.shells.find((s) => s.id === info.shellProfileId) ?? config!.shells[0];
         if (!profile) return null;
         const id = uuidv4();
+        // Sanitize cwd: skip executable paths that were incorrectly saved as cwd
+        let cwd = info.cwd || '';
+        if (/\.(exe|cmd|bat|com|ps1|sh|msi|dll)$/i.test(cwd) || !cwd) {
+          cwd = profile.cwd || (navigator.platform.startsWith('Win') ? 'C:\\Users' : process.env.HOME || '/');
+        }
         try {
           const { pid } = await window.terminalAPI.createPty({
-            id, shellPath: profile.path, args: profile.args, cwd: info.cwd || 'C:\\Users', env: profile.env, cols: 80, rows: 24,
+            id, shellPath: profile.path, args: profile.args, cwd, env: profile.env, cols: 80, rows: 24,
           });
-          return { id, instance: { id, title: info.title || profile.name, customTitle: !!info.title, shellProfileId: profile.id, cwd: info.cwd, mode: 'tiled' as const, pid, lastProcess: '', startupCommand: info.startupCommand || '' } };
+          return { id, instance: { id, title: info.title || profile.name, customTitle: !!info.title, shellProfileId: profile.id, cwd, mode: 'tiled' as const, pid, lastProcess: '', startupCommand: info.startupCommand || '' } };
         } catch { return null; }
       }
 

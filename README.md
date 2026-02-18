@@ -76,6 +76,9 @@ Switch themes from the command palette (type "theme"):
 - **Tokyo Night**
 - **Solarized Dark**
 - **One Dark**
+- **Solarized Light**
+- **GitHub Light**
+- **Catppuccin Latte**
 
 Or create your own in Settings > Theme with color pickers.
 
@@ -89,7 +92,20 @@ Right-click any tab for:
 - New Terminal (pick shell)
 - Close / Close Others / Close All
 
-## Getting Started
+## Download
+
+Get the latest release from [GitHub Releases](https://github.com/InbarR/tmax/releases/latest).
+
+| Platform | Download |
+|---|---|
+| **Windows** (installer) | [tmax-1.0.0.Setup.exe](https://github.com/InbarR/tmax/releases/download/v1.0.0/tmax-1.0.0.Setup.exe) |
+| **Windows** (portable) | [tmax-win32-x64-portable.zip](https://github.com/InbarR/tmax/releases/download/v1.0.0/tmax-win32-x64-portable.zip) |
+| **macOS** (Apple Silicon) | [tmax-1.0.0-arm64.dmg](https://github.com/InbarR/tmax/releases/download/v1.0.0/tmax-1.0.0-arm64.dmg) |
+| **macOS** (Intel) | [tmax-1.0.0-x64.dmg](https://github.com/InbarR/tmax/releases/download/v1.0.0/tmax-1.0.0-x64.dmg) |
+| **Linux** (.deb) | [tmax_1.0.0_amd64.deb](https://github.com/InbarR/tmax/releases/download/v1.0.0/tmax_1.0.0_amd64.deb) |
+| **Linux** (.rpm) | [tmax-1.0.0-1.x86_64.rpm](https://github.com/InbarR/tmax/releases/download/v1.0.0/tmax-1.0.0-1.x86_64.rpm) |
+
+## Building from Source
 
 ### Prerequisites
 
@@ -115,21 +131,10 @@ npm run build
 ```
 
 Output per platform:
-- **Windows**: `out/make/squirrel.windows/x64/tmax-1.0.0 Setup.exe`
-- **macOS**: `out/make/tmax-1.0.0.dmg`
-- **Linux**: `out/make/deb/x64/tmax_1.0.0_amd64.deb` and `.rpm`
+- **Windows**: `out/make/squirrel.windows/x64/tmax-1.0.0.Setup.exe`
+- **macOS**: `out/make/*.dmg`
+- **Linux**: `out/make/deb/x64/*.deb` and `out/make/rpm/x64/*.rpm`
 - **All**: portable `.zip`
-
-### CI/CD
-
-Push a tag to trigger cross-platform builds on GitHub Actions:
-
-```bash
-git tag v1.0.0
-git push --tags
-```
-
-This builds for Windows, macOS, and Linux, and creates a GitHub Release with all artifacts.
 
 ## Architecture
 

@@ -1,4 +1,6 @@
 import { IPty, spawn } from 'node-pty';
+import { existsSync, statSync } from 'fs';
+import { homedir } from 'os';
 
 export interface PtyCreateOpts {
   id: string;
@@ -24,12 +26,22 @@ export class PtyManager {
   }
 
   create(opts: PtyCreateOpts): { id: string; pid: number } {
+    // Validate cwd is an existing directory; fall back to home dir
+    let cwd = opts.cwd;
+    try {
+      if (!cwd || !existsSync(cwd) || !statSync(cwd).isDirectory()) {
+        cwd = homedir();
+      }
+    } catch {
+      cwd = homedir();
+    }
+
     const baseEnv = opts.env ?? (process.env as Record<string, string>);
     const ptyProcess = spawn(opts.shellPath, opts.args, {
       name: 'xterm-256color',
       cols: opts.cols,
       rows: opts.rows,
-      cwd: opts.cwd,
+      cwd,
       useConpty: true,
       env: { ...baseEnv, TERM_PROGRAM: 'tmax', COLORTERM: 'truecolor' },
     });

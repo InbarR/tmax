@@ -187,10 +187,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
         const sep = processName.includes('\\') ? '\\' : '/';
         processName = (processName.split(sep).pop() || processName).replace(/\.(exe|cmd|bat|com)$/i, '');
         const updates: Partial<typeof terminal> = { lastProcess: processName };
-        // If the title looks like a path, update cwd and track in recents
-        if (rawTitle.match(/^[A-Z]:\\/i) || rawTitle.startsWith('/')) {
-          updates.cwd = rawTitle;
-          store.addRecentDir(rawTitle);
+        // If the title looks like a directory path, update cwd and track in recents
+        // Only accept paths that don't end with a file extension (i.e. actual folders)
+        const trimmed = rawTitle.trim();
+        const looksLikePath = /^[A-Z]:\\/i.test(trimmed) || trimmed.startsWith('/');
+        const hasFileExtension = /\.\w{1,5}$/i.test(trimmed);
+        if (looksLikePath && !hasFileExtension) {
+          updates.cwd = rawTitle.trim();
+          store.addRecentDir(rawTitle.trim());
         }
         const newTerminals = new Map(store.terminals);
         newTerminals.set(terminalId, { ...terminal, ...updates });

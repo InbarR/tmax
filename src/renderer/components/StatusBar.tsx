@@ -55,10 +55,10 @@ const StatusBar: React.FC = () => {
         <span className="status-dim">v1.0.0</span>
         <button
           className="status-help-btn"
-          onClick={() => useTerminalStore.getState().toggleShortcuts()}
-          title="Show keyboard shortcuts (Ctrl+Shift+?)"
+          onClick={() => useTerminalStore.getState().toggleCommandPalette()}
+          title="Show command palette (Ctrl+Shift+P)"
         >
-          ?
+          &#9776;
         </button>
       </div>
     </div>

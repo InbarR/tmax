@@ -1,5 +1,5 @@
-import React, { useCallback, useState, useEffect, useRef } from 'react';
-import { useDraggable } from '@dnd-kit/core';
+import React, { useCallback, useState, useEffect, useRef, useMemo } from 'react';
+import { SortableContext, useSortable, horizontalListSortingStrategy, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useTerminalStore } from '../state/terminal-store';
 import type { TerminalId } from '../state/types';
@@ -24,8 +24,8 @@ const Tab: React.FC<TabProps> = ({
   onClose,
   onContextMenu,
 }) => {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: terminalId });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: terminalId });
   const [renameValue, setRenameValue] = useState(title);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -61,7 +61,8 @@ const Tab: React.FC<TabProps> = ({
   const className = `tab${isActive ? ' active' : ''}${isDormant ? ' dormant' : ''}${isDetached ? ' detached' : ''}${isSelected ? ' selected' : ''}`;
 
   const style: React.CSSProperties = {
-    transform: CSS.Translate.toString(transform),
+    transform: CSS.Transform.toString(transform),
+    transition,
     opacity: isDragging ? 0.5 : 1,
     ...(tabColor ? { background: `${tabColor}55`, borderBottom: `2px solid ${tabColor}` } : {}),
   };
@@ -100,7 +101,13 @@ const Tab: React.FC<TabProps> = ({
       }}
       onMouseDown={handleMouseDown}
       onContextMenu={onContextMenu}
-      onDoubleClick={() => useTerminalStore.getState().startRenaming(terminalId)}
+      onDoubleClick={() => {
+        if (isDormant) {
+          useTerminalStore.getState().wakeFromDormant(terminalId);
+        } else {
+          useTerminalStore.getState().startRenaming(terminalId);
+        }
+      }}
       {...attributes}
       {...listeners}
     >
@@ -162,21 +169,25 @@ const TabBar: React.FC<{ vertical?: boolean }> = ({ vertical }) => {
   );
 
   const terminalEntries = Array.from(terminals.entries());
+  const terminalIds = useMemo(() => terminalEntries.map(([id]) => id), [terminalEntries]);
+  const sortStrategy = vertical ? verticalListSortingStrategy : horizontalListSortingStrategy;
 
   return (
     <div className={`tab-bar${vertical ? ' vertical' : ''}`}>
-      {terminalEntries.map(([id, terminal]) => (
-        <Tab
-          key={id}
-          terminalId={id}
-          title={terminal.title}
-          isActive={focusedTerminalId === id}
-          isRenaming={renamingId === id}
-          onActivate={() => useTerminalStore.getState().setFocus(id)}
-          onClose={() => useTerminalStore.getState().closeTerminal(id)}
-          onContextMenu={(e) => handleContextMenu(e, id)}
-        />
-      ))}
+      <SortableContext items={terminalIds} strategy={sortStrategy}>
+        {terminalEntries.map(([id, terminal]) => (
+          <Tab
+            key={id}
+            terminalId={id}
+            title={terminal.title}
+            isActive={focusedTerminalId === id}
+            isRenaming={renamingId === id}
+            onActivate={() => useTerminalStore.getState().setFocus(id)}
+            onClose={() => useTerminalStore.getState().closeTerminal(id)}
+            onContextMenu={(e) => handleContextMenu(e, id)}
+          />
+        ))}
+      </SortableContext>
       <button className="tab-add" onClick={handleCreate} title="New Terminal">
         +
       </button>

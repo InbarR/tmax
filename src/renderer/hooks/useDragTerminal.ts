@@ -47,7 +47,10 @@ export function useDragTerminal(): UseDragTerminalResult {
       const droppableId = String(event.over.id);
       const parsed = parseDroppableId(droppableId);
 
-      if (parsed) {
+      if (!parsed) {
+        // Not a drop zone — it's a tab reorder (terminal ID)
+        store.reorderTerminals(draggedId, droppableId);
+      } else if (parsed) {
         const { targetId, side } = parsed;
 
         if (side === 'center') {
