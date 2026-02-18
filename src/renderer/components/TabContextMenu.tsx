@@ -61,7 +61,7 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, onClose }) =>
 
   const handleRenameSubmit = useCallback(() => {
     if (renameValue.trim()) {
-      store().renameTerminal(position.terminalId, renameValue.trim());
+      store().renameTerminal(position.terminalId, renameValue.trim(), true);
     }
     onClose();
   }, [renameValue, position.terminalId, onClose]);

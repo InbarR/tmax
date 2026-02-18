@@ -127,10 +127,6 @@ const defaultConfig: AppConfig = {
     { action: 'resizeDown', key: 'Ctrl+Shift+Alt+ArrowDown' },
     { action: 'resizeLeft', key: 'Ctrl+Shift+Alt+ArrowLeft' },
     { action: 'resizeRight', key: 'Ctrl+Shift+Alt+ArrowRight' },
-    { action: 'resizeRight', key: 'Ctrl+ArrowRight' },
-    { action: 'resizeLeft', key: 'Ctrl+ArrowLeft' },
-    { action: 'resizeDown', key: 'Ctrl+ArrowDown' },
-    { action: 'resizeUp', key: 'Ctrl+ArrowUp' },
   ],
   theme: {
     background: '#1e1e2e',

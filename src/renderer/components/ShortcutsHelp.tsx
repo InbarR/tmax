@@ -21,7 +21,7 @@ const shortcuts = [
   { category: 'Layout', items: [
     { key: 'Ctrl+Alt+Arrow', action: 'Split in direction' },
     { key: 'Ctrl+Shift+F', action: 'Toggle float / dock' },
-    { key: 'Ctrl+Arrow / Ctrl+Shift+Alt+Arrow', action: 'Resize pane' },
+    { key: 'Ctrl+Shift+Alt+Arrow', action: 'Resize pane' },
     { key: 'Ctrl+Shift+E', action: 'Equalize all pane sizes' },
   ]},
   { category: 'Zoom', items: [

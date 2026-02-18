@@ -72,10 +72,6 @@ const DEFAULT_BINDINGS: Record<string, string> = {
   'Ctrl+Shift+Alt+ArrowLeft': 'resizeLeft',
   'Ctrl+Shift+Alt+ArrowRight': 'resizeRight',
   'Ctrl+Shift+M': 'tabMenu',
-  'Ctrl+ArrowRight': 'resizeRight',
-  'Ctrl+ArrowLeft': 'resizeLeft',
-  'Ctrl+ArrowDown': 'resizeDown',
-  'Ctrl+ArrowUp': 'resizeUp',
 };
 
 export function useKeybindings(): void {
