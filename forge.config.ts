@@ -50,6 +50,7 @@ const config: ForgeConfig = {
       options: {
         name: "tmax",
         productName: "tmax",
+        license: "MIT",
         homepage: "https://github.com/InbarR/tmax",
         description: "Powerful multi-terminal app with tiling and floating panels",
         categories: ["Utility", "TerminalEmulator"],

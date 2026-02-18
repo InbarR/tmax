@@ -2,6 +2,7 @@
   "name": "tmax",
   "version": "1.0.0",
   "description": "Powerful multi-terminal app with tiling, floating panels, and keyboard-driven workflow",
+  "license": "MIT",
   "author": "tmax",
   "main": ".vite/build/main.js",
   "scripts": {
