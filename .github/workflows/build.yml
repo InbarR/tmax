@@ -1,9 +1,12 @@
-name: Build & Release
+name: Build and Release
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -13,50 +16,93 @@ jobs:
         include:
           - os: windows-latest
             platform: win32
+            arch: x64
           - os: macos-latest
             platform: darwin
+            arch: x64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
           - os: ubuntu-latest
             platform: linux
+            arch: x64
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
+          cache: 'npm'
 
-      # Linux dependencies for Electron
+      # Linux dependencies for Electron + native modules
       - name: Install Linux build dependencies
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y dpkg fakeroot rpm libx11-dev libxkbfile-dev
 
+      # Generate macOS icon (icns) from png
+      - name: Generate macOS icon
+        if: matrix.platform == 'darwin'
+        run: |
+          mkdir -p assets/icon.iconset
+          sips -z 16 16     assets/icon.png --out assets/icon.iconset/icon_16x16.png
+          sips -z 32 32     assets/icon.png --out assets/icon.iconset/icon_16x16@2x.png
+          sips -z 32 32     assets/icon.png --out assets/icon.iconset/icon_32x32.png
+          sips -z 64 64     assets/icon.png --out assets/icon.iconset/icon_32x32@2x.png
+          sips -z 128 128   assets/icon.png --out assets/icon.iconset/icon_128x128.png
+          sips -z 256 256   assets/icon.png --out assets/icon.iconset/icon_128x128@2x.png
+          sips -z 256 256   assets/icon.png --out assets/icon.iconset/icon_256x256.png
+          sips -z 512 512   assets/icon.png --out assets/icon.iconset/icon_256x256@2x.png
+          sips -z 512 512   assets/icon.png --out assets/icon.iconset/icon_512x512.png
+          sips -z 1024 1024 assets/icon.png --out assets/icon.iconset/icon_512x512@2x.png
+          iconutil -c icns assets/icon.iconset -o assets/icon.icns
+
       - name: Install dependencies
         run: npm install
 
-      - name: Build
-        run: npm run build
+      - name: Build for ${{ matrix.platform }}-${{ matrix.arch }}
+        run: npm run build -- --arch=${{ matrix.arch }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Ad-hoc sign macOS app so it can run without Gatekeeper errors
+      - name: Ad-hoc sign macOS app
+        if: matrix.platform == 'darwin'
+        run: |
+          codesign --force --deep --sign - out/tmax-darwin-${{ matrix.arch }}/tmax.app
+
+      # Create portable ZIP for Windows
+      - name: Create Windows portable ZIP
+        if: matrix.platform == 'win32'
+        run: |
+          cd out
+          7z a -tzip tmax-win32-${{ matrix.arch }}-portable.zip tmax-win32-${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tmax-${{ matrix.platform }}
+          name: tmax-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             out/make/**/*.exe
+            out/make/**/*.zip
             out/make/**/*.dmg
             out/make/**/*.deb
             out/make/**/*.rpm
-            out/make/**/*.zip
+            out/make/**/*.nupkg
+            out/*.zip
+          if-no-files-found: warn
 
   release:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+
     permissions:
       contents: write
 
@@ -66,11 +112,33 @@ jobs:
         with:
           path: artifacts
 
-      - name: List artifacts
-        run: find artifacts -type f
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      # Rename DMG files to include architecture
+      - name: Rename DMG files to include architecture
+        run: |
+          for dir in artifacts/tmax-darwin-*/; do
+            arch=$(basename "$dir" | sed 's/tmax-darwin-//')
+            for dmg in "$dir"out/make/**/*.dmg; do
+              if [ -f "$dmg" ]; then
+                newname=$(dirname "$dmg")/tmax-darwin-${arch}.dmg
+                mv "$dmg" "$newname"
+              fi
+            done
+          done
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
+          files: |
+            artifacts/**/*.exe
+            artifacts/**/*.zip
+            artifacts/**/*.dmg
+            artifacts/**/*.deb
+            artifacts/**/*.rpm
+          draft: false
+          prerelease: false
           generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
