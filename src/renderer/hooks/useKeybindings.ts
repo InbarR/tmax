@@ -203,7 +203,7 @@ function dispatchAction(action: string): void {
       store.equalizeLayout();
       break;
     case 'toggleFocusMode':
-      store.toggleFocusMode();
+      store.toggleViewMode();
       break;
     case 'toggleDormant':
       if (focusedId) {

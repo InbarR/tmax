@@ -62,7 +62,8 @@ const TilingNode: React.FC<TilingNodeProps> = ({ node }) => {
 
 const TilingLayout: React.FC = () => {
   const tilingRoot = useTerminalStore((s) => s.layout.tilingRoot);
-  const focusModeTerminalId = useTerminalStore((s) => s.focusModeTerminalId);
+  const viewMode = useTerminalStore((s) => s.viewMode);
+  const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
 
   if (!tilingRoot) {
     return (
@@ -72,10 +73,10 @@ const TilingLayout: React.FC = () => {
     );
   }
 
-  if (focusModeTerminalId) {
+  if (viewMode === 'focus' && focusedTerminalId) {
     return (
       <div className="tiling-leaf">
-        <TerminalPanel terminalId={focusModeTerminalId} />
+        <TerminalPanel terminalId={focusedTerminalId} />
       </div>
     );
   }

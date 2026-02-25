@@ -167,10 +167,10 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, onClose }) =>
           </button>
           <div className="context-menu-separator" />
           <button className="context-menu-item" onClick={() => {
-            store().toggleFocusMode(position.terminalId);
+            store().toggleViewMode();
             onClose();
           }}>
-            {store().focusModeTerminalId === position.terminalId ? 'Exit Focus Mode' : 'Focus Mode'} <span className="shortcut">Ctrl+Shift+F</span>
+            {store().viewMode === 'focus' ? 'Split Mode' : 'Focus Mode'} <span className="shortcut">Ctrl+Shift+F</span>
           </button>
           <button className="context-menu-item" onClick={() => {
             const t = store().terminals.get(position.terminalId);

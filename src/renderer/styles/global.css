@@ -864,6 +864,24 @@ body,
   text-decoration: underline;
 }
 
+.status-mode-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 1px 6px;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.status-mode-btn:hover {
+  background: rgba(137, 180, 250, 0.15);
+  color: var(--text-primary);
+  border-color: var(--focus-border);
+}
+
 .status-help-btn {
   width: 18px;
   height: 18px;

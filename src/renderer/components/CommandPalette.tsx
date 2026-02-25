@@ -33,7 +33,7 @@ const CommandPalette: React.FC = () => {
       { id: 'splitDown', label: 'Split Down', shortcut: 'Ctrl+Alt+\u2193', action: () => { const id = focusedId(); if (id) store().splitTerminal(id, 'vertical', undefined, 'bottom'); } },
       { id: 'splitLeft', label: 'Split Left', shortcut: 'Ctrl+Alt+\u2190', action: () => { const id = focusedId(); if (id) store().splitTerminal(id, 'horizontal', undefined, 'left'); } },
       { id: 'splitUp', label: 'Split Up', shortcut: 'Ctrl+Alt+\u2191', action: () => { const id = focusedId(); if (id) store().splitTerminal(id, 'vertical', undefined, 'top'); } },
-      { id: 'toggleFocusMode', label: 'Toggle Focus Mode (Maximize Terminal)', shortcut: 'Ctrl+Shift+F', action: () => { const id = focusedId(); if (id) store().toggleFocusMode(id); } },
+      { id: 'toggleViewMode', label: 'Toggle View Mode (Focus / Split)', shortcut: 'Ctrl+Shift+F', action: () => store().toggleViewMode() },
       { id: 'toggleDormant', label: 'Toggle Hide (Dormant)', shortcut: 'Ctrl+Shift+H', action: () => { const id = focusedId(); if (id) { const t = store().terminals.get(id); if (t?.mode === 'dormant') store().wakeFromDormant(id); else store().moveToDormant(id); } } },
       { id: 'equalize', label: 'Equalize Pane Sizes', shortcut: 'Ctrl+Shift+E', action: () => store().equalizeLayout() },
       { id: 'zoomIn', label: 'Zoom In', shortcut: 'Ctrl+=', action: () => store().zoomIn() },

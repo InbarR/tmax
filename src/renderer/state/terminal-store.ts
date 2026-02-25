@@ -261,7 +261,7 @@ interface TerminalStore {
   showSettings: boolean;
   tabBarPosition: 'top' | 'left';
   renamingTerminalId: TerminalId | null;
-  focusModeTerminalId: TerminalId | null;
+  viewMode: 'split' | 'focus';
   selectedTerminalIds: Record<TerminalId, true>;
   fontSize: number;
   favoriteDirs: string[];
@@ -303,7 +303,7 @@ interface TerminalStore {
   updateConfig: (update: Partial<AppConfig>) => Promise<void>;
   toggleTabBarPosition: () => void;
   startRenaming: (id: TerminalId | null) => void;
-  toggleFocusMode: (id?: TerminalId) => void;
+  toggleViewMode: () => void;
   toggleSelectTerminal: (id: TerminalId) => void;
   clearSelection: () => void;
   equalizeLayout: () => void;
@@ -351,7 +351,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   recentDirs: [],
   tabBarPosition: 'top' as 'top' | 'left',
   renamingTerminalId: null,
-  focusModeTerminalId: null,
+  viewMode: 'split' as 'split' | 'focus',
   selectedTerminalIds: {} as Record<TerminalId, true>,
   fontSize: 14,
 
@@ -453,18 +453,15 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       }
     }
 
-    const newFocusMode = get().focusModeTerminalId === id ? null : get().focusModeTerminalId;
-
     set({
       terminals: newTerminals,
       layout: { tilingRoot: newRoot, floatingPanels: newFloating },
       focusedTerminalId: newFocus,
-      focusModeTerminalId: newFocusMode,
     });
   },
 
   setFocus: (id: TerminalId) => {
-    const { terminals, layout, nextZIndex, focusModeTerminalId } = get();
+    const { terminals, layout, nextZIndex } = get();
     if (!terminals.has(id)) return;
 
     const instance = terminals.get(id)!;
@@ -488,9 +485,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         layout: { ...layout, floatingPanels: newFloating },
         nextZIndex: nextZIndex + 1,
       });
-    } else if (focusModeTerminalId && instance.mode === 'tiled' && id !== focusModeTerminalId) {
-      // Exit focus mode when switching to a different tiled terminal
-      set({ focusedTerminalId: id, focusModeTerminalId: null });
     } else {
       set({ focusedTerminalId: id });
     }
@@ -636,7 +630,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       },
       nextZIndex: nextZIndex + 1,
       focusedTerminalId: id,
-      focusModeTerminalId: get().focusModeTerminalId === id ? null : get().focusModeTerminalId,
     });
   },
 
@@ -709,7 +702,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       terminals: newTerminals,
       layout: { tilingRoot: newRoot, floatingPanels: newFloating },
       focusedTerminalId: newFocus,
-      focusModeTerminalId: get().focusModeTerminalId === id ? null : get().focusModeTerminalId,
     });
   },
 
@@ -798,7 +790,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       terminals: newTerminals,
       layout: { tilingRoot: newRoot, floatingPanels: newFloating },
       focusedTerminalId: newFocus,
-      focusModeTerminalId: get().focusModeTerminalId === id ? null : get().focusModeTerminalId,
     });
   },
 
@@ -943,16 +934,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set({ renamingTerminalId: id });
   },
 
-  toggleFocusMode: (id?: TerminalId) => {
-    const { focusModeTerminalId, focusedTerminalId } = get();
-    const targetId = id ?? focusedTerminalId;
-    if (!targetId) return;
-
-    if (focusModeTerminalId === targetId) {
-      set({ focusModeTerminalId: null });
-    } else {
-      set({ focusModeTerminalId: targetId, focusedTerminalId: targetId });
-    }
+  toggleViewMode: () => {
+    const { viewMode } = get();
+    set({ viewMode: viewMode === 'split' ? 'focus' : 'split' });
   },
 
   toggleSelectTerminal: (id: TerminalId) => {
