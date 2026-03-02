@@ -201,7 +201,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
         useTerminalStore.setState({ terminals: newTerminals });
       }
 
-      if (terminal && rawTitle && !terminal.customTitle) {
+      if (terminal && rawTitle && !terminal.customTitle && store.renamingTerminalId !== terminalId) {
         // Extract short name: last path segment, strip .exe
         let name = rawTitle;
         // Handle Windows paths (C:\foo\bar.exe) and unix paths (/usr/bin/bash)
@@ -307,7 +307,22 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     } catch { /* terminal may be disposed */ }
   }, [isFocused]);
 
+  // Re-focus xterm when the OS window regains focus (alt-tab back)
+  useEffect(() => {
+    if (!isFocused) return;
+    const handleWindowFocus = () => {
+      try {
+        if (terminalRef.current) {
+          terminalRef.current.focus();
+        }
+      } catch { /* terminal may be disposed */ }
+    };
+    window.addEventListener('focus', handleWindowFocus);
+    return () => window.removeEventListener('focus', handleWindowFocus);
+  }, [isFocused]);
+
   // Apply tab color or default color as terminal background tint via CSS overlay
+  const title = useTerminalStore((s) => s.terminals.get(terminalId)?.title);
   const tabColor = useTerminalStore((s) => s.terminals.get(terminalId)?.tabColor);
   const defaultTabColor = useTerminalStore((s) => (s.config as any)?.defaultTabColor);
   const bgTint = tabColor || defaultTabColor;
@@ -368,6 +383,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
           <button className="terminal-search-btn" onClick={handleCloseSearch} title="Close">&#10005;</button>
         </div>
       )}
+      {title && <div className="terminal-pane-title">{title}</div>}
       <div ref={containerRef} className="xterm-container" />
       {bgTint && <div className="terminal-color-overlay" style={{ background: bgTint + '18' }} />}
     </div>

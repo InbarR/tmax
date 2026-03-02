@@ -17,6 +17,7 @@ import ShortcutsHelp from './components/ShortcutsHelp';
 import Settings from './components/Settings';
 import CommandPalette from './components/CommandPalette';
 import DirPanel from './components/DirPanel';
+import CopilotPanel from './components/CopilotPanel';
 
 const App: React.FC = () => {
   const loadConfig = useTerminalStore((s) => s.loadConfig);
@@ -106,6 +107,7 @@ const App: React.FC = () => {
         <TabBar vertical={tabBarPosition === 'left'} />
         <div className="main-area">
           <DirPanel />
+          <CopilotPanel />
           <div className="layout-area">
             <TilingLayout />
             <FloatingLayer />

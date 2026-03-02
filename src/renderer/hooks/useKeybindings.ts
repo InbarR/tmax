@@ -72,6 +72,8 @@ const DEFAULT_BINDINGS: Record<string, string> = {
   'Ctrl+Shift+Alt+ArrowLeft': 'resizeLeft',
   'Ctrl+Shift+Alt+ArrowRight': 'resizeRight',
   'Ctrl+Shift+M': 'tabMenu',
+  'Ctrl+Shift+C': 'copilotPanel',
+  'Ctrl+Shift+L': 'cycleGridColumns',
 };
 
 export function useKeybindings(): void {
@@ -220,6 +222,12 @@ function dispatchAction(action: string): void {
       break;
     case 'tabMenu':
       store.openTabMenu();
+      break;
+    case 'copilotPanel':
+      store.toggleCopilotPanel();
+      break;
+    case 'cycleGridColumns':
+      store.cycleGridColumns();
       break;
     case 'moveUp':
     case 'moveDown':

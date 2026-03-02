@@ -11,6 +11,7 @@ import type {
   AppConfig,
   SplitDirection,
 } from './types';
+import type { CopilotSessionSummary } from '../../shared/copilot-types';
 
 // ── Theme → CSS variable sync ────────────────────────────────────────
 
@@ -244,6 +245,52 @@ function findDirectionalNeighbor(
   return null;
 }
 
+// ── Grid layout builder ──────────────────────────────────────────────
+
+function buildGridRow(ids: TerminalId[]): LayoutNode {
+  if (ids.length === 1) return { kind: 'leaf', terminalId: ids[0] };
+  const mid = Math.ceil(ids.length / 2);
+  return {
+    kind: 'split',
+    id: uuidv4(),
+    direction: 'horizontal',
+    splitRatio: mid / ids.length,
+    first: buildGridRow(ids.slice(0, mid)),
+    second: buildGridRow(ids.slice(mid)),
+  };
+}
+
+function stackGridRows(nodes: LayoutNode[]): LayoutNode {
+  if (nodes.length === 1) return nodes[0];
+  const mid = Math.ceil(nodes.length / 2);
+  return {
+    kind: 'split',
+    id: uuidv4(),
+    direction: 'vertical',
+    splitRatio: mid / nodes.length,
+    first: stackGridRows(nodes.slice(0, mid)),
+    second: stackGridRows(nodes.slice(mid)),
+  };
+}
+
+function buildGridTree(terminalIds: TerminalId[], forceCols?: number): LayoutNode | null {
+  if (terminalIds.length === 0) return null;
+  if (terminalIds.length === 1) return { kind: 'leaf', terminalId: terminalIds[0] };
+  const n = terminalIds.length;
+  const cols = forceCols && forceCols > 0 ? Math.min(forceCols, n) : Math.ceil(Math.sqrt(n));
+  const rows = Math.ceil(n / cols);
+  const rowNodes: LayoutNode[] = [];
+  let idx = 0;
+  for (let r = 0; r < rows; r++) {
+    const rowTerminals: TerminalId[] = [];
+    for (let c = 0; c < cols && idx < n; c++) {
+      rowTerminals.push(terminalIds[idx++]);
+    }
+    rowNodes.push(buildGridRow(rowTerminals));
+  }
+  return stackGridRows(rowNodes);
+}
+
 // ── Store interface ──────────────────────────────────────────────────
 
 interface TerminalStore {
@@ -261,13 +308,20 @@ interface TerminalStore {
   showSettings: boolean;
   tabBarPosition: 'top' | 'left';
   renamingTerminalId: TerminalId | null;
-  viewMode: 'split' | 'focus';
+  viewMode: 'split' | 'focus' | 'grid';
+  gridColumns: number; // 0 = auto (sqrt-based), 1..N = fixed column count
+  preGridRoot: LayoutNode | null; // saved layout before entering grid mode
   selectedTerminalIds: Record<TerminalId, true>;
   fontSize: number;
   favoriteDirs: string[];
   recentDirs: string[];
   showDirPicker: boolean;
   tabMenuTerminalId: TerminalId | null;
+  showCopilotPanel: boolean;
+  copilotSessions: CopilotSessionSummary[];
+  claudeCodeSessions: CopilotSessionSummary[];
+  copilotSearchQuery: string;
+  selectedCopilotSessionId: string | null;
 
   // Actions
   loadConfig: () => Promise<void>;
@@ -307,6 +361,7 @@ interface TerminalStore {
   toggleSelectTerminal: (id: TerminalId) => void;
   clearSelection: () => void;
   equalizeLayout: () => void;
+  cycleGridColumns: () => void;
   moveTerminalDirection: (id: TerminalId, dir: 'up' | 'down' | 'left' | 'right') => void;
   zoomIn: () => void;
   zoomOut: () => void;
@@ -325,6 +380,20 @@ interface TerminalStore {
   openTabMenu: (id?: TerminalId) => void;
   loadDirs: () => Promise<void>;
   saveDirs: () => Promise<void>;
+  toggleCopilotPanel: () => void;
+  loadCopilotSessions: () => Promise<void>;
+  searchCopilotSessions: (query: string) => Promise<void>;
+  openCopilotSession: (sessionId: string) => Promise<void>;
+  setCopilotSessions: (sessions: CopilotSessionSummary[]) => void;
+  addCopilotSession: (session: CopilotSessionSummary) => void;
+  updateCopilotSession: (session: CopilotSessionSummary) => void;
+  removeCopilotSession: (sessionId: string) => void;
+  loadClaudeCodeSessions: () => Promise<void>;
+  searchClaudeCodeSessions: (query: string) => Promise<void>;
+  openClaudeCodeSession: (sessionId: string) => Promise<void>;
+  addClaudeCodeSession: (session: CopilotSessionSummary) => void;
+  updateClaudeCodeSession: (session: CopilotSessionSummary) => void;
+  removeClaudeCodeSession: (sessionId: string) => void;
 }
 
 // Cached session extras (layouts, etc.) so saveSession doesn't need async load
@@ -346,12 +415,19 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   showCommandPalette: false,
   showSettings: false,
   showDirPicker: false,
+  showCopilotPanel: false,
+  copilotSessions: [],
+  claudeCodeSessions: [],
+  copilotSearchQuery: '',
+  selectedCopilotSessionId: null,
   tabMenuTerminalId: null,
   favoriteDirs: [],
   recentDirs: [],
   tabBarPosition: 'top' as 'top' | 'left',
   renamingTerminalId: null,
-  viewMode: 'split' as 'split' | 'focus',
+  viewMode: 'split' as 'split' | 'focus' | 'grid',
+  gridColumns: 0,
+  preGridRoot: null as LayoutNode | null,
   selectedTerminalIds: {} as Record<TerminalId, true>,
   fontSize: 14,
 
@@ -935,8 +1011,30 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   toggleViewMode: () => {
-    const { viewMode } = get();
-    set({ viewMode: viewMode === 'split' ? 'focus' : 'split' });
+    const { viewMode, layout, preGridRoot, gridColumns } = get();
+    if (viewMode === 'grid') {
+      // Grid → Focus: restore original tree
+      const restored = preGridRoot || layout.tilingRoot;
+      set({
+        viewMode: 'focus',
+        layout: { ...layout, tilingRoot: restored },
+        preGridRoot: null,
+      });
+    } else {
+      // Focus/Split → Grid: save current tree and build grid
+      const root = layout.tilingRoot;
+      if (!root) {
+        set({ viewMode: 'grid' });
+        return;
+      }
+      const ids = getLeafOrder(root);
+      const gridRoot = buildGridTree(ids, gridColumns || undefined);
+      set({
+        viewMode: 'grid',
+        preGridRoot: root,
+        layout: { ...layout, tilingRoot: gridRoot },
+      });
+    }
   },
 
   toggleSelectTerminal: (id: TerminalId) => {
@@ -977,6 +1075,38 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     }
 
     set({ layout: { ...layout, tilingRoot: equalize(layout.tilingRoot) } });
+  },
+
+  cycleGridColumns: () => {
+    const { layout, gridColumns, viewMode, preGridRoot } = get();
+    // Use the original tree (preGridRoot) to get terminal IDs if in grid mode
+    const sourceRoot = preGridRoot || layout.tilingRoot;
+    if (!sourceRoot) return;
+    const ids = getLeafOrder(sourceRoot);
+    const n = ids.length;
+    if (n <= 1) return;
+
+    const next = gridColumns + 1;
+    const newCols = next > n ? 0 : next;
+
+    // Rebuild grid tree with new column count
+    const newGridRoot = buildGridTree(ids, newCols || undefined);
+
+    if (viewMode === 'grid') {
+      // Already in grid mode — just replace the tree
+      set({
+        gridColumns: newCols,
+        layout: { ...layout, tilingRoot: newGridRoot },
+      });
+    } else {
+      // Enter grid mode
+      set({
+        gridColumns: newCols,
+        viewMode: 'grid',
+        preGridRoot: layout.tilingRoot,
+        layout: { ...layout, tilingRoot: newGridRoot },
+      });
+    }
   },
 
   moveTerminalDirection: (id: TerminalId, dir: 'up' | 'down' | 'left' | 'right') => {
@@ -1339,5 +1469,204 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       isDragging,
       draggedTerminalId: isDragging ? (terminalId ?? null) : null,
     });
+  },
+
+  // ── Copilot panel actions ──────────────────────────────────────────
+  toggleCopilotPanel: () => {
+    set((s) => ({ showCopilotPanel: !s.showCopilotPanel }));
+  },
+
+  loadCopilotSessions: async () => {
+    const sessions = await (window.terminalAPI as any).listCopilotSessions();
+    set({ copilotSessions: sessions ?? [] });
+  },
+
+  searchCopilotSessions: async (query: string) => {
+    set({ copilotSearchQuery: query });
+    if (!query.trim()) {
+      const sessions = await (window.terminalAPI as any).listCopilotSessions();
+      set({ copilotSessions: sessions ?? [] });
+      return;
+    }
+    const sessions = await (window.terminalAPI as any).searchCopilotSessions(query);
+    set({ copilotSessions: sessions ?? [] });
+  },
+
+  openCopilotSession: async (sessionId: string) => {
+    const session = await (window.terminalAPI as any).getCopilotSession(sessionId);
+    if (!session) return;
+
+    const cwd = session.workspace?.cwd || undefined;
+    const store = get();
+
+    // Create a new terminal at the session's cwd
+    const config = store.config;
+    if (!config) return;
+
+    const profileId = config.defaultShellId;
+    const profile = config.shells.find((s) => s.id === profileId);
+    if (!profile) return;
+
+    const id = uuidv4();
+    const termCwd = cwd || profile.cwd || (navigator.platform.startsWith('Win') ? 'C:\\Users' : '/');
+    const { pid } = await window.terminalAPI.createPty({
+      id,
+      shellPath: profile.path,
+      args: profile.args,
+      cwd: termCwd,
+      env: profile.env,
+      cols: 80,
+      rows: 24,
+    });
+
+    const displayName = session.workspace?.summary
+      || (session.workspace?.repository ? session.workspace.repository.split('/').pop() : null)
+      || session.workspace?.name
+      || sessionId.slice(0, 8);
+    const title = `Copilot: ${displayName}`;
+
+    const instance: TerminalInstance = {
+      id,
+      title,
+      shellProfileId: profileId,
+      cwd: termCwd,
+      customTitle: true,
+      mode: 'tiled',
+      pid,
+      lastProcess: '',
+      startupCommand: `agency copilot --resume ${sessionId}`,
+    };
+
+    const { terminals, layout } = get();
+    const newTerminals = new Map(terminals);
+    newTerminals.set(id, instance);
+    const newLeaf: LayoutLeafNode = { kind: 'leaf', terminalId: id };
+    let newRoot: LayoutNode;
+    if (layout.tilingRoot === null) {
+      newRoot = newLeaf;
+    } else {
+      const order = getLeafOrder(layout.tilingRoot);
+      newRoot = insertLeaf(layout.tilingRoot, order[order.length - 1], id, 'right');
+    }
+    set({
+      terminals: newTerminals,
+      layout: { ...layout, tilingRoot: newRoot },
+      focusedTerminalId: id,
+    });
+  },
+
+  setCopilotSessions: (sessions: CopilotSessionSummary[]) => {
+    set({ copilotSessions: sessions });
+  },
+
+  addCopilotSession: (session: CopilotSessionSummary) => {
+    set((s) => ({
+      copilotSessions: [...s.copilotSessions.filter((x) => x.id !== session.id), session],
+    }));
+  },
+
+  updateCopilotSession: (session: CopilotSessionSummary) => {
+    set((s) => ({
+      copilotSessions: s.copilotSessions.map((x) => (x.id === session.id ? session : x)),
+    }));
+  },
+
+  removeCopilotSession: (sessionId: string) => {
+    set((s) => ({
+      copilotSessions: s.copilotSessions.filter((x) => x.id !== sessionId),
+      selectedCopilotSessionId: s.selectedCopilotSessionId === sessionId ? null : s.selectedCopilotSessionId,
+    }));
+  },
+
+  // ── Claude Code session actions ────────────────────────────────────
+  loadClaudeCodeSessions: async () => {
+    const sessions = await (window.terminalAPI as any).listClaudeCodeSessions();
+    set({ claudeCodeSessions: sessions ?? [] });
+  },
+
+  searchClaudeCodeSessions: async (query: string) => {
+    if (!query.trim()) {
+      const sessions = await (window.terminalAPI as any).listClaudeCodeSessions();
+      set({ claudeCodeSessions: sessions ?? [] });
+      return;
+    }
+    const sessions = await (window.terminalAPI as any).searchClaudeCodeSessions(query);
+    set({ claudeCodeSessions: sessions ?? [] });
+  },
+
+  openClaudeCodeSession: async (sessionId: string) => {
+    const session = await (window.terminalAPI as any).getClaudeCodeSession(sessionId);
+    if (!session) return;
+
+    const cwd = session.cwd || undefined;
+    const store = get();
+    const config = store.config;
+    if (!config) return;
+
+    const profileId = config.defaultShellId;
+    const profile = config.shells.find((s: any) => s.id === profileId);
+    if (!profile) return;
+
+    const id = uuidv4();
+    const termCwd = cwd || profile.cwd || (navigator.platform.startsWith('Win') ? 'C:\\Users' : '/');
+    const { pid } = await window.terminalAPI.createPty({
+      id,
+      shellPath: profile.path,
+      args: profile.args,
+      cwd: termCwd,
+      env: profile.env,
+      cols: 80,
+      rows: 24,
+    });
+
+    const displayName = session.summary || sessionId.slice(0, 8);
+    const title = `Claude: ${displayName}`;
+
+    const instance: TerminalInstance = {
+      id,
+      title,
+      shellProfileId: profileId,
+      cwd: termCwd,
+      customTitle: true,
+      mode: 'tiled',
+      pid,
+      lastProcess: '',
+      startupCommand: `claude --resume`,
+    };
+
+    const { terminals, layout } = get();
+    const newTerminals = new Map(terminals);
+    newTerminals.set(id, instance);
+    const newLeaf: LayoutLeafNode = { kind: 'leaf', terminalId: id };
+    let newRoot: LayoutNode;
+    if (layout.tilingRoot === null) {
+      newRoot = newLeaf;
+    } else {
+      const order = getLeafOrder(layout.tilingRoot);
+      newRoot = insertLeaf(layout.tilingRoot, order[order.length - 1], id, 'right');
+    }
+    set({
+      terminals: newTerminals,
+      layout: { ...layout, tilingRoot: newRoot },
+      focusedTerminalId: id,
+    });
+  },
+
+  addClaudeCodeSession: (session: CopilotSessionSummary) => {
+    set((s) => ({
+      claudeCodeSessions: [...s.claudeCodeSessions.filter((x) => x.id !== session.id), session],
+    }));
+  },
+
+  updateClaudeCodeSession: (session: CopilotSessionSummary) => {
+    set((s) => ({
+      claudeCodeSessions: s.claudeCodeSessions.map((x) => (x.id === session.id ? session : x)),
+    }));
+  },
+
+  removeClaudeCodeSession: (sessionId: string) => {
+    set((s) => ({
+      claudeCodeSessions: s.claudeCodeSessions.filter((x) => x.id !== sessionId),
+    }));
   },
 }));

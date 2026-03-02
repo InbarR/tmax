@@ -33,7 +33,8 @@ const CommandPalette: React.FC = () => {
       { id: 'splitDown', label: 'Split Down', shortcut: 'Ctrl+Alt+\u2193', action: () => { const id = focusedId(); if (id) store().splitTerminal(id, 'vertical', undefined, 'bottom'); } },
       { id: 'splitLeft', label: 'Split Left', shortcut: 'Ctrl+Alt+\u2190', action: () => { const id = focusedId(); if (id) store().splitTerminal(id, 'horizontal', undefined, 'left'); } },
       { id: 'splitUp', label: 'Split Up', shortcut: 'Ctrl+Alt+\u2191', action: () => { const id = focusedId(); if (id) store().splitTerminal(id, 'vertical', undefined, 'top'); } },
-      { id: 'toggleViewMode', label: 'Toggle View Mode (Focus / Split)', shortcut: 'Ctrl+Shift+F', action: () => store().toggleViewMode() },
+      { id: 'toggleViewMode', label: 'Toggle View Mode (Focus / Grid)', shortcut: 'Ctrl+Shift+F', action: () => store().toggleViewMode() },
+      { id: 'cycleGridColumns', label: 'Cycle Grid Layout', shortcut: 'Ctrl+Shift+L', action: () => store().cycleGridColumns() },
       { id: 'toggleDormant', label: 'Toggle Hide (Dormant)', shortcut: 'Ctrl+Shift+H', action: () => { const id = focusedId(); if (id) { const t = store().terminals.get(id); if (t?.mode === 'dormant') store().wakeFromDormant(id); else store().moveToDormant(id); } } },
       { id: 'equalize', label: 'Equalize Pane Sizes', shortcut: 'Ctrl+Shift+E', action: () => store().equalizeLayout() },
       { id: 'zoomIn', label: 'Zoom In', shortcut: 'Ctrl+=', action: () => store().zoomIn() },
@@ -58,6 +59,7 @@ const CommandPalette: React.FC = () => {
           setDialog(null);
         }});
       }},
+      { id: 'copilotSessions', label: 'Copilot Sessions Panel', shortcut: 'Ctrl+Shift+C', action: () => store().toggleCopilotPanel() },
       { id: 'dirPicker', label: 'Go to Directory (Favorites & Recent)', shortcut: 'Ctrl+Shift+D', action: () => store().toggleDirPicker() },
       { id: 'toggleTabBar', label: 'Toggle Tab Bar: Top / Left', action: () => store().toggleTabBarPosition() },
       { id: 'shortcuts', label: 'Show Keyboard Shortcuts', shortcut: 'Ctrl+Shift+/', action: () => store().toggleShortcuts() },

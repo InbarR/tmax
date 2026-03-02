@@ -4,6 +4,11 @@ import Store from 'electron-store';
 import { PtyManager } from './pty-manager';
 import { ConfigStore } from './config-store';
 import { IPC } from '../shared/ipc-channels';
+import { CopilotSessionMonitor } from './copilot-session-monitor';
+import { CopilotSessionWatcher } from './copilot-session-watcher';
+import { notifyCopilotSession, clearNotificationCooldowns } from './copilot-notification';
+import { ClaudeCodeSessionMonitor } from './claude-code-session-monitor';
+import { ClaudeCodeSessionWatcher } from './claude-code-session-watcher';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -11,6 +16,10 @@ declare const MAIN_WINDOW_VITE_NAME: string;
 let mainWindow: BrowserWindow | null = null;
 let ptyManager: PtyManager | null = null;
 let configStore: ConfigStore | null = null;
+let copilotMonitor: CopilotSessionMonitor | null = null;
+let copilotWatcher: CopilotSessionWatcher | null = null;
+let claudeCodeMonitor: ClaudeCodeSessionMonitor | null = null;
+let claudeCodeWatcher: ClaudeCodeSessionWatcher | null = null;
 const sessionStore = new Store({ name: 'tmax-session' });
 const detachedWindows = new Map<string, BrowserWindow>();
 
@@ -214,7 +223,121 @@ function registerIpcHandlers(): void {
     }
   });
 
+  // ── Copilot IPC handlers ────────────────────────────────────────────
+  ipcMain.handle(IPC.COPILOT_LIST_SESSIONS, () => {
+    return copilotMonitor?.scanSessions() ?? [];
+  });
 
+  ipcMain.handle(IPC.COPILOT_GET_SESSION, (_event, id: string) => {
+    return copilotMonitor?.getSession(id) ?? null;
+  });
+
+  ipcMain.handle(IPC.COPILOT_SEARCH_SESSIONS, (_event, query: string) => {
+    return copilotMonitor?.searchSessions(query) ?? [];
+  });
+
+  ipcMain.handle(IPC.COPILOT_START_WATCHING, async () => {
+    if (copilotWatcher) {
+      await copilotWatcher.start();
+    }
+  });
+
+  ipcMain.handle(IPC.COPILOT_STOP_WATCHING, async () => {
+    if (copilotWatcher) {
+      await copilotWatcher.stop();
+    }
+  });
+
+  // ── Claude Code IPC handlers ──────────────────────────────────────────
+  ipcMain.handle(IPC.CLAUDE_CODE_LIST_SESSIONS, () => {
+    return claudeCodeMonitor?.scanSessions() ?? [];
+  });
+
+  ipcMain.handle(IPC.CLAUDE_CODE_GET_SESSION, (_event, id: string) => {
+    return claudeCodeMonitor?.getSession(id) ?? null;
+  });
+
+  ipcMain.handle(IPC.CLAUDE_CODE_SEARCH_SESSIONS, (_event, query: string) => {
+    return claudeCodeMonitor?.searchSessions(query) ?? [];
+  });
+
+  ipcMain.handle(IPC.CLAUDE_CODE_START_WATCHING, async () => {
+    if (claudeCodeWatcher) {
+      await claudeCodeWatcher.start();
+    }
+  });
+
+  ipcMain.handle(IPC.CLAUDE_CODE_STOP_WATCHING, async () => {
+    if (claudeCodeWatcher) {
+      await claudeCodeWatcher.stop();
+    }
+  });
+}
+
+function setupCopilotMonitor(): void {
+  copilotMonitor = new CopilotSessionMonitor();
+
+  copilotMonitor.setCallbacks({
+    onSessionUpdated(session) {
+      mainWindow?.webContents.send(IPC.COPILOT_SESSION_UPDATED, session);
+      notifyCopilotSession(session);
+    },
+    onSessionAdded(session) {
+      mainWindow?.webContents.send(IPC.COPILOT_SESSION_ADDED, session);
+    },
+    onSessionRemoved(sessionId) {
+      mainWindow?.webContents.send(IPC.COPILOT_SESSION_REMOVED, sessionId);
+    },
+  });
+
+  copilotWatcher = new CopilotSessionWatcher(copilotMonitor.getBasePath(), {
+    onEventsChanged(sessionId) {
+      copilotMonitor!.handleEventsChanged(sessionId);
+    },
+    onNewSession(sessionId) {
+      copilotMonitor!.handleNewSession(sessionId);
+    },
+    onSessionRemoved(sessionId) {
+      copilotMonitor!.handleSessionRemoved(sessionId);
+    },
+  });
+
+  copilotWatcher.setStaleCheckCallback(() => {
+    // Re-scan all sessions periodically to catch stale states
+    copilotMonitor!.scanSessions();
+  });
+}
+
+function setupClaudeCodeMonitor(): void {
+  claudeCodeMonitor = new ClaudeCodeSessionMonitor();
+
+  claudeCodeMonitor.setCallbacks({
+    onSessionUpdated(session) {
+      mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_UPDATED, session);
+    },
+    onSessionAdded(session) {
+      mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_ADDED, session);
+    },
+    onSessionRemoved(sessionId) {
+      mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_REMOVED, sessionId);
+    },
+  });
+
+  claudeCodeWatcher = new ClaudeCodeSessionWatcher(claudeCodeMonitor.getBasePath(), {
+    onFileChanged(filePath) {
+      claudeCodeMonitor!.handleFileChanged(filePath);
+    },
+    onNewFile(filePath) {
+      claudeCodeMonitor!.handleNewFile(filePath);
+    },
+    onFileRemoved(filePath) {
+      claudeCodeMonitor!.handleFileRemoved(filePath);
+    },
+  });
+
+  claudeCodeWatcher.setStaleCheckCallback(() => {
+    claudeCodeMonitor!.scanSessions();
+  });
 }
 
 process.on('uncaughtException', (error) => {
@@ -228,6 +351,10 @@ app.whenReady().then(() => {
     console.log('Config store ready');
     setupPtyManager();
     console.log('PTY manager ready');
+    setupCopilotMonitor();
+    console.log('Copilot monitor ready');
+    setupClaudeCodeMonitor();
+    console.log('Claude Code monitor ready');
     createWindow();
     console.log('Window created');
     registerIpcHandlers();
@@ -243,7 +370,12 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
   ptyManager?.killAll();
+  await copilotWatcher?.stop();
+  copilotMonitor?.dispose();
+  await claudeCodeWatcher?.stop();
+  claudeCodeMonitor?.dispose();
+  clearNotificationCooldowns();
   app.quit();
 });

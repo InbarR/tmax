@@ -10,6 +10,7 @@ const StatusBar: React.FC = () => {
   const fontSize = useTerminalStore((s) => s.fontSize);
   const config = useTerminalStore((s) => s.config);
   const viewMode = useTerminalStore((s) => s.viewMode);
+  const gridColumns = useTerminalStore((s) => s.gridColumns);
   const focused = focusedId ? terminals.get(focusedId) : null;
   const totalCount = terminals.size;
   const tiledCount = layout.tilingRoot ? getLeafOrder(layout.tilingRoot).length : 0;
@@ -51,7 +52,7 @@ const StatusBar: React.FC = () => {
           onClick={() => useTerminalStore.getState().toggleViewMode()}
           title="Toggle view mode (Ctrl+Shift+F)"
         >
-          [{viewMode === 'focus' ? 'Focus' : 'Split'}]
+          [{viewMode === 'focus' ? 'Focus' : viewMode === 'grid' ? (gridColumns ? `Grid ${gridColumns}col` : 'Grid') : 'Split'}]
         </button>
         <span className="status-dim">
           {totalCount} terminal{totalCount !== 1 ? 's' : ''}

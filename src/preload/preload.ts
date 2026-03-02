@@ -113,6 +113,108 @@ const terminalAPI: TerminalAPI = {
     };
   },
 
+  // ── Copilot session APIs ──────────────────────────────────────────
+  listCopilotSessions() {
+    return ipcRenderer.invoke(IPC.COPILOT_LIST_SESSIONS);
+  },
+
+  getCopilotSession(id: string) {
+    return ipcRenderer.invoke(IPC.COPILOT_GET_SESSION, id);
+  },
+
+  searchCopilotSessions(query: string) {
+    return ipcRenderer.invoke(IPC.COPILOT_SEARCH_SESSIONS, query);
+  },
+
+  startCopilotWatching() {
+    return ipcRenderer.invoke(IPC.COPILOT_START_WATCHING);
+  },
+
+  stopCopilotWatching() {
+    return ipcRenderer.invoke(IPC.COPILOT_STOP_WATCHING);
+  },
+
+  onCopilotSessionUpdated(cb: (session: unknown) => void): () => void {
+    const listener = (_event: Electron.IpcRendererEvent, session: unknown) => {
+      cb(session);
+    };
+    ipcRenderer.on(IPC.COPILOT_SESSION_UPDATED, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.COPILOT_SESSION_UPDATED, listener);
+    };
+  },
+
+  onCopilotSessionAdded(cb: (session: unknown) => void): () => void {
+    const listener = (_event: Electron.IpcRendererEvent, session: unknown) => {
+      cb(session);
+    };
+    ipcRenderer.on(IPC.COPILOT_SESSION_ADDED, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.COPILOT_SESSION_ADDED, listener);
+    };
+  },
+
+  onCopilotSessionRemoved(cb: (sessionId: string) => void): () => void {
+    const listener = (_event: Electron.IpcRendererEvent, sessionId: string) => {
+      cb(sessionId);
+    };
+    ipcRenderer.on(IPC.COPILOT_SESSION_REMOVED, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.COPILOT_SESSION_REMOVED, listener);
+    };
+  },
+
+  // ── Claude Code session APIs ───────────────────────────────────────
+  listClaudeCodeSessions() {
+    return ipcRenderer.invoke(IPC.CLAUDE_CODE_LIST_SESSIONS);
+  },
+
+  getClaudeCodeSession(id: string) {
+    return ipcRenderer.invoke(IPC.CLAUDE_CODE_GET_SESSION, id);
+  },
+
+  searchClaudeCodeSessions(query: string) {
+    return ipcRenderer.invoke(IPC.CLAUDE_CODE_SEARCH_SESSIONS, query);
+  },
+
+  startClaudeCodeWatching() {
+    return ipcRenderer.invoke(IPC.CLAUDE_CODE_START_WATCHING);
+  },
+
+  stopClaudeCodeWatching() {
+    return ipcRenderer.invoke(IPC.CLAUDE_CODE_STOP_WATCHING);
+  },
+
+  onClaudeCodeSessionUpdated(cb: (session: unknown) => void): () => void {
+    const listener = (_event: Electron.IpcRendererEvent, session: unknown) => {
+      cb(session);
+    };
+    ipcRenderer.on(IPC.CLAUDE_CODE_SESSION_UPDATED, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.CLAUDE_CODE_SESSION_UPDATED, listener);
+    };
+  },
+
+  onClaudeCodeSessionAdded(cb: (session: unknown) => void): () => void {
+    const listener = (_event: Electron.IpcRendererEvent, session: unknown) => {
+      cb(session);
+    };
+    ipcRenderer.on(IPC.CLAUDE_CODE_SESSION_ADDED, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.CLAUDE_CODE_SESSION_ADDED, listener);
+    };
+  },
+
+  onClaudeCodeSessionRemoved(cb: (sessionId: string) => void): () => void {
+    const listener = (_event: Electron.IpcRendererEvent, sessionId: string) => {
+      cb(sessionId);
+    };
+    ipcRenderer.on(IPC.CLAUDE_CODE_SESSION_REMOVED, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.CLAUDE_CODE_SESSION_REMOVED, listener);
+    };
+  },
+
 };
 
 contextBridge.exposeInMainWorld('terminalAPI', terminalAPI);

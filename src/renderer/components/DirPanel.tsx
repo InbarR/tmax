@@ -98,6 +98,7 @@ const DirPanel: React.FC = () => {
 
   const selectDir = useCallback((dir: string) => {
     useTerminalStore.getState().cdToDir(dir);
+    useTerminalStore.getState().toggleDirPicker();
   }, []);
 
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent) => {
