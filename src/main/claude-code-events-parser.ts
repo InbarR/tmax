@@ -241,6 +241,30 @@ function deriveResult(
   };
 }
 
+export function extractClaudeCodePrompts(filePath: string, limit = 20): string[] {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const prompts: string[] = [];
+    for (const line of content.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const o = JSON.parse(line);
+        if (o.type === 'user' && o.message?.content) {
+          for (const block of o.message.content) {
+            if (block.type === 'text' && block.text) {
+              prompts.push(block.text.slice(0, 300).replace(/\n/g, ' ').trim());
+              break;
+            }
+          }
+        }
+      } catch { /* skip */ }
+    }
+    return prompts.slice(-limit);
+  } catch {
+    return [];
+  }
+}
+
 export function clearClaudeCodeCache(filePath: string): void {
   cache.delete(filePath);
 }

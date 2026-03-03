@@ -486,11 +486,26 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       newRoot = insertLeaf(layout.tilingRoot, lastId, id, 'right');
     }
 
+    // In grid mode, also update preGridRoot and rebuild the grid
+    const { viewMode, preGridRoot, gridColumns } = get();
+    let newPreGridRoot = preGridRoot;
+    if (viewMode === 'grid') {
+      // Add to preGridRoot too
+      if (preGridRoot) {
+        const preOrder = getLeafOrder(preGridRoot);
+        newPreGridRoot = insertLeaf(preGridRoot, preOrder[preOrder.length - 1], id, 'right');
+      }
+      // Rebuild grid with all terminals including the new one
+      const allIds = getLeafOrder(newRoot);
+      newRoot = buildGridTree(allIds, gridColumns || undefined) || newRoot;
+    }
+
     set({
       terminals: newTerminals,
       layout: { ...layout, tilingRoot: newRoot },
       focusedTerminalId: id,
       nextZIndex,
+      preGridRoot: newPreGridRoot,
     });
   },
 
@@ -516,6 +531,20 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       newFloating = newFloating.filter((p) => p.terminalId !== id);
     }
 
+    // In grid mode, also update preGridRoot and rebuild the grid
+    const { viewMode, preGridRoot, gridColumns } = get();
+    let newPreGridRoot = preGridRoot;
+    if (viewMode === 'grid' && instance.mode === 'tiled') {
+      if (preGridRoot) {
+        newPreGridRoot = removeLeaf(preGridRoot, id);
+      }
+      // Rebuild grid from remaining terminals
+      const remainingIds = newRoot ? getLeafOrder(newRoot) : [];
+      if (remainingIds.length > 0) {
+        newRoot = buildGridTree(remainingIds, gridColumns || undefined);
+      }
+    }
+
     // Determine new focus
     let newFocus: TerminalId | null = focusedTerminalId;
     if (focusedTerminalId === id) {
@@ -533,6 +562,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       terminals: newTerminals,
       layout: { tilingRoot: newRoot, floatingPanels: newFloating },
       focusedTerminalId: newFocus,
+      preGridRoot: newPreGridRoot,
     });
   },
 
@@ -1535,6 +1565,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       pid,
       lastProcess: '',
       startupCommand: `agency copilot --resume ${sessionId}`,
+      aiSessionId: sessionId,
     };
 
     const { terminals, layout } = get();
@@ -1632,6 +1663,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       pid,
       lastProcess: '',
       startupCommand: `claude --resume ${sessionId}`,
+      aiSessionId: sessionId,
     };
 
     const { terminals, layout } = get();

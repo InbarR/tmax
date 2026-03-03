@@ -150,6 +150,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
               const newTerminals = new Map(store.terminals);
               newTerminals.set(terminalId, { ...terminal, cwd: dir });
               useTerminalStore.setState({ terminals: newTerminals });
+              store.addRecentDir(dir);
             }
           }
         }
@@ -171,9 +172,18 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     // Send startup command if set (for layout restore)
     const termInstance = useTerminalStore.getState().terminals.get(terminalId);
     if (termInstance?.startupCommand) {
+      const cmd = termInstance.startupCommand;
       setTimeout(() => {
-        window.terminalAPI.writePty(terminalId, termInstance.startupCommand + '\r');
+        window.terminalAPI.writePty(terminalId, cmd + '\r');
       }, 1500);
+      // Clear after firing so it doesn't re-run on session restore
+      const store = useTerminalStore.getState();
+      const newTerminals = new Map(store.terminals);
+      const t = newTerminals.get(terminalId);
+      if (t) {
+        newTerminals.set(terminalId, { ...t, startupCommand: '' });
+        useTerminalStore.setState({ terminals: newTerminals });
+      }
     }
 
     // Auto-rename tab when shell sends title via OSC sequence (skip custom titles)

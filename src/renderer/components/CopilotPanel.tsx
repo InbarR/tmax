@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import { useTerminalStore } from '../state/terminal-store';
 import type { CopilotSessionSummary, CopilotSessionStatus, SessionProvider } from '../../shared/copilot-types';
 
@@ -46,16 +47,13 @@ function shortPath(p: string): string {
 
 function getTitle(s: CopilotSessionSummary): string {
   if (s.summary) return s.summary;
-  if (s.repository) return shortPath(s.repository);
   if (s.cwd) return shortPath(s.cwd);
+  if (s.repository) return shortPath(s.repository);
   return s.id.slice(0, 8);
 }
 
 function getSubtitle(s: CopilotSessionSummary): string | null {
-  if (s.summary) {
-    if (s.repository) return shortPath(s.repository);
-    if (s.cwd) return shortPath(s.cwd);
-  }
+  if (s.summary && s.cwd) return shortPath(s.cwd);
   return null;
 }
 
@@ -79,13 +77,30 @@ const CopilotPanel: React.FC = () => {
   const show = useTerminalStore((s) => s.showCopilotPanel);
   const copilotSessions = useTerminalStore((s) => s.copilotSessions);
   const claudeCodeSessions = useTerminalStore((s) => s.claudeCodeSessions);
+  const terminals = useTerminalStore((s) => s.terminals);
+
+  // Track which AI session IDs have open terminals
+  const openSessionIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const [, t] of terminals) {
+      if (t.aiSessionId) ids.add(t.aiSessionId);
+    }
+    return ids;
+  }, [terminals]);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [resizing, setResizing] = useState(false);
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; session: CopilotSessionSummary } | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; provider: SessionProvider; value: string } | null>(null);
+  const [summaryOverrides, setSummaryOverrides] = useState<Record<string, string>>({});
+  const [promptsDialog, setPromptsDialog] = useState<{ title: string; prompts: string[] } | null>(null);
+  const [showRunningOnly, setShowRunningOnly] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const ctxRef = useRef<HTMLDivElement>(null);
+  const renameRef = useRef<HTMLInputElement>(null);
 
   // Start/stop watching when panel opens/closes
   useEffect(() => {
@@ -149,11 +164,16 @@ const CopilotPanel: React.FC = () => {
     let all = [
       ...copilotSessions.map((s) => ({ ...s, provider: s.provider || 'copilot' as const })),
       ...claudeCodeSessions.map((s) => ({ ...s, provider: s.provider || 'claude-code' as const })),
-    ];
+    ].map((s) => summaryOverrides[s.id] ? { ...s, summary: summaryOverrides[s.id] } : s);
 
     // Filter by provider tab
     if (filterTab !== 'all') {
       all = all.filter((s) => s.provider === filterTab);
+    }
+
+    // Filter to running (non-idle) sessions only
+    if (showRunningOnly) {
+      all = all.filter((s) => s.status !== 'idle');
     }
 
     // Filter by search query
@@ -169,18 +189,34 @@ const CopilotPanel: React.FC = () => {
       );
     }
 
-    // Deduplicate: keep only the most recent session per cwd+branch+provider combo
-    const seen = new Map<string, CopilotSessionSummary>();
-    for (const s of sortSessions(all)) {
-      const key = `${s.provider}|${s.cwd}|${s.branch}`;
-      const existing = seen.get(key);
+    // Deduplicate by session ID (primary) and cwd+branch+provider (secondary)
+    const byId = new Map<string, CopilotSessionSummary>();
+    for (const s of all) {
+      const existing = byId.get(s.id);
       if (!existing || (s.lastActivityTime || 0) > (existing.lastActivityTime || 0)) {
-        seen.set(key, s);
+        byId.set(s.id, s);
+      }
+    }
+    // Also collapse same cwd+branch+provider to most recent (prefer ones with summaries)
+    const byKey = new Map<string, CopilotSessionSummary>();
+    for (const s of sortSessions(Array.from(byId.values()))) {
+      const key = `${s.provider}|${s.cwd}|${s.branch}`;
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, s);
+      } else {
+        // Prefer session with summary; if both have or neither has, keep most recent
+        const existHasSummary = !!existing.summary;
+        const newHasSummary = !!s.summary;
+        if ((!existHasSummary && newHasSummary) ||
+            (existHasSummary === newHasSummary && (s.lastActivityTime || 0) > (existing.lastActivityTime || 0))) {
+          byKey.set(key, s);
+        }
       }
     }
 
-    return sortSessions(Array.from(seen.values()));
-  }, [copilotSessions, claudeCodeSessions, query, filterTab]);
+    return sortSessions(Array.from(byKey.values()));
+  }, [copilotSessions, claudeCodeSessions, query, filterTab, showRunningOnly, summaryOverrides]);
 
   useEffect(() => {
     if (selectedIndex >= filtered.length) {
@@ -195,6 +231,71 @@ const CopilotPanel: React.FC = () => {
       item?.scrollIntoView({ block: 'nearest' });
     }
   }, [selectedIndex]);
+
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) setCtxMenu(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [ctxMenu]);
+
+  // Focus rename input
+  useEffect(() => {
+    if (renaming) requestAnimationFrame(() => renameRef.current?.focus());
+  }, [renaming]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, session: CopilotSessionSummary) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY, session });
+  }, []);
+
+  const handleRemoveSession = useCallback((session: CopilotSessionSummary) => {
+    if (session.provider === 'claude-code') {
+      useTerminalStore.getState().removeClaudeCodeSession(session.id);
+    } else {
+      useTerminalStore.getState().removeCopilotSession(session.id);
+    }
+    setCtxMenu(null);
+  }, []);
+
+  const handleStartRename = useCallback((session: CopilotSessionSummary) => {
+    setRenaming({ id: session.id, provider: session.provider, value: summaryOverrides[session.id] || session.summary || getTitle(session) });
+    setCtxMenu(null);
+  }, []);
+
+  const handleFinishRename = useCallback(() => {
+    if (!renaming) return;
+    const newSummary = renaming.value.trim();
+    if (newSummary) {
+      setSummaryOverrides((prev) => ({ ...prev, [renaming.id]: newSummary }));
+    }
+    setRenaming(null);
+  }, [renaming]);
+
+  const handleShowPrompts = useCallback(async (session: CopilotSessionSummary) => {
+    const api = window.terminalAPI as any;
+    let prompts: string[];
+    if (session.provider === 'claude-code') {
+      prompts = await api.getClaudeCodePrompts(session.id);
+    } else {
+      prompts = await api.getCopilotPrompts(session.id);
+    }
+    setPromptsDialog({
+      title: summaryOverrides[session.id] || session.summary || getTitle(session),
+      prompts: prompts.length > 0 ? prompts : ['(no prompts found)'],
+    });
+    setCtxMenu(null);
+  }, [summaryOverrides]);
+
+  const handleRefresh = useCallback(() => {
+    const store = useTerminalStore.getState();
+    store.loadCopilotSessions();
+    store.loadClaudeCodeSessions();
+  }, []);
 
   const handleResizeStart = useCallback(
     (e: React.MouseEvent) => {
@@ -279,9 +380,18 @@ const CopilotPanel: React.FC = () => {
 
       <div className="dir-panel-header">
         <span>AI Sessions</span>
-        <button className="dir-panel-close" onClick={() => useTerminalStore.getState().toggleCopilotPanel()}>
-          &#10005;
-        </button>
+        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+          <button
+            className={`ai-session-tab${showRunningOnly ? ' active' : ''}`}
+            onClick={() => setShowRunningOnly((v) => !v)}
+            title="Show only running sessions"
+            style={{ fontSize: '10px', padding: '1px 6px' }}
+          >
+            Running
+          </button>
+          <button className="dir-panel-close" onClick={handleRefresh} title="Refresh">&#8635;</button>
+          <button className="dir-panel-close" onClick={() => useTerminalStore.getState().toggleCopilotPanel()}>&#10005;</button>
+        </div>
       </div>
 
       {/* Filter tabs */}
@@ -325,6 +435,7 @@ const CopilotPanel: React.FC = () => {
           const title = getTitle(session);
           const subtitle = getSubtitle(session);
           const active = isActiveStatus(session.status);
+          const isOpen = openSessionIds.has(session.id);
           const time = relativeTime(session.lastActivityTime);
           const hasStats = session.messageCount > 0 || session.toolCallCount > 0;
 
@@ -334,6 +445,7 @@ const CopilotPanel: React.FC = () => {
               className={`ai-session-item${index === selectedIndex ? ' selected' : ''}${active ? ' active' : ''}`}
               onClick={() => openSession(session)}
               onMouseEnter={() => setSelectedIndex(index)}
+              onContextMenu={(e) => handleContextMenu(e, session)}
               title={session.cwd || session.id}
             >
               <span
@@ -343,13 +455,33 @@ const CopilotPanel: React.FC = () => {
               />
               <div className="ai-session-info">
                 <div className="ai-session-title-row">
-                  <span className="ai-session-name" title={title}>
-                    {title}
-                  </span>
+                  {renaming && renaming.id === session.id ? (
+                    <input
+                      ref={renameRef}
+                      className="ai-session-rename-input"
+                      value={renaming.value}
+                      onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
+                      onKeyDown={(e) => {
+                        e.stopPropagation();
+                        if (e.key === 'Enter') handleFinishRename();
+                        if (e.key === 'Escape') setRenaming(null);
+                      }}
+                      onBlur={handleFinishRename}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span className="ai-session-name" title={title}>
+                      {title}
+                    </span>
+                  )}
+                  {isOpen && <span className="ai-open-badge">OPEN</span>}
                   {time && <span className="ai-session-time">{time}</span>}
                 </div>
                 {subtitle && (
                   <div className="ai-session-subtitle">{subtitle}</div>
+                )}
+                {session.cwd && (
+                  <div className="ai-session-cwd" title={session.cwd}>{session.cwd}</div>
                 )}
                 {active && (
                   <div className="ai-session-status" style={{ color: STATUS_COLORS[session.status] }}>
@@ -362,6 +494,9 @@ const CopilotPanel: React.FC = () => {
                   </span>
                   {session.branch && (
                     <span className="ai-branch-badge">{session.branch}</span>
+                  )}
+                  {session.model && (
+                    <span className="ai-session-stat">{session.model.replace(/^claude-/, '').replace(/-\d{8}$/, '')}</span>
                   )}
                   {hasStats && (
                     <>
@@ -383,6 +518,106 @@ const CopilotPanel: React.FC = () => {
               : 'No matching sessions'}
           </div>
         )}
+      </div>
+
+      {promptsDialog && ReactDOM.createPortal(
+        <PromptsDialog
+          title={promptsDialog.title}
+          prompts={promptsDialog.prompts}
+          onClose={() => setPromptsDialog(null)}
+        />,
+        document.body,
+      )}
+
+      {ctxMenu && (
+        <div ref={ctxRef} className="context-menu" style={{ left: ctxMenu.x, top: ctxMenu.y, zIndex: 1000 }}>
+          <button className="context-menu-item" onClick={() => { openSession(ctxMenu.session); setCtxMenu(null); }}>
+            Resume session
+          </button>
+          <button className="context-menu-item" onClick={() => handleShowPrompts(ctxMenu.session)}>
+            Show prompts
+          </button>
+          <button className="context-menu-item" onClick={() => handleStartRename(ctxMenu.session)}>
+            Rename
+          </button>
+          {ctxMenu.session.cwd && (
+            <>
+              <button className="context-menu-item" onClick={() => { navigator.clipboard.writeText(ctxMenu.session.cwd); setCtxMenu(null); }}>
+                Copy path
+              </button>
+              <button className="context-menu-item" onClick={() => { (window.terminalAPI as any).openPath(ctxMenu.session.cwd); setCtxMenu(null); }}>
+                Open in explorer
+              </button>
+            </>
+          )}
+          <div className="context-menu-separator" />
+          <button className="context-menu-item" onClick={() => { navigator.clipboard.writeText(ctxMenu.session.id); setCtxMenu(null); }}>
+            Copy session ID
+          </button>
+          <button className="context-menu-item danger" onClick={() => handleRemoveSession(ctxMenu.session)}>
+            Remove from list
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Prompts Dialog ───────────────────────────────────────────────────
+
+const PromptsDialog: React.FC<{
+  title: string;
+  prompts: string[];
+  onClose: () => void;
+}> = ({ title, prompts, onClose }) => {
+  const [search, setSearch] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    requestAnimationFrame(() => searchRef.current?.focus());
+  }, []);
+
+  // Reverse to show newest first, then filter
+  const reversed = useMemo(() => [...prompts].reverse(), [prompts]);
+  const filtered = useMemo(() => {
+    if (!search.trim()) return reversed;
+    const q = search.toLowerCase();
+    return reversed.filter((p) => p.toLowerCase().includes(q));
+  }, [reversed, search]);
+
+  return (
+    <div className="palette-backdrop" onClick={onClose}>
+      <div className="ai-prompts-dialog" onClick={(e) => e.stopPropagation()}>
+        <div className="ai-prompts-header">
+          <span title={title}>{title}</span>
+          <button className="dir-panel-close" onClick={onClose}>&#10005;</button>
+        </div>
+        <input
+          ref={searchRef}
+          className="dir-panel-search"
+          type="text"
+          placeholder="Search prompts..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Escape') onClose(); e.stopPropagation(); }}
+        />
+        <div className="ai-prompts-list">
+          {filtered.map((p, i) => {
+            const originalIndex = prompts.length - prompts.indexOf(filtered[i]);
+            return (
+              <div key={i} className="ai-prompt-item">
+                <span className="ai-prompt-index">{prompts.length - reversed.indexOf(p)}</span>
+                <span className="ai-prompt-text">{p}</span>
+              </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="dir-panel-empty">No matching prompts</div>
+          )}
+        </div>
+        <div className="ai-prompts-footer">
+          {filtered.length} of {prompts.length} prompts
+        </div>
       </div>
     </div>
   );

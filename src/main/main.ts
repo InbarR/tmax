@@ -248,6 +248,10 @@ function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle(IPC.COPILOT_GET_PROMPTS, (_event, id: string) => {
+    return copilotMonitor?.getPrompts(id) ?? [];
+  });
+
   // ── Claude Code IPC handlers ──────────────────────────────────────────
   ipcMain.handle(IPC.CLAUDE_CODE_LIST_SESSIONS, () => {
     return claudeCodeMonitor?.scanSessions() ?? [];
@@ -271,6 +275,10 @@ function registerIpcHandlers(): void {
     if (claudeCodeWatcher) {
       await claudeCodeWatcher.stop();
     }
+  });
+
+  ipcMain.handle(IPC.CLAUDE_CODE_GET_PROMPTS, (_event, id: string) => {
+    return claudeCodeMonitor?.getPrompts(id) ?? [];
   });
 }
 

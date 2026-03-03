@@ -54,6 +54,7 @@ export interface TerminalInstance {
   pid: number;
   lastProcess: string;
   startupCommand: string;
+  aiSessionId?: string;
 }
 
 // ── Configuration ────────────────────────────────────────────────────

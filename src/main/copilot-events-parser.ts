@@ -82,6 +82,26 @@ export function parseSessionEvents(eventsFilePath: string): ParsedSessionEvents 
   }
 }
 
+export function extractCopilotPrompts(eventsFilePath: string, limit = 20): string[] {
+  try {
+    const content = fs.readFileSync(eventsFilePath, 'utf-8');
+    const prompts: string[] = [];
+    for (const line of content.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const o = JSON.parse(line);
+        if (o.type === 'user.message') {
+          const text = String(o.data?.content || o.data?.transformedContent || '').trim();
+          if (text) prompts.push(text.slice(0, 300));
+        }
+      } catch { /* skip */ }
+    }
+    return prompts.slice(-limit);
+  } catch {
+    return [];
+  }
+}
+
 export function clearParserCache(eventsFilePath: string): void {
   cache.delete(eventsFilePath);
 }

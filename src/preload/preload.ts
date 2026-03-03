@@ -134,6 +134,10 @@ const terminalAPI: TerminalAPI = {
     return ipcRenderer.invoke(IPC.COPILOT_STOP_WATCHING);
   },
 
+  getCopilotPrompts(id: string) {
+    return ipcRenderer.invoke(IPC.COPILOT_GET_PROMPTS, id);
+  },
+
   onCopilotSessionUpdated(cb: (session: unknown) => void): () => void {
     const listener = (_event: Electron.IpcRendererEvent, session: unknown) => {
       cb(session);
@@ -183,6 +187,10 @@ const terminalAPI: TerminalAPI = {
 
   stopClaudeCodeWatching() {
     return ipcRenderer.invoke(IPC.CLAUDE_CODE_STOP_WATCHING);
+  },
+
+  getClaudeCodePrompts(id: string) {
+    return ipcRenderer.invoke(IPC.CLAUDE_CODE_GET_PROMPTS, id);
   },
 
   onClaudeCodeSessionUpdated(cb: (session: unknown) => void): () => void {

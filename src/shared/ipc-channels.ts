@@ -23,6 +23,7 @@ export const IPC = {
   COPILOT_SESSION_REMOVED: 'copilot:sessionRemoved',
   COPILOT_START_WATCHING: 'copilot:startWatching',
   COPILOT_STOP_WATCHING: 'copilot:stopWatching',
+  COPILOT_GET_PROMPTS: 'copilot:getPrompts',
   CLAUDE_CODE_LIST_SESSIONS: 'claude-code:listSessions',
   CLAUDE_CODE_GET_SESSION: 'claude-code:getSession',
   CLAUDE_CODE_SEARCH_SESSIONS: 'claude-code:searchSessions',
@@ -31,6 +32,7 @@ export const IPC = {
   CLAUDE_CODE_SESSION_REMOVED: 'claude-code:sessionRemoved',
   CLAUDE_CODE_START_WATCHING: 'claude-code:startWatching',
   CLAUDE_CODE_STOP_WATCHING: 'claude-code:stopWatching',
+  CLAUDE_CODE_GET_PROMPTS: 'claude-code:getPrompts',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

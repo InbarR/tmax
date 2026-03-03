@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import {
   parseClaudeCodeSession,
   clearClaudeCodeCache,
+  extractClaudeCodePrompts,
 } from './claude-code-events-parser';
 import type { CopilotSessionSummary } from '../shared/copilot-types';
 
@@ -166,6 +167,12 @@ export class ClaudeCodeSessionMonitor {
     }
 
     return results;
+  }
+
+  getPrompts(sessionId: string, limit = 20): string[] {
+    const filePath = this.filePaths.get(sessionId);
+    if (!filePath) return [];
+    return extractClaudeCodePrompts(filePath, limit);
   }
 
   // ── Watcher callbacks ────────────────────────────────────────────────

@@ -1931,6 +1931,17 @@ select.settings-input {
   min-width: 0;
 }
 
+.ai-open-badge {
+  font-size: 9px;
+  padding: 0 4px;
+  border-radius: 3px;
+  color: #a6e3a1;
+  background: rgba(166, 227, 161, 0.15);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
 .ai-session-time {
   font-size: 10px;
   color: var(--text-secondary);
@@ -1945,6 +1956,16 @@ select.settings-input {
   overflow: hidden;
   text-overflow: ellipsis;
   opacity: 0.8;
+}
+
+.ai-session-cwd {
+  font-size: 10px;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
 }
 
 .ai-session-status {
@@ -1990,6 +2011,91 @@ select.settings-input {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100px;
+}
+
+/* AI Prompts Dialog */
+.ai-prompts-dialog {
+  width: 500px;
+  max-height: 60vh;
+  background: var(--bg-secondary);
+  border: 1px solid var(--focus-border);
+  border-radius: 8px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.ai-prompts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-prompts-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+
+.ai-prompt-item {
+  display: flex;
+  gap: 8px;
+  padding: 6px 14px;
+  align-items: flex-start;
+}
+
+.ai-prompt-item:hover {
+  background: rgba(137, 180, 250, 0.06);
+}
+
+.ai-prompt-index {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border-radius: 50%;
+  margin-top: 1px;
+}
+
+.ai-prompt-text {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.ai-prompts-footer {
+  padding: 6px 14px;
+  border-top: 1px solid var(--border-color);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.ai-session-rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 4px;
+  font-size: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--focus-border);
+  border-radius: 2px;
+  color: var(--text-primary);
+  outline: none;
 }
 
 .ai-session-stat {
