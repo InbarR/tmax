@@ -8,6 +8,7 @@ import { MakerRpm } from "@electron-forge/maker-rpm";
 import { MakerDMG } from "@electron-forge/maker-dmg";
 
 const config: ForgeConfig = {
+  outDir: process.env.FORGE_OUT_DIR || 'out',
   hooks: {
     postPackage: async (_config, options) => {
       // Copy node-pty native module into packaged app

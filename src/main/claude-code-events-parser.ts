@@ -1,6 +1,17 @@
 import * as fs from 'node:fs';
 import type { CopilotSessionStatus } from '../shared/copilot-types';
 
+/** Extract first text from message content (string or array of blocks). */
+function extractText(content: unknown): string | null {
+  if (typeof content === 'string') return content.trim() || null;
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      if (block.type === 'text' && block.text) return block.text.trim() || null;
+    }
+  }
+  return null;
+}
+
 export interface ClaudeCodeParsedSession {
   sessionId: string;
   slug: string;
@@ -140,17 +151,9 @@ function processLine(line: string, state: CacheEntry): void {
 
           // Extract first prompt text
           if (parsed.message?.content) {
-            for (const block of parsed.message.content) {
-              if (block.type === 'text' && block.text) {
-                const text = block.text.trim();
-                // Skip system-generated interruption messages
-                if (!text.startsWith('[Request interrupted')) {
-                  state.firstPrompt = text
-                    .slice(0, 120)
-                    .replace(/\n/g, ' ');
-                }
-                break;
-              }
+            const text = extractText(parsed.message.content);
+            if (text && !text.startsWith('[Request interrupted')) {
+              state.firstPrompt = text.slice(0, 120).replace(/\n/g, ' ');
             }
           }
           state.metaExtracted = true;
@@ -182,14 +185,9 @@ function processLine(line: string, state: CacheEntry): void {
           try {
             const parsed = JSON.parse(line);
             if (parsed.message?.content) {
-              for (const block of parsed.message.content) {
-                if (block.type === 'text' && block.text) {
-                  const text = block.text.trim();
-                  if (!text.startsWith('[Request interrupted')) {
-                    state.firstPrompt = text.slice(0, 120).replace(/\n/g, ' ');
-                  }
-                  break;
-                }
+              const text = extractText(parsed.message.content);
+              if (text && !text.startsWith('[Request interrupted')) {
+                state.firstPrompt = text.slice(0, 120).replace(/\n/g, ' ');
               }
             }
           } catch { /* skip */ }
@@ -271,12 +269,8 @@ export function extractClaudeCodePrompts(filePath: string, limit = 20): string[]
       try {
         const o = JSON.parse(line);
         if (o.type === 'user' && o.message?.content) {
-          for (const block of o.message.content) {
-            if (block.type === 'text' && block.text) {
-              prompts.push(block.text.slice(0, 300).replace(/\n/g, ' ').trim());
-              break;
-            }
-          }
+          const text = extractText(o.message.content);
+          if (text) prompts.push(text.slice(0, 300).replace(/\n/g, ' '));
         }
       } catch { /* skip */ }
     }
