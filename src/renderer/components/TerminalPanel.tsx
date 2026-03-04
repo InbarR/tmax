@@ -58,7 +58,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     });
 
     const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
+    const webLinksAddon = new WebLinksAddon((_event, uri) => {
+      window.open(uri, '_blank');
+    });
     const searchAddon = new SearchAddon();
 
     term.loadAddon(fitAddon);
