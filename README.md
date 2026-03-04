@@ -100,6 +100,8 @@ Right-click any tab for:
 
 Download the latest version from the [Releases page](https://github.com/InbarR/tmax/releases). Available for Windows (.exe installer + portable .zip), macOS (.dmg for Apple Silicon and Intel), and Linux (.deb, .rpm).
 
+> **macOS:** If you see _"tmax is damaged and can't be opened"_, run: `xattr -cr /Applications/tmax.app`
+
 ## Building from Source
 
 ### Prerequisites
