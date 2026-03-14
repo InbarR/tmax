@@ -13,6 +13,12 @@ import { ClaudeCodeSessionMonitor } from './claude-code-session-monitor';
 import { ClaudeCodeSessionWatcher } from './claude-code-session-watcher';
 import { VersionChecker } from './version-checker';
 
+// Handle Squirrel.Windows lifecycle events (install, update, uninstall)
+// Must be at the top before any other initialization
+if (process.platform === 'win32' && process.argv[1]?.startsWith('--squirrel-')) {
+  app.quit();
+}
+
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
@@ -326,8 +332,12 @@ function registerIpcHandlers(): void {
     return versionChecker?.getUpdateInfo() ?? null;
   });
 
-  ipcMain.handle(IPC.VERSION_CHECK_NOW, () => {
-    return versionChecker?.checkNow() ?? null;
+  ipcMain.on(IPC.VERSION_CHECK_NOW, () => {
+    versionChecker?.checkNow();
+  });
+
+  ipcMain.on(IPC.VERSION_RESTART_AND_UPDATE, () => {
+    versionChecker?.restartAndUpdate();
   });
 
   ipcMain.handle(IPC.CLIPBOARD_SAVE_IMAGE, (_event, base64Png: string) => {

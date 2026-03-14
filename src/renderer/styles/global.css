@@ -977,6 +977,31 @@ body,
   text-decoration: underline;
 }
 
+.status-update-downloading {
+  color: #e8a838;
+  font-weight: 600;
+  animation: pulse-update 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-update {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.status-update-ready {
+  color: #4ec957;
+  cursor: pointer;
+  font-weight: 600;
+  background: rgba(78, 201, 87, 0.1);
+  padding: 0 6px;
+  border-radius: 3px;
+}
+
+.status-update-ready:hover {
+  background: rgba(78, 201, 87, 0.2);
+  text-decoration: underline;
+}
+
 .status-cwd {
   color: var(--text-secondary);
   cursor: pointer;

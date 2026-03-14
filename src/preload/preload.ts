@@ -23,9 +23,10 @@ export interface TerminalAPI {
   clipboardHasImage(): boolean;
   clipboardSaveImage(): Promise<string>;
   getAppVersion(): Promise<string>;
-  getVersionUpdate(): Promise<{ current: string; latest: string; url: string } | null>;
-  checkForUpdates(): Promise<{ current: string; latest: string; url: string } | null>;
-  onNewVersionAvailable(cb: (info: { current: string; latest: string; url: string }) => void): () => void;
+  getVersionUpdate(): Promise<{ status: string; current: string; latest?: string; url?: string; error?: string } | null>;
+  checkForUpdates(): void;
+  restartAndUpdate(): void;
+  onUpdateStatusChanged(cb: (info: { status: string; current: string; latest?: string; url?: string; error?: string }) => void): () => void;
 }
 
 const terminalAPI: TerminalAPI = {
@@ -249,16 +250,20 @@ const terminalAPI: TerminalAPI = {
   },
 
   checkForUpdates() {
-    return ipcRenderer.invoke(IPC.VERSION_CHECK_NOW);
+    ipcRenderer.send(IPC.VERSION_CHECK_NOW);
   },
 
-  onNewVersionAvailable(cb: (info: { current: string; latest: string; url: string }) => void): () => void {
-    const listener = (_event: Electron.IpcRendererEvent, info: { current: string; latest: string; url: string }) => {
+  restartAndUpdate() {
+    ipcRenderer.send(IPC.VERSION_RESTART_AND_UPDATE);
+  },
+
+  onUpdateStatusChanged(cb: (info: { status: string; current: string; latest?: string; url?: string; error?: string }) => void): () => void {
+    const listener = (_event: Electron.IpcRendererEvent, info: { status: string; current: string; latest?: string; url?: string; error?: string }) => {
       cb(info);
     };
-    ipcRenderer.on(IPC.VERSION_NEW_AVAILABLE, listener);
+    ipcRenderer.on(IPC.VERSION_UPDATE_STATUS, listener);
     return () => {
-      ipcRenderer.removeListener(IPC.VERSION_NEW_AVAILABLE, listener);
+      ipcRenderer.removeListener(IPC.VERSION_UPDATE_STATUS, listener);
     };
   },
 

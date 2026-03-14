@@ -4,14 +4,14 @@ import { getLeafOrder } from '../state/terminal-store';
 
 const StatusBar: React.FC = () => {
   const [appVersion, setAppVersion] = useState<string>('');
-  const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string; url: string } | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<{ status: string; current: string; latest?: string; url?: string } | null>(null);
 
   useEffect(() => {
     window.terminalAPI.getAppVersion().then(setAppVersion);
     window.terminalAPI.getVersionUpdate().then((info) => {
       if (info) setUpdateInfo(info);
     });
-    const cleanup = window.terminalAPI.onNewVersionAvailable((info) => {
+    const cleanup = window.terminalAPI.onUpdateStatusChanged((info) => {
       setUpdateInfo(info);
     });
     return cleanup;
@@ -80,7 +80,22 @@ const StatusBar: React.FC = () => {
           {floatingCount > 0 ? ` (${tiledCount} tiled, ${floatingCount} floating)` : ''}
         </span>
         <span className="status-dim">{Math.round((fontSize / (config?.terminal?.fontSize ?? 14)) * 100)}%</span>
-        {updateInfo ? (
+        {updateInfo && updateInfo.status === 'downloading' ? (
+          <span
+            className="status-update-downloading"
+            title={`Downloading update${updateInfo.latest ? ` v${updateInfo.latest}` : ''}...`}
+          >
+            ⟳ Updating{updateInfo.latest ? ` to v${updateInfo.latest}` : ''}
+          </span>
+        ) : updateInfo && updateInfo.status === 'downloaded' ? (
+          <span
+            className="status-update-ready"
+            onClick={() => window.terminalAPI.restartAndUpdate()}
+            title="Click to restart and apply update"
+          >
+            v{appVersion} → v{updateInfo.latest} ↻
+          </span>
+        ) : updateInfo && updateInfo.status === 'available' && updateInfo.url ? (
           <span
             className="status-update-available"
             onClick={() => window.open(updateInfo.url, '_blank')}
