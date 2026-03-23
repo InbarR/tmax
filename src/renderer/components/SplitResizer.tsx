@@ -2,6 +2,9 @@ import React, { useCallback, useRef, useState } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 import type { SplitDirection } from '../state/types';
 
+/** Minimum pane size in pixels to prevent unusable narrow terminals */
+const MIN_PANE_PX = 120;
+
 interface SplitResizerProps {
   splitNodeId: string;
   direction: SplitDirection;
@@ -48,7 +51,12 @@ const SplitResizer: React.FC<SplitResizerProps> = ({
         const deltaPx = currentPos - startPosRef.current;
         const deltaRatio = deltaPx / parentSizeRef.current;
         const newRatio = startRatioRef.current + deltaRatio;
-        useTerminalStore.getState().setSplitRatio(splitNodeId, newRatio);
+        // Pixel-aware clamp: keep each pane ≥ MIN_PANE_PX
+        const minRatio = parentSizeRef.current > 0
+          ? MIN_PANE_PX / parentSizeRef.current
+          : 0.1;
+        const clamped = Math.max(minRatio, Math.min(1 - minRatio, newRatio));
+        useTerminalStore.getState().setSplitRatio(splitNodeId, clamped);
       };
 
       const handleMouseUp = () => {
