@@ -95,6 +95,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   const isFocused = focusedTerminalId === terminalId;
 
   const handleFocus = useCallback(() => {
+    const prevFocused = useTerminalStore.getState().focusedTerminalId;
     useTerminalStore.getState().setFocus(terminalId);
     diagRef.current.focusEventCount++;
     diagRef.current.lastFocusTime = Date.now();
@@ -104,6 +105,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     try {
       terminalRef.current?.focus();
     } catch { /* terminal may be disposed */ }
+    // Ensure DEC focus reporting reaches the PTY even if xterm.js lost
+    // its internal focus-reporting state (e.g. after a pane split/resize).
+    // Without this, Copilot CLI stays in isFocused=false and drops input.
+    if (prevFocused !== terminalId) {
+      if (prevFocused) {
+        window.terminalAPI.writePty(prevFocused, '\x1b[O');
+        window.terminalAPI.diagLog('renderer:focus-inject-out', { terminalId: prevFocused });
+      }
+      window.terminalAPI.writePty(terminalId, '\x1b[I');
+      window.terminalAPI.diagLog('renderer:focus-inject-in', { terminalId });
+    }
   }, [terminalId]);
 
   useEffect(() => {
