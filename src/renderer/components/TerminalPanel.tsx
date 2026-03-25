@@ -549,6 +549,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   return (
     <div
       className={className}
+      data-terminal-id={terminalId}
       onMouseDownCapture={(e) => {
         if (!isFocused) {
           // This click is a pane-switch click, not a TUI interaction.

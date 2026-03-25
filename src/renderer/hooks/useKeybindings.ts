@@ -59,6 +59,7 @@ const DEFAULT_BINDINGS: Record<string, string> = {
   'Ctrl+Shift+R': 'renameTerminal',
   'Ctrl+Shift+?': 'showShortcuts',
   'Ctrl+Shift+G': 'switchTerminal',
+  'Ctrl+Shift+J': 'switchTerminalList',
   'Ctrl+Shift+D': 'dirPicker',
   'Ctrl+Shift+P': 'commandPalette',
   'Ctrl+Tab': 'focusNext',
@@ -179,6 +180,9 @@ function dispatchAction(action: string): void {
       }
       break;
     case 'switchTerminal':
+      store.togglePaneHints();
+      break;
+    case 'switchTerminalList':
       store.toggleSwitcher();
       break;
     case 'renameTerminal':

@@ -1442,6 +1442,40 @@ body,
   font-size: 13px;
 }
 
+/* ===== Pane Hint Overlay ===== */
+.pane-hint-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.pane-hint-label {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--focus-border, #89b4fa);
+  color: var(--bg-primary, #1e1e2e);
+  font-size: 24px;
+  font-weight: 700;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  text-transform: uppercase;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pane-hint-label:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+}
+
 /* ===== Dir Side Panel ===== */
 .dir-panel {
   position: relative;
