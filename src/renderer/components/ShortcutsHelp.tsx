@@ -10,6 +10,7 @@ const shortcuts = [
     { key: 'Ctrl+Shift+W', action: 'Close terminal' },
     { key: 'Ctrl+Shift+R', action: 'Rename terminal' },
     { key: 'Ctrl+Shift+G', action: 'Jump to terminal by name' },
+    { key: 'Ctrl+Shift+J', action: 'Pane hints (press letter to jump)' },
     { key: 'Ctrl+Shift+P', action: 'Command palette' },
     { key: 'Ctrl+Shift+M', action: 'Open tab menu' },
     { key: 'Ctrl+Shift+D', action: 'Go to directory (favorites & recent)' },
