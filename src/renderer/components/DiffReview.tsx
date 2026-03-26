@@ -9,7 +9,6 @@ import type {
   AnnotatedLine,
   DiffLineType,
 } from '../../shared/diff-types';
-import TerminalPanel from './TerminalPanel';
 import '../styles/diff-review.css';
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -488,10 +487,8 @@ const DiffReview: React.FC = () => {
 
   return (
     <div className="diff-review-overlay">
-      {/* Left: Terminal */}
-      <div className="diff-review-terminal">
-        <TerminalPanel terminalId={diffReviewTerminalId} />
-      </div>
+      {/* Left: dimmed backdrop — existing terminal shows through underneath */}
+      <div className="diff-review-backdrop" onClick={closeDiffReview} />
 
       {/* Right: Diff panel */}
       <div className="diff-review-panel">
