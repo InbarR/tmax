@@ -418,12 +418,8 @@ function registerIpcHandlers(): void {
   // ── Diff editor IPC handlers ────────────────────────────────────────
   const diffService = new GitDiffService();
 
-  ipcMain.handle(IPC.DIFF_RESOLVE_GIT_ROOT, async (_event, ptyId: string, initialCwd: string) => {
-    const pid = ptyManager?.getPid(ptyId);
-    console.log('[diff] resolveGitRoot ptyId:', ptyId, 'pid:', pid, 'initialCwd:', initialCwd);
-    const root = await resolveGitRoot(pid, initialCwd);
-    console.log('[diff] resolved git root:', root);
-    return root;
+  ipcMain.handle(IPC.DIFF_RESOLVE_GIT_ROOT, async (_event, cwd: string) => {
+    return resolveGitRoot(cwd);
   });
 
   ipcMain.handle(IPC.DIFF_GET_CODE_CHANGES, async (_event, cwd: string, mode: DiffMode) => {

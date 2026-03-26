@@ -377,6 +377,9 @@ const DiffReview: React.FC = () => {
   const diffReviewMode = useTerminalStore(s => s.diffReviewMode);
   const closeDiffReview = useTerminalStore(s => s.closeDiffReview);
   const setDiffReviewMode = useTerminalStore(s => s.setDiffReviewMode);
+  const terminalCwd = useTerminalStore(s =>
+    diffReviewTerminalId ? s.terminals.get(diffReviewTerminalId)?.cwd ?? '' : ''
+  );
 
   const [diffResult, setDiffResult] = useState<DiffResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -387,17 +390,13 @@ const DiffReview: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [gitCwd, setGitCwd] = useState<string | null>(null);
 
-  // Resolve git root and load diff — main process tries multiple CWD sources
+  // Resolve git root and load diff — uses renderer-tracked terminal CWD
   const loadDiff = useCallback(async (mode: DiffMode) => {
-    if (!diffReviewTerminalId) return;
+    if (!diffReviewTerminalId || !terminalCwd) return;
     setLoading(true);
     setError(null);
     try {
-      const terminal = useTerminalStore.getState().terminals.get(diffReviewTerminalId);
-      const initialCwd = terminal?.cwd || '';
-
-      // Single call: main process tries shell PEB CWD → process.cwd() → initialCwd → walk-up
-      const root = await window.terminalAPI.diffResolveGitRoot(diffReviewTerminalId, initialCwd);
+      const root = await window.terminalAPI.diffResolveGitRoot(terminalCwd);
       setGitCwd(root);
 
       const result = await window.terminalAPI.diffGetDiff(root, mode);
@@ -412,17 +411,19 @@ const DiffReview: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [diffReviewTerminalId, selectedFile]);
+  }, [diffReviewTerminalId, terminalCwd, selectedFile]);
 
-  // Load diff on open and mode change
+  // Load diff on open, mode change, or terminal switch
   useEffect(() => {
-    if (diffReviewOpen) {
+    if (diffReviewOpen && diffReviewTerminalId) {
       setSelectedFile(null);
       setAnnotatedFile(null);
       setComments([]);
+      setGitCwd(null);
+      setDiffResult(null);
       loadDiff(diffReviewMode);
     }
-  }, [diffReviewOpen, diffReviewMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [diffReviewOpen, diffReviewMode, diffReviewTerminalId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load annotated file when selection changes
   useEffect(() => {

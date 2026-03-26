@@ -113,6 +113,32 @@ export class PtyManager {
     this.stats.set(opts.id, { pid: ptyProcess.pid, writeCount: 0, lastWriteTime: 0, dataCount: 0, lastDataTime: 0, dataBytes: 0 });
     diagLog('pty:created', { id: opts.id, pid: ptyProcess.pid, shell: opts.shellPath, cwd });
 
+    // Inject shell integration: emit OSC 7 after every prompt so the renderer
+    // can track the terminal's current working directory reliably.
+    const shellName = opts.shellPath.toLowerCase();
+    if (shellName.includes('pwsh') || shellName.includes('powershell')) {
+      // PowerShell: append to the prompt function to emit OSC 7 (file URI)
+      const psSnippet = [
+        // Wrap in a function to avoid polluting the prompt output
+        '$__tmax_origPrompt = $function:prompt;',
+        'function prompt { ',
+        '  $p = $__tmax_origPrompt.Invoke();',
+        '  $d = $executionContext.SessionState.Path.CurrentLocation.Path;',
+        '  $u = "file:///" + ($d -replace "\\\\","/");',
+        '  [Console]::Write("`e]7;$u`a");',
+        '  return $p',
+        '}',
+      ].join(' ');
+      // Send as a single line + Enter, then clear screen to hide the init noise
+      setTimeout(() => ptyProcess.write(psSnippet + '\r'), 200);
+      setTimeout(() => ptyProcess.write('cls\r'), 400);
+    } else if (shellName.includes('bash') || shellName.includes('zsh')) {
+      // Bash/Zsh: use PROMPT_COMMAND / precmd
+      const bashSnippet = 'PROMPT_COMMAND=\'printf "\\e]7;file:///%s\\a" "$(pwd)"\'' + '\r';
+      setTimeout(() => ptyProcess.write(bashSnippet), 200);
+    }
+    // CMD: relies on prompt regex fallback (no hook mechanism)
+
     ptyProcess.onData((data) => {
       const s = this.stats.get(opts.id);
       if (s) { s.dataCount++; s.lastDataTime = Date.now(); s.dataBytes += data.length; }

@@ -41,7 +41,7 @@ export interface TerminalAPI {
   diagLog(event: string, data?: Record<string, unknown>): void;
   getDiagLogPath(): Promise<string>;
   // ── Diff editor ──────────────────────────────────────────────────
-  diffResolveGitRoot(ptyId: string, initialCwd: string): Promise<string>;
+  diffResolveGitRoot(cwd: string): Promise<string>;
   diffGetDiff(cwd: string, mode: DiffMode): Promise<DiffResult>;
   diffGetAnnotatedFile(cwd: string, filePath: string, mode: DiffMode): Promise<AnnotatedFile>;
 }
@@ -297,8 +297,8 @@ const terminalAPI: TerminalAPI = {
   },
 
   // ── Diff editor ──────────────────────────────────────────────────
-  diffResolveGitRoot(ptyId: string, initialCwd: string) {
-    return ipcRenderer.invoke(IPC.DIFF_RESOLVE_GIT_ROOT, ptyId, initialCwd);
+  diffResolveGitRoot(cwd: string) {
+    return ipcRenderer.invoke(IPC.DIFF_RESOLVE_GIT_ROOT, cwd);
   },
 
   diffGetDiff(cwd: string, mode: DiffMode) {

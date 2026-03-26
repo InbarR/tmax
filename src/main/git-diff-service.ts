@@ -1,10 +1,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile, readlink } from 'node:fs/promises';
-import { existsSync, writeFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
-import { diagLog } from './diag-logger';
 import type {
   DiffFile,
   DiffHunk,
@@ -45,141 +43,27 @@ async function tryGitRoot(cwd: string): Promise<string | null> {
 }
 
 /**
- * Resolve the git root for a terminal by trying multiple CWD sources:
- * 1. PEB CWD of the shell process (actual directory after cd)
- * 2. The Electron main process CWD (where npm start was run)
- * 3. The terminal's initial CWD from the store
- * 4. Walk up from initial CWD looking for .git
- *
- * Returns the first git root found, or throws.
+ * Resolve the git root from a renderer-tracked CWD.
+ * The renderer already tracks the terminal's current directory via prompt parsing,
+ * so we just need to find the git root from that path.
  */
-export async function resolveGitRoot(ptyPid: number | null, initialCwd: string): Promise<string> {
-  const candidates: string[] = [];
+export async function resolveGitRoot(cwd: string): Promise<string> {
+  if (!cwd) throw new Error('No CWD provided — terminal may not have reported its directory yet.');
 
-  // 1. Try reading the shell's actual CWD from the process
-  if (ptyPid) {
-    try {
-      const shellCwd = await getShellCwd(ptyPid);
-      if (shellCwd) candidates.push(shellCwd);
-    } catch { /* continue to fallbacks */ }
-  }
+  // 1. Try git rev-parse directly
+  const root = await tryGitRoot(cwd);
+  if (root) return root;
 
-  // 2. Electron main process CWD (where the app was launched)
-  candidates.push(process.cwd());
-
-  // 3. Terminal's initial CWD
-  if (initialCwd) candidates.push(initialCwd);
-
-  // Try each candidate
-  for (const cwd of candidates) {
-    diagLog('diff:tryGitRoot', { cwd });
-    const root = await tryGitRoot(cwd);
-    if (root) {
-      diagLog('diff:resolved', { cwd, root });
-      return root;
-    }
-  }
-
-  // 4. Walk up from initial CWD looking for .git directory
-  let dir = initialCwd;
+  // 2. Walk up looking for .git directory
+  let dir = cwd;
   while (dir) {
-    if (existsSync(path.join(dir, '.git'))) {
-      diagLog('diff:resolved-walk', { dir });
-      return dir;
-    }
+    if (existsSync(path.join(dir, '.git'))) return dir;
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
 
-  throw new Error(`No git repository found. Tried: ${candidates.join(', ')}`);
-}
-
-// ── Shell CWD detection (platform-specific) ─────────────────────────
-
-// PowerShell script saved to temp to read process CWD from PEB
-const PS_CWD_SCRIPT = `
-param([int]$TargetPid)
-$ErrorActionPreference = 'SilentlyContinue'
-Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
-public class TmaxCwdReader {
-  [DllImport("ntdll.dll")]
-  static extern int NtQueryInformationProcess(IntPtr h, int c, ref PBI p, int l, out int r);
-  [DllImport("kernel32.dll")]
-  static extern bool ReadProcessMemory(IntPtr h, IntPtr a, byte[] b, int s, out int r);
-  [DllImport("kernel32.dll")]
-  static extern IntPtr OpenProcess(uint a, bool i, int p);
-  [DllImport("kernel32.dll")]
-  static extern bool CloseHandle(IntPtr h);
-  [StructLayout(LayoutKind.Sequential)]
-  struct PBI {
-    public IntPtr R1; public IntPtr Peb; public IntPtr R2a;
-    public IntPtr R2b; public IntPtr Uid; public IntPtr R3;
-  }
-  public static string Get(int pid) {
-    IntPtr h = OpenProcess(0x0410, false, pid);
-    if (h == IntPtr.Zero) return null;
-    try {
-      PBI pbi = new PBI(); int rl;
-      if (NtQueryInformationProcess(h, 0, ref pbi, Marshal.SizeOf(pbi), out rl) != 0) return null;
-      byte[] buf = new byte[8]; int br;
-      ReadProcessMemory(h, IntPtr.Add(pbi.Peb, 0x20), buf, 8, out br);
-      IntPtr pp = (IntPtr)BitConverter.ToInt64(buf, 0);
-      byte[] us = new byte[16];
-      ReadProcessMemory(h, IntPtr.Add(pp, 0x38), us, 16, out br);
-      short len = BitConverter.ToInt16(us, 0);
-      IntPtr ba = (IntPtr)BitConverter.ToInt64(us, 8);
-      if (len <= 0 || len > 2048) return null;
-      byte[] cwd = new byte[len];
-      ReadProcessMemory(h, ba, cwd, len, out br);
-      return Encoding.Unicode.GetString(cwd);
-    } finally { CloseHandle(h); }
-  }
-}
-'@
-$result = [TmaxCwdReader]::Get($TargetPid)
-if ($result) { Write-Output $result }
-`.trim();
-
-let cwdScriptPath: string | null = null;
-
-function ensureCwdScript(): string {
-  if (cwdScriptPath && existsSync(cwdScriptPath)) return cwdScriptPath;
-  cwdScriptPath = path.join(os.tmpdir(), 'tmax-cwd-reader.ps1');
-  writeFileSync(cwdScriptPath, PS_CWD_SCRIPT, 'utf-8');
-  return cwdScriptPath;
-}
-
-async function getShellCwd(ptyPid: number): Promise<string | null> {
-  const platform = os.platform();
-  if (platform === 'win32') {
-    try {
-      const scriptPath = ensureCwdScript();
-      const { stdout } = await execFileAsync('powershell.exe', [
-        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-        '-File', scriptPath, '-TargetPid', String(ptyPid),
-      ], { windowsHide: true, timeout: 15000 });
-      let cwd = stdout.trim();
-      if (cwd.length > 3 && cwd.endsWith('\\')) cwd = cwd.slice(0, -1);
-      if (cwd && existsSync(cwd)) return cwd;
-    } catch { /* PEB reading failed, fall through */ }
-    return null;
-  } else if (platform === 'darwin') {
-    try {
-      const { stdout } = await execFileAsync('lsof', [
-        '-p', String(ptyPid), '-d', 'cwd', '-Fn',
-      ], { windowsHide: true, timeout: 5000 });
-      const match = stdout.match(/^n(.+)$/m);
-      return match ? match[1] : null;
-    } catch { return null; }
-  } else {
-    try {
-      return await readlink(`/proc/${ptyPid}/cwd`);
-    } catch { return null; }
-  }
+  throw new Error(`No git repository found from: ${cwd}`);
 }
 
 // ── Git operations ─────────────────────────────────────────────────
