@@ -60,13 +60,28 @@ export interface PtyStats {
   dataBytes: number;
 }
 
+const BATCH_INTERVAL = 12; // ms — flush PTY output batches (~1 frame at 60fps + margin)
+
 export class PtyManager {
   private ptys = new Map<string, IPty>();
   private stats = new Map<string, PtyStats>();
   private callbacks: PtyCallbacks;
+  private pendingData = new Map<string, string>();
+  private batchTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(callbacks: PtyCallbacks) {
     this.callbacks = callbacks;
+  }
+
+  private scheduleBatchFlush(): void {
+    if (this.batchTimer) return;
+    this.batchTimer = setTimeout(() => {
+      this.batchTimer = null;
+      for (const [id, data] of this.pendingData) {
+        this.callbacks.onData(id, data);
+      }
+      this.pendingData.clear();
+    }, BATCH_INTERVAL);
   }
 
   getStats(id: string): PtyStats | null {
@@ -102,7 +117,11 @@ export class PtyManager {
       const s = this.stats.get(opts.id);
       if (s) { s.dataCount++; s.lastDataTime = Date.now(); s.dataBytes += data.length; }
       diagLog('pty:data', { id: opts.id, bytes: data.length });
-      this.callbacks.onData(opts.id, data);
+      // Batch output: accumulate chunks and flush at most once per BATCH_INTERVAL.
+      // This prevents IPC flooding during output bursts (e.g. system resume).
+      const existing = this.pendingData.get(opts.id);
+      this.pendingData.set(opts.id, existing ? existing + data : data);
+      this.scheduleBatchFlush();
     });
 
     ptyProcess.onExit(({ exitCode }) => {
@@ -149,6 +168,7 @@ export class PtyManager {
     if (pty) {
       pty.kill();
       this.ptys.delete(id);
+      this.pendingData.delete(id);
     }
   }
 
