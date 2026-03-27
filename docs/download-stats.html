@@ -39,7 +39,7 @@
   .filter-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
   .chart-section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 24px; }
   .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
-  .chart-container { position: relative; width: 100%; height: 200px; }
+  .chart-container { position: relative; width: 100%; height: 240px; }
   .chart-container canvas { width: 100%; height: 100%; }
 </style>
 </head>
@@ -120,7 +120,7 @@ function renderChart(releases) {
   if (data.length === 0) return;
 
   const maxPerDay = Math.max(...data.map(d => d.perDay), 1);
-  const pad = { top: 20, right: 16, bottom: 40, left: 48 };
+  const pad = { top: 20, right: 16, bottom: 56, left: 48 };
   const chartW = W - pad.left - pad.right;
   const chartH = H - pad.top - pad.bottom;
   const barW = Math.min(40, (chartW / data.length) * 0.7);
@@ -174,14 +174,22 @@ function renderChart(releases) {
       ctx.fillText(d.perDay.toFixed(1), x + barW / 2, y - 4);
     }
 
-    // X-axis label
+    // X-axis label: version + date
+    const dateStr = d.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     ctx.fillStyle = '#a6adc8';
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
     ctx.save();
-    ctx.translate(x + barW / 2, pad.top + chartH + 14);
+    ctx.translate(x + barW / 2, pad.top + chartH + 12);
     ctx.rotate(-0.4);
     ctx.fillText(d.tag, 0, 0);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(x + barW / 2, pad.top + chartH + 26);
+    ctx.rotate(-0.4);
+    ctx.fillStyle = '#585b70';
+    ctx.font = '9px system-ui';
+    ctx.fillText(dateStr, 0, 0);
     ctx.restore();
   }
 }
