@@ -156,28 +156,19 @@ const StatusBar: React.FC = () => {
           )}
         </div>
         <div className="status-section status-right">
-          {Array.from(terminals.values()).some((t) => t.aiSessionId || t.startupCommand) && (
-            <button
-              className="status-mode-btn"
-              onClick={() => useTerminalStore.getState().resumeAllSessions()}
-              title="Resume all AI sessions"
-            >
-              [&#9654; Resume Sessions]
-            </button>
-          )}
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().colorizeAllTabs()}
             title="Toggle tab colors (Ctrl+Shift+O)"
           >
-            [{hasAnyColor ? 'Colors \u2713' : 'Colors'} Ctrl+Shift+O]
+            &#127912; {hasAnyColor ? 'Colors \u2713' : 'Colors'}
           </button>
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleViewMode()}
             title="Toggle view mode (Ctrl+Shift+F)"
           >
-            [{viewMode === 'focus' ? 'Focus' : viewMode === 'grid' ? (gridColumns ? `Grid ${gridColumns}col` : 'Grid') : 'Split'} Ctrl+Shift+F]
+            &#9638; {viewMode === 'focus' ? 'Focus' : viewMode === 'grid' ? (gridColumns ? `Grid ${gridColumns}col` : 'Grid') : 'Split'}
           </button>
           <span className="status-dim">
             {totalCount} terminal{totalCount !== 1 ? 's' : ''}
