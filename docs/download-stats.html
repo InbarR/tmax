@@ -56,7 +56,7 @@
 </div>
 
 <div class="chart-section">
-  <div class="chart-title">Downloads per day (stacked by version)</div>
+  <div class="chart-title">Downloads by version (stacked by OS)</div>
   <div class="chart-container"><canvas id="chart"></canvas></div>
 </div>
 
@@ -95,13 +95,7 @@ function relativeDate(d) {
   return Math.floor(diff / 86400) + 'd ago';
 }
 
-// Color palette for stacked segments (one per version)
-const STACK_COLORS = [
-  '#89b4fa', '#a6e3a1', '#f9e2af', '#f38ba8', '#cba6f7',
-  '#fab387', '#94e2d5', '#f5c2e7', '#74c7ec', '#eba0ac',
-  '#b4befe', '#f5e0dc', '#89dceb', '#f2cdcd', '#a6adc8',
-  '#585b70', '#7f849c', '#9399b2', '#bac2de', '#cdd6f4',
-];
+const OS_COLORS = { windows: '#89b4fa', macos: '#a6e3a1', linux: '#f9e2af' };
 
 function renderChart(releases) {
   const canvas = document.getElementById('chart');
@@ -113,52 +107,26 @@ function renderChart(releases) {
   ctx.scale(dpr, dpr);
   const W = rect.width, H = rect.height;
 
-  // Build data: each release gets a date range and total downloads
+  // Build data: one bar per version, stacked by OS
   const sorted = [...releases].filter(r => r.assets.length > 0).reverse(); // oldest first
-  const versionData = sorted.map((r, i) => {
-    const downloads = r.assets.filter(a => !EXCLUDED.has(a.name)).reduce((s, a) => s + a.download_count, 0);
-    const published = new Date(r.published_at);
-    const nextDate = i < sorted.length - 1 ? new Date(sorted[i + 1].published_at) : new Date();
-    const days = Math.max(1, (nextDate - published) / 86400000);
-    return { tag: r.tag_name, downloads, published, days };
+  const data = sorted.map(r => {
+    const byOS = { windows: 0, macos: 0, linux: 0 };
+    for (const a of r.assets) {
+      if (EXCLUDED.has(a.name)) continue;
+      const p = platformOf(a.name);
+      if (p in byOS) byOS[p] += a.download_count;
+    }
+    return { tag: r.tag_name, date: new Date(r.published_at), ...byOS, total: byOS.windows + byOS.macos + byOS.linux };
   });
 
-  if (versionData.length === 0) return;
+  if (data.length === 0) return;
 
-  // Build day buckets: for each day in the range, figure out which version was current
-  const firstDate = new Date(versionData[0].published);
-  firstDate.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const totalDays = Math.max(1, Math.ceil((today - firstDate) / 86400000)) + 1;
-
-  // For each version, compute downloads/day (evenly distributed across its active period)
-  // Then for each calendar day, stack the version that was active
-  const dayBuckets = []; // [{date, segments: [{version, dlPerDay, colorIdx}]}]
-  for (let d = 0; d < totalDays; d++) {
-    const date = new Date(firstDate.getTime() + d * 86400000);
-    const segments = [];
-    // Find which version was active on this day
-    for (let v = versionData.length - 1; v >= 0; v--) {
-      const ver = versionData[v];
-      const verStart = new Date(ver.published);
-      verStart.setHours(0, 0, 0, 0);
-      const verEnd = v < versionData.length - 1 ? new Date(versionData[v + 1].published) : new Date(today.getTime() + 86400000);
-      verEnd.setHours(0, 0, 0, 0);
-      if (date >= verStart && date < verEnd) {
-        const perDay = ver.downloads / ver.days;
-        segments.push({ tag: ver.tag, perDay, colorIdx: v % STACK_COLORS.length });
-        break;
-      }
-    }
-    dayBuckets.push({ date, segments });
-  }
-
-  const maxVal = Math.max(...dayBuckets.map(b => b.segments.reduce((s, seg) => s + seg.perDay, 0)), 1);
-  const pad = { top: 20, right: 16, bottom: 70, left: 48 };
+  const maxVal = Math.max(...data.map(d => d.total), 1);
+  const pad = { top: 20, right: 16, bottom: 56, left: 48 };
   const chartW = W - pad.left - pad.right;
   const chartH = H - pad.top - pad.bottom;
-  const barW = Math.max(2, chartW / dayBuckets.length - 1);
+  const gap = chartW / data.length;
+  const barW = Math.min(36, gap * 0.7);
 
   // Grid lines
   ctx.strokeStyle = '#45475a';
@@ -169,7 +137,7 @@ function renderChart(releases) {
   ctx.textAlign = 'right';
   for (let i = 0; i <= gridLines; i++) {
     const y = pad.top + chartH - (chartH * i / gridLines);
-    const val = (maxVal * i / gridLines).toFixed(1);
+    const val = Math.round(maxVal * i / gridLines);
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
     ctx.fillText(val, pad.left - 6, y + 4);
   }
@@ -181,50 +149,72 @@ function renderChart(releases) {
   ctx.textAlign = 'center';
   ctx.fillStyle = '#a6adc8';
   ctx.font = '11px system-ui';
-  ctx.fillText('dl/day', 0, 0);
+  ctx.fillText('downloads', 0, 0);
   ctx.restore();
 
-  // Bars — one per day, colored by active version
-  for (let i = 0; i < dayBuckets.length; i++) {
-    const bucket = dayBuckets[i];
-    const x = pad.left + (chartW / dayBuckets.length) * i;
+  // Stacked bars — one per version, segments for Windows/macOS/Linux
+  const osKeys = ['windows', 'macos', 'linux'];
+  for (let i = 0; i < data.length; i++) {
+    const d = data[i];
+    const x = pad.left + gap * i + (gap - barW) / 2;
     let yOffset = 0;
-    for (const seg of bucket.segments) {
-      const barH = (seg.perDay / maxVal) * chartH;
+    for (const os of osKeys) {
+      const val = d[os];
+      if (val === 0) continue;
+      const barH = (val / maxVal) * chartH;
       const y = pad.top + chartH - yOffset - barH;
-      ctx.fillStyle = STACK_COLORS[seg.colorIdx];
-      ctx.fillRect(x, y, barW, barH);
+      ctx.fillStyle = OS_COLORS[os];
+      ctx.beginPath();
+      // Round top corners only on the topmost segment
+      if (yOffset + barH >= d.total / maxVal * chartH - 1) {
+        ctx.roundRect(x, y, barW, barH, [3, 3, 0, 0]);
+      } else {
+        ctx.rect(x, y, barW, barH);
+      }
+      ctx.fill();
       yOffset += barH;
     }
-  }
 
-  // X-axis date labels — show ~8 evenly spaced dates
-  const labelCount = Math.min(8, dayBuckets.length);
-  ctx.fillStyle = '#a6adc8';
-  ctx.font = '10px system-ui';
-  ctx.textAlign = 'center';
-  for (let i = 0; i < labelCount; i++) {
-    const idx = Math.round(i * (dayBuckets.length - 1) / (labelCount - 1));
-    const bucket = dayBuckets[idx];
-    const x = pad.left + (chartW / dayBuckets.length) * idx + barW / 2;
-    const dateStr = bucket.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    ctx.fillText(dateStr, x, pad.top + chartH + 14);
+    // Total on top
+    if (d.total > 0) {
+      ctx.fillStyle = '#cdd6f4';
+      ctx.font = '10px system-ui';
+      ctx.textAlign = 'center';
+      const topY = pad.top + chartH - (d.total / maxVal) * chartH;
+      ctx.fillText(d.total, x + barW / 2, topY - 4);
+    }
+
+    // X-axis: version + date
+    const dateStr = d.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.save();
+    ctx.translate(x + barW / 2, pad.top + chartH + 12);
+    ctx.rotate(-0.4);
+    ctx.fillStyle = '#a6adc8';
+    ctx.fillText(d.tag, 0, 0);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(x + barW / 2, pad.top + chartH + 26);
+    ctx.rotate(-0.4);
+    ctx.fillStyle = '#585b70';
+    ctx.font = '9px system-ui';
+    ctx.fillText(dateStr, 0, 0);
+    ctx.restore();
   }
 
   // Legend
-  const legendY = pad.top + chartH + 30;
-  ctx.font = '10px system-ui';
+  const legendY = pad.top + chartH + 42;
+  ctx.font = '11px system-ui';
   let legendX = pad.left;
-  for (let v = 0; v < versionData.length; v++) {
-    const color = STACK_COLORS[v % STACK_COLORS.length];
+  for (const [os, color] of Object.entries(OS_COLORS)) {
     ctx.fillStyle = color;
-    ctx.fillRect(legendX, legendY, 10, 10);
+    ctx.fillRect(legendX, legendY, 12, 12);
     ctx.fillStyle = '#a6adc8';
     ctx.textAlign = 'left';
-    const label = versionData[v].tag;
-    ctx.fillText(label, legendX + 14, legendY + 9);
-    legendX += ctx.measureText(label).width + 24;
-    if (legendX > W - pad.right - 40) { legendX = pad.left; /* wrap would need more height */ }
+    const label = os === 'macos' ? 'macOS' : os.charAt(0).toUpperCase() + os.slice(1);
+    ctx.fillText(label, legendX + 16, legendY + 10);
+    legendX += ctx.measureText(label).width + 32;
   }
 }
 
