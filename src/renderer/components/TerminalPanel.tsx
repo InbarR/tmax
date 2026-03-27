@@ -276,20 +276,45 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
             rafScheduled = true;
             requestAnimationFrame(flushPendingData);
           }
-          // Parse cwd from PowerShell prompt "PS C:\path>" or cmd prompt "C:\path>"
-          // Strip ANSI escape sequences first to avoid capturing colored output as paths
-          const clean = data.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
-          const psMatch = clean.match(/PS ([A-Z]:\\[^>]*?)>/i);
-          const cmdMatch = clean.match(/^([A-Z]:\\[^>]*?)>/im);
-          const dir = psMatch?.[1] || cmdMatch?.[1];
-          if (dir) {
+          // ── CWD detection ──────────────────────────────────────────
+          // 1. OSC 7 (standard): \x1b]7;file:///C:/path\x07
+          // 2. OSC 9;9 (ConPTY/Windows Terminal): \x1b]9;9;C:\path\x07
+          // 3. Prompt regex fallback: "PS C:\path>" or "C:\path>"
+          let detectedDir: string | null = null;
+
+          // Try OSC 7 (file URI)
+          const osc7Match = data.match(/\x1b\]7;file:\/\/[^/]*\/([^\x07\x1b]+)(?:\x07|\x1b\\)/);
+          if (osc7Match) {
+            detectedDir = decodeURIComponent(osc7Match[1]).replace(/\//g, '\\');
+          }
+
+          // Try OSC 9;9 (Windows Terminal / ConPTY)
+          if (!detectedDir) {
+            const osc9Match = data.match(/\x1b\]9;9;([^\x07\x1b]+)(?:\x07|\x1b\\)/);
+            if (osc9Match) {
+              detectedDir = osc9Match[1];
+            }
+          }
+
+          // Fallback: parse prompt text for standard PS/cmd prompts
+          if (!detectedDir) {
+            const clean = data
+              .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')   // OSC sequences
+              .replace(/\x1b\[[?]?[0-9;]*[A-Za-z]/g, '')            // CSI sequences (including ?25h/l)
+              .replace(/\x1b[^[\]].?/g, '');                         // Other short escapes
+            const psMatch = clean.match(/PS ([A-Z]:\\[^>]*?)>\s*$/im);
+            const cmdMatch = clean.match(/^([A-Z]:\\[^>]*?)>\s*$/im);
+            detectedDir = psMatch?.[1] || cmdMatch?.[1] || null;
+          }
+
+          if (detectedDir) {
             const store = useTerminalStore.getState();
             const terminal = store.terminals.get(terminalId);
-            if (terminal && terminal.cwd !== dir) {
+            if (terminal && terminal.cwd !== detectedDir) {
               const newTerminals = new Map(store.terminals);
-              newTerminals.set(terminalId, { ...terminal, cwd: dir });
+              newTerminals.set(terminalId, { ...terminal, cwd: detectedDir });
               useTerminalStore.setState({ terminals: newTerminals });
-              store.addRecentDir(dir);
+              store.addRecentDir(detectedDir);
             }
             // Shell prompt appeared after AI session exited — pre-fill resume command
             if (aiSessionStartedRef.current && aiResumeCommandRef.current) {
@@ -628,6 +653,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       {title && <div className="terminal-pane-title">{title}</div>}
       {showDiag && <DiagnosticsOverlay terminalId={terminalId} diagRef={diagRef} mainDiag={mainDiagRef.current} logPath={logPathRef.current} onClose={() => setShowDiag(false)} />}
       <div ref={containerRef} className="xterm-container" />
+      <button
+        className="terminal-diff-btn"
+        title="Open diff review"
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          useTerminalStore.getState().openDiffReview(terminalId);
+        }}
+      >&#9998;</button>
       <button
         className="terminal-refocus-btn"
         title="Re-focus terminal (use if stuck)"

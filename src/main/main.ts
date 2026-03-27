@@ -13,6 +13,8 @@ import { ClaudeCodeSessionMonitor } from './claude-code-session-monitor';
 import { ClaudeCodeSessionWatcher } from './claude-code-session-watcher';
 import { VersionChecker } from './version-checker';
 import { initDiagLogger, getDiagLogPath, diagLog } from './diag-logger';
+import { GitDiffService, resolveGitRoot } from './git-diff-service';
+import type { DiffMode } from '../shared/diff-types';
 
 // Handle Squirrel.Windows lifecycle events (install, update, uninstall)
 // Must be at the top before any other initialization
@@ -411,6 +413,25 @@ function registerIpcHandlers(): void {
     const filePath = path.join(clipboardTempDir, `clipboard-${timestamp}-${rand}.png`);
     fs.writeFileSync(filePath, Buffer.from(base64Png, 'base64'), { mode: 0o600 });
     return filePath;
+  });
+
+  // ── Diff editor IPC handlers ────────────────────────────────────────
+  const diffService = new GitDiffService();
+
+  ipcMain.handle(IPC.DIFF_RESOLVE_GIT_ROOT, async (_event, cwd: string) => {
+    return resolveGitRoot(cwd);
+  });
+
+  ipcMain.handle(IPC.DIFF_GET_CODE_CHANGES, async (_event, cwd: string, mode: DiffMode) => {
+    return diffService.getCodeChanges(cwd, mode);
+  });
+
+  ipcMain.handle(IPC.DIFF_GET_DIFF, async (_event, cwd: string, mode: DiffMode) => {
+    return diffService.getDiff(cwd, mode);
+  });
+
+  ipcMain.handle(IPC.DIFF_GET_ANNOTATED_FILE, async (_event, cwd: string, filePath: string, mode: DiffMode) => {
+    return diffService.getAnnotatedFile(cwd, filePath, mode);
   });
 }
 

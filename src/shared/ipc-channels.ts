@@ -42,6 +42,11 @@ export const IPC = {
   PTY_GET_DIAG: 'pty:getDiag',
   DIAG_LOG: 'diag:log',
   DIAG_GET_LOG_PATH: 'diag:getLogPath',
+  // ── Diff editor ────────────────────────────────────────────────────
+  DIFF_RESOLVE_GIT_ROOT: 'diff:resolveGitRoot',
+  DIFF_GET_CODE_CHANGES: 'diff:getCodeChanges',
+  DIFF_GET_DIFF: 'diff:getDiff',
+  DIFF_GET_ANNOTATED_FILE: 'diff:getAnnotatedFile',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

@@ -12,6 +12,7 @@ import type {
   SplitDirection,
 } from './types';
 import type { CopilotSessionSummary } from '../../shared/copilot-types';
+import type { DiffMode } from '../../shared/diff-types';
 
 // ── Tab color palette ────────────────────────────────────────────────
 
@@ -342,6 +343,10 @@ interface TerminalStore {
   claudeCodeSessions: CopilotSessionSummary[];
   copilotSearchQuery: string;
   selectedCopilotSessionId: string | null;
+  // Diff review state
+  diffReviewOpen: boolean;
+  diffReviewTerminalId: TerminalId | null;
+  diffReviewMode: DiffMode;
 
   // Actions
   loadConfig: () => Promise<void>;
@@ -420,6 +425,10 @@ interface TerminalStore {
   updateClaudeCodeSession: (session: CopilotSessionSummary) => void;
   removeClaudeCodeSession: (sessionId: string) => void;
   resumeAllSessions: () => void;
+  // Diff review actions
+  openDiffReview: (terminalId: TerminalId) => void;
+  closeDiffReview: () => void;
+  setDiffReviewMode: (mode: DiffMode) => void;
 }
 
 // Cached session extras (layouts, etc.) so saveSession doesn't need async load
@@ -448,6 +457,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   claudeCodeSessions: [],
   copilotSearchQuery: '',
   selectedCopilotSessionId: null,
+  diffReviewOpen: false,
+  diffReviewTerminalId: null,
+  diffReviewMode: 'unstaged' as DiffMode,
   tabMenuTerminalId: null,
   favoriteDirs: [],
   recentDirs: [],
@@ -2019,5 +2031,16 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         window.terminalAPI.writePty(id, cmd + '\r');
       }
     }
+  },
+
+  // ── Diff review actions ───────────────────────────────────────────
+  openDiffReview: (terminalId: TerminalId) => {
+    set({ diffReviewOpen: true, diffReviewTerminalId: terminalId, diffReviewMode: 'unstaged' });
+  },
+  closeDiffReview: () => {
+    set({ diffReviewOpen: false, diffReviewTerminalId: null });
+  },
+  setDiffReviewMode: (mode: DiffMode) => {
+    set({ diffReviewMode: mode });
   },
 }));

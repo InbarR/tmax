@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, clipboard } from 'electron';
 import { IPC } from '../shared/ipc-channels';
+import type { DiffMode, DiffResult, AnnotatedFile } from '../shared/diff-types';
 
 export interface PtyDiag {
   pid: number;
@@ -39,6 +40,10 @@ export interface TerminalAPI {
   getPtyDiag(id: string): Promise<PtyDiag | null>;
   diagLog(event: string, data?: Record<string, unknown>): void;
   getDiagLogPath(): Promise<string>;
+  // ── Diff editor ──────────────────────────────────────────────────
+  diffResolveGitRoot(cwd: string): Promise<string>;
+  diffGetDiff(cwd: string, mode: DiffMode): Promise<DiffResult>;
+  diffGetAnnotatedFile(cwd: string, filePath: string, mode: DiffMode): Promise<AnnotatedFile>;
 }
 
 const terminalAPI: TerminalAPI = {
@@ -289,6 +294,19 @@ const terminalAPI: TerminalAPI = {
     return () => {
       ipcRenderer.removeListener(IPC.VERSION_UPDATE_STATUS, listener);
     };
+  },
+
+  // ── Diff editor ──────────────────────────────────────────────────
+  diffResolveGitRoot(cwd: string) {
+    return ipcRenderer.invoke(IPC.DIFF_RESOLVE_GIT_ROOT, cwd);
+  },
+
+  diffGetDiff(cwd: string, mode: DiffMode) {
+    return ipcRenderer.invoke(IPC.DIFF_GET_DIFF, cwd, mode);
+  },
+
+  diffGetAnnotatedFile(cwd: string, filePath: string, mode: DiffMode) {
+    return ipcRenderer.invoke(IPC.DIFF_GET_ANNOTATED_FILE, cwd, filePath, mode);
   },
 
 };
