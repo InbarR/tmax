@@ -15,6 +15,58 @@ function hexToTerminalRgba(hex: string, alpha: number): string {
   return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`;
 }
 
+const WSL_PROMPT_DEBOUNCE_MS = 200;
+const WSL_PROMPT_FALLBACK_MS = 5000;
+
+/**
+ * Sends a command to a WSL terminal after detecting the shell prompt.
+ * Uses debounce to avoid firing on MOTD/banner text, with a fallback timeout.
+ * Returns a cleanup function for useEffect teardown.
+ */
+function sendCommandOnWslPrompt(
+  terminalId: string,
+  cmd: string,
+  onSent?: (cmd: string) => void,
+): () => void {
+  let promptSent = false;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const checkPrompt = (id: string, data: string) => {
+    if (id !== terminalId || promptSent) return;
+    const clean = data.replace(/\x1b\[[^m]*m/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
+    // $/#/% = sh/bash/zsh; ❯/➜ = Oh-My-Zsh/Starship; > = fish/generic
+    if (/[$#%❯➜>]\s*$/.test(clean)) {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (!promptSent) {
+          promptSent = true;
+          promptUnsub();
+          window.terminalAPI.writePty(terminalId, cmd + '\r');
+          onSent?.(cmd);
+        }
+      }, WSL_PROMPT_DEBOUNCE_MS);
+    }
+  };
+
+  const promptUnsub = window.terminalAPI.onPtyData(checkPrompt);
+
+  const fallbackTimer = setTimeout(() => {
+    if (!promptSent) {
+      promptSent = true;
+      promptUnsub();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      window.terminalAPI.writePty(terminalId, cmd + '\r');
+      onSent?.(cmd);
+    }
+  }, WSL_PROMPT_FALLBACK_MS);
+
+  return () => {
+    promptUnsub();
+    clearTimeout(fallbackTimer);
+    if (debounceTimer) clearTimeout(debounceTimer);
+  };
+}
+
 function ago(ts: number): string {
   if (!ts) return 'never';
   const s = (Date.now() - ts) / 1000;
@@ -103,6 +155,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   );
   const aiResumeCommandRef = useRef<string>('');
   const aiSessionStartedRef = useRef(false);
+  const wslPromptCleanupRef = useRef<(() => void) | null>(null);
   const isFocused = focusedTerminalId === terminalId;
 
   const handleFocus = useCallback(() => {
@@ -304,10 +357,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
           // 3. Prompt regex fallback: "PS C:\path>" or "C:\path>"
           let detectedDir: string | null = null;
 
+          // Check if this is a WSL terminal (preserve Linux-style paths)
+          const termInst = useTerminalStore.getState().terminals.get(terminalId);
+          const isWsl = termInst?.wsl === true;
+
           // Try OSC 7 (file URI)
           const osc7Match = data.match(/\x1b\]7;file:\/\/[^/]*\/([^\x07\x1b]+)(?:\x07|\x1b\\)/);
           if (osc7Match) {
-            detectedDir = decodeURIComponent(osc7Match[1]).replace(/\//g, '\\');
+            const decoded = decodeURIComponent(osc7Match[1]);
+            // For WSL terminals, keep Linux-style forward slashes; prefix with / for absolute path
+            detectedDir = isWsl ? '/' + decoded : decoded.replace(/\//g, '\\');
           }
 
           // Try OSC 9;9 (Windows Terminal / ConPTY)
@@ -370,16 +429,24 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     const termInstance = useTerminalStore.getState().terminals.get(terminalId);
     if (termInstance?.startupCommand && !termInstance.startupCommandSent) {
       const cmd = termInstance.startupCommand;
-      // Save resume command for AI sessions so we can pre-fill it on exit
-      if (termInstance.aiSessionId) {
-        aiResumeCommandRef.current = cmd;
+      if (termInstance.wsl) {
+        // WSL: wait for the shell prompt before sending the command
+        wslPromptCleanupRef.current = sendCommandOnWslPrompt(terminalId, cmd, (sentCmd) => {
+          if (termInstance.aiSessionId) {
+            aiResumeCommandRef.current = sentCmd;
+            aiSessionStartedRef.current = true;
+          }
+        });
+      } else {
+        setTimeout(() => {
+          window.terminalAPI.writePty(terminalId, cmd + '\r');
+          // Arm the re-send mechanism for native AI sessions only.
+          if (termInstance.aiSessionId) {
+            aiResumeCommandRef.current = cmd;
+            aiSessionStartedRef.current = true;
+          }
+        }, 1500);
       }
-      setTimeout(() => {
-        window.terminalAPI.writePty(terminalId, cmd + '\r');
-        if (termInstance.aiSessionId) {
-          aiSessionStartedRef.current = true;
-        }
-      }, 1500);
       // Mark as sent so it doesn't re-run on hot reload, but keep the value for session save
       const store = useTerminalStore.getState();
       const newTerminals = new Map(store.terminals);
@@ -512,6 +579,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       dataDisposable.dispose();
       unsubscribePtyData();
       unsubscribePtyExit();
+      wslPromptCleanupRef.current?.();
       if (textareaEl) {
         textareaEl.removeEventListener('focus', handleFocus);
         textareaEl.removeEventListener('blur', handleBlur);

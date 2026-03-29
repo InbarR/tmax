@@ -19,6 +19,8 @@ export interface CopilotSessionSummary {
   toolCallCount: number;
   lastActivityTime: number;
   model?: string;
+  wsl?: boolean;
+  wslDistro?: string;
 }
 
 export interface CopilotWorkspaceMetadata {

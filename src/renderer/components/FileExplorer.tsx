@@ -17,6 +17,7 @@ const FileExplorer: React.FC = () => {
   const terminals = useTerminalStore((s) => s.terminals);
   const focused = focusedId ? terminals.get(focusedId) : null;
   const terminalCwd = focused?.cwd || '';
+  const wslDistro = focused?.wslDistro;
 
   const [browsePath, setBrowsePath] = useState('');
   const [files, setFiles] = useState<FileEntry[]>([]);
@@ -47,33 +48,39 @@ const FileExplorer: React.FC = () => {
 
   const navigateUp = useCallback(() => {
     if (!currentPath) return;
-    const parent = currentPath.replace(/[/\\][^/\\]+[/\\]?$/, '') || currentPath.slice(0, 3); // e.g. C:\
+    const parent = currentPath.replace(/[/\\][^/\\]+[/\\]?$/, '') || currentPath.slice(0, 3);
     navigateTo(parent);
   }, [currentPath, navigateTo]);
 
   // Load root directory
   useEffect(() => {
     if (!show || !currentPath) return;
-    (window.terminalAPI as any).fileList(currentPath).then((entries: FileEntry[]) => {
+    (window.terminalAPI as any).fileList(currentPath, wslDistro).then((entries: FileEntry[]) => {
       setFiles(showHidden ? entries : entries.filter((e: FileEntry) => !e.name.startsWith('.')));
     });
-  }, [currentPath, show, showHidden]);
+  }, [currentPath, show, showHidden, wslDistro]);
 
   const toggleDir = useCallback((dirPath: string) => {
     setExpanded((prev) => {
       const next = { ...prev, [dirPath]: !prev[dirPath] };
       if (next[dirPath] && !children[dirPath]) {
-        (window.terminalAPI as any).fileList(dirPath).then((entries: FileEntry[]) => {
+        (window.terminalAPI as any).fileList(dirPath, wslDistro).then((entries: FileEntry[]) => {
           setChildren((c) => ({ ...c, [dirPath]: showHidden ? entries : entries.filter((e: FileEntry) => !e.name.startsWith('.')) }));
         });
       }
       return next;
     });
-  }, [children]);
+  }, [children, wslDistro]);
 
   const handleFileClick = useCallback((filePath: string) => {
-    (window.terminalAPI as any).openPath(filePath);
-  }, []);
+    // For WSL files, translate Linux path to UNC for Windows to open
+    if (wslDistro && filePath.startsWith('/')) {
+      const uncPath = `\\\\wsl.localhost\\${wslDistro}${filePath.replace(/\//g, '\\')}`;
+      (window.terminalAPI as any).openPath(uncPath);
+    } else {
+      (window.terminalAPI as any).openPath(filePath);
+    }
+  }, [wslDistro]);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();

@@ -12,6 +12,7 @@ import { CopilotSessionWatcher } from './copilot-session-watcher';
 import { notifyCopilotSession, clearNotificationCooldowns } from './copilot-notification';
 import { ClaudeCodeSessionMonitor } from './claude-code-session-monitor';
 import { ClaudeCodeSessionWatcher } from './claude-code-session-watcher';
+import { WslSessionManager } from './wsl-session-manager';
 import { VersionChecker } from './version-checker';
 import { initDiagLogger, getDiagLogPath, diagLog } from './diag-logger';
 import { GitDiffService, resolveGitRoot } from './git-diff-service';
@@ -128,6 +129,7 @@ let copilotMonitor: CopilotSessionMonitor | null = null;
 let copilotWatcher: CopilotSessionWatcher | null = null;
 let claudeCodeMonitor: ClaudeCodeSessionMonitor | null = null;
 let claudeCodeWatcher: ClaudeCodeSessionWatcher | null = null;
+let wslSessionManager: WslSessionManager | null = null;
 let versionChecker: VersionChecker | null = null;
 let clipboardTempDir: string | null = null;
 const sessionStore = new Store({ name: 'tmax-session' });
@@ -281,7 +283,7 @@ function setupConfigStore(): void {
 function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC.PTY_CREATE,
-    (_event, opts: { id: string; shellPath: string; args: string[]; cwd: string; env?: Record<string, string>; cols: number; rows: number }) => {
+    (_event, opts: { id: string; shellPath: string; args: string[]; cwd: string; env?: Record<string, string>; cols: number; rows: number; wslDistro?: string }) => {
       // Validate shell path against configured profiles to prevent arbitrary exec
       const shells = configStore!.get('shells');
       const profile = shells.find((s: { path: string }) => s.path === opts.shellPath);
@@ -291,7 +293,25 @@ function registerIpcHandlers(): void {
       // Clamp cols/rows to reasonable bounds
       const cols = Math.max(1, Math.min(500, opts.cols || 80));
       const rows = Math.max(1, Math.min(200, opts.rows || 24));
-      return ptyManager!.create({ ...opts, args: profile.args, cols, rows });
+      // For WSL sessions targeting a specific distro, use -d <distro> and --cd <cwd>
+      let args: string[];
+      if (opts.wslDistro) {
+        // Validate distro name: must be alphanumeric/dash/dot only (no shell metacharacters)
+        if (!/^[\w][\w.\-]*$/.test(opts.wslDistro)) {
+          throw new Error(`Invalid WSL distro name: ${opts.wslDistro}`);
+        }
+        args = ['-d', opts.wslDistro];
+        // If the renderer passed a Linux CWD (starts with /), use --cd to set it
+        if (opts.cwd && opts.cwd.startsWith('/')) {
+          args.push('--cd', opts.cwd);
+        }
+      } else {
+        args = profile.args;
+      }
+      const { wslDistro: _wsl, ...ptyOpts } = opts;
+      // For WSL with --cd, node-pty still needs a valid Windows cwd
+      const cwd = opts.wslDistro ? (os.homedir()) : ptyOpts.cwd;
+      return ptyManager!.create({ ...ptyOpts, args, cols, rows, cwd });
     }
   );
 
@@ -454,15 +474,19 @@ function registerIpcHandlers(): void {
 
   // ── Copilot IPC handlers ────────────────────────────────────────────
   ipcMain.handle(IPC.COPILOT_LIST_SESSIONS, () => {
-    return copilotMonitor?.scanSessions() ?? [];
+    const native = copilotMonitor?.scanSessions() ?? [];
+    const wsl = wslSessionManager?.scanCopilotSessions() ?? [];
+    return [...native, ...wsl];
   });
 
   ipcMain.handle(IPC.COPILOT_GET_SESSION, (_event, id: string) => {
-    return copilotMonitor?.getSession(id) ?? null;
+    return copilotMonitor?.getSession(id) ?? wslSessionManager?.getCopilotSession(id) ?? null;
   });
 
   ipcMain.handle(IPC.COPILOT_SEARCH_SESSIONS, (_event, query: string) => {
-    return copilotMonitor?.searchSessions(query) ?? [];
+    const native = copilotMonitor?.searchSessions(query) ?? [];
+    const wsl = wslSessionManager?.searchCopilotSessions(query) ?? [];
+    return [...native, ...wsl];
   });
 
   ipcMain.handle(IPC.COPILOT_START_WATCHING, async () => {
@@ -478,20 +502,26 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle(IPC.COPILOT_GET_PROMPTS, (_event, id: string) => {
-    return copilotMonitor?.getPrompts(id) ?? [];
+    const native = copilotMonitor?.getPrompts(id) ?? [];
+    if (native.length > 0) return native;
+    return wslSessionManager?.getCopilotPrompts(id) ?? [];
   });
 
   // ── Claude Code IPC handlers ──────────────────────────────────────────
   ipcMain.handle(IPC.CLAUDE_CODE_LIST_SESSIONS, () => {
-    return claudeCodeMonitor?.scanSessions() ?? [];
+    const native = claudeCodeMonitor?.scanSessions() ?? [];
+    const wsl = wslSessionManager?.scanClaudeCodeSessions() ?? [];
+    return [...native, ...wsl];
   });
 
   ipcMain.handle(IPC.CLAUDE_CODE_GET_SESSION, (_event, id: string) => {
-    return claudeCodeMonitor?.getSession(id) ?? null;
+    return claudeCodeMonitor?.getSession(id) ?? wslSessionManager?.getClaudeCodeSession(id) ?? null;
   });
 
   ipcMain.handle(IPC.CLAUDE_CODE_SEARCH_SESSIONS, (_event, query: string) => {
-    return claudeCodeMonitor?.searchSessions(query) ?? [];
+    const native = claudeCodeMonitor?.searchSessions(query) ?? [];
+    const wsl = wslSessionManager?.searchClaudeCodeSessions(query) ?? [];
+    return [...native, ...wsl];
   });
 
   ipcMain.handle(IPC.CLAUDE_CODE_START_WATCHING, async () => {
@@ -507,7 +537,9 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle(IPC.CLAUDE_CODE_GET_PROMPTS, (_event, id: string) => {
-    return claudeCodeMonitor?.getPrompts(id) ?? [];
+    const native = claudeCodeMonitor?.getPrompts(id) ?? [];
+    if (native.length > 0) return native;
+    return wslSessionManager?.getClaudeCodePrompts(id) ?? [];
   });
 
   // ── Version check IPC handlers ──────────────────────────────────────
@@ -580,16 +612,21 @@ function registerIpcHandlers(): void {
   });
 
   // ── File explorer IPC ──────────────────────────────────────────────
-  ipcMain.handle(IPC.FILE_LIST, async (_event, dirPath: string) => {
-    const fs = require('fs');
-    const pathMod = require('path');
+  ipcMain.handle(IPC.FILE_LIST, async (_event, dirPath: string, wslDistro?: string) => {
     try {
-      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+      // For WSL terminals, translate Linux paths to UNC paths for fs access
+      let fsPath = dirPath;
+      if (wslDistro && dirPath.startsWith('/')) {
+        if (!/^[\w][\w.\-]*$/.test(wslDistro)) return [];
+        fsPath = `\\\\wsl.localhost\\${wslDistro}${dirPath.replace(/\//g, '\\')}`;
+      }
+      const entries = fs.readdirSync(fsPath, { withFileTypes: true });
       return entries
         .map((e: any) => ({
           name: e.name,
           isDirectory: e.isDirectory(),
-          path: pathMod.join(dirPath, e.name),
+          // Return Linux-style paths for WSL so the explorer stays consistent
+          path: wslDistro ? dirPath.replace(/\/$/, '') + '/' + e.name : path.join(dirPath, e.name),
         }))
         .sort((a: any, b: any) => {
           // Directories first, then alphabetical
@@ -668,6 +705,36 @@ function setupClaudeCodeMonitor(): void {
   });
 }
 
+async function setupWslSessionManager(): Promise<void> {
+  if (process.platform !== 'win32') return;
+
+  wslSessionManager = new WslSessionManager();
+
+  wslSessionManager.setCallbacks({
+    onCopilotSessionUpdated(session) {
+      mainWindow?.webContents.send(IPC.COPILOT_SESSION_UPDATED, session);
+      notifyCopilotSession(session);
+    },
+    onCopilotSessionAdded(session) {
+      mainWindow?.webContents.send(IPC.COPILOT_SESSION_ADDED, session);
+    },
+    onCopilotSessionRemoved(sessionId) {
+      mainWindow?.webContents.send(IPC.COPILOT_SESSION_REMOVED, sessionId);
+    },
+    onClaudeCodeSessionUpdated(session) {
+      mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_UPDATED, session);
+    },
+    onClaudeCodeSessionAdded(session) {
+      mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_ADDED, session);
+    },
+    onClaudeCodeSessionRemoved(sessionId) {
+      mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_REMOVED, sessionId);
+    },
+  });
+
+  await wslSessionManager.start();
+}
+
 process.on('uncaughtException', (error) => {
   console.error('Uncaught exception in main process:', error);
 });
@@ -722,6 +789,13 @@ app.whenReady().then(() => {
     versionChecker = new VersionChecker(mainWindow!);
     versionChecker.start();
     console.log('Version checker started');
+    // Start WSL discovery after window is visible — WSL distro detection
+    // uses synchronous subprocess calls that can block for several seconds
+    setupWslSessionManager().then(() => {
+      console.log('WSL session manager ready');
+    }).catch((err) => {
+      console.error('WSL session manager failed:', err);
+    });
   } catch (error) {
     console.error('Startup error:', error);
   }
@@ -750,6 +824,7 @@ app.on('window-all-closed', async () => {
   copilotMonitor?.dispose();
   await claudeCodeWatcher?.stop();
   claudeCodeMonitor?.dispose();
+  await wslSessionManager?.stop();
   versionChecker?.stop();
   clearNotificationCooldowns();
   app.quit();

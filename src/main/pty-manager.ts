@@ -138,6 +138,15 @@ export class PtyManager {
       // Send as a single line + Enter, then clear screen to hide the init noise
       setTimeout(() => ptyProcess.write(psSnippet + '\r'), 200);
       setTimeout(() => ptyProcess.write('cls\r'), 400);
+    } else if (shellName.includes('wsl')) {
+      // WSL: shell init (oh-my-zsh, bashrc) takes longer than native shells.
+      // Skip automatic CWD hook injection — it flashes visibly before the shell
+      // is ready. CWD tracking for plain WSL terminals falls back to prompt
+      // regex detection, and AI session terminals don't need it.
+    } else if (shellName.includes('bash') || shellName.includes('zsh')) {
+      // Bash/Zsh: use PROMPT_COMMAND / precmd
+      const bashSnippet = 'PROMPT_COMMAND=\'printf "\\e]7;file:///%s\\a" "$(pwd)"\'' + '\r';
+      setTimeout(() => ptyProcess.write(bashSnippet), 200);
     }
     // CMD: relies on prompt regex fallback (no hook mechanism)
 

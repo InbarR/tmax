@@ -470,6 +470,11 @@ const CopilotPanel: React.FC = () => {
                     </span>
                   )}
                   {isOpen && <span className="ai-open-badge">OPEN</span>}
+                  {session.wsl && (
+                    <span className="ai-wsl-badge" title={session.wslDistro || 'WSL'}>
+                      {session.wslDistro || 'WSL'}
+                    </span>
+                  )}
                   {time && <span className="ai-session-time">{time}</span>}
                 </div>
                 {subtitle && (

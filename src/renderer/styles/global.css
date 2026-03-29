@@ -2866,6 +2866,17 @@ select.settings-input {
   flex-shrink: 0;
 }
 
+.ai-wsl-badge {
+  font-size: 9px;
+  padding: 0 4px;
+  border-radius: 3px;
+  color: #f9e2af;
+  background: rgba(249, 226, 175, 0.15);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
 .ai-session-time {
   font-size: 10px;
   color: var(--text-secondary);

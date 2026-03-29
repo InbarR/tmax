@@ -18,9 +18,11 @@ export class CopilotSessionMonitor {
   private sessions = new Map<string, CopilotSession>();
   private callbacks: CopilotMonitorCallbacks = {};
   private readonly basePath: string;
+  private readonly wslDistro?: string;
 
-  constructor() {
-    this.basePath = path.join(os.homedir(), '.copilot', 'session-state');
+  constructor(options?: { basePath?: string; wslDistro?: string }) {
+    this.basePath = options?.basePath ?? path.join(os.homedir(), '.copilot', 'session-state');
+    this.wslDistro = options?.wslDistro;
   }
 
   setCallbacks(callbacks: CopilotMonitorCallbacks): void {
@@ -262,7 +264,7 @@ export class CopilotSessionMonitor {
   }
 
   private toSummary(session: CopilotSession): CopilotSessionSummary {
-    return {
+    const summary: CopilotSessionSummary = {
       id: session.id,
       provider: 'copilot',
       status: session.status,
@@ -274,5 +276,12 @@ export class CopilotSessionMonitor {
       toolCallCount: session.toolCallCount,
       lastActivityTime: session.lastActivityTime,
     };
+
+    if (this.wslDistro) {
+      summary.wsl = true;
+      summary.wslDistro = this.wslDistro;
+    }
+
+    return summary;
   }
 }
