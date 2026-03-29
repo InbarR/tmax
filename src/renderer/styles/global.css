@@ -527,12 +527,22 @@ body,
   flex: 1;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: clip;
 }
 
-/* Hide xterm scrollbar to prevent right-edge flicker */
+/* Style xterm scrollbar to match app theme */
 .terminal-panel .xterm-container .xterm-viewport::-webkit-scrollbar {
-  width: 0;
+  width: 6px;
+}
+.terminal-panel .xterm-container .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+.terminal-panel .xterm-container .xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+.terminal-panel .xterm-container .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
 }
 
 .terminal-panel .xterm-container .xterm {

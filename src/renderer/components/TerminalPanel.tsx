@@ -185,7 +185,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
         event.preventDefault(); // Stop browser native paste (would cause double paste)
         if (window.terminalAPI.clipboardHasImage()) {
           window.terminalAPI.clipboardSaveImage().then((filePath) => {
-            window.terminalAPI.writePty(terminalId, filePath);
+            // Submit current input first, then paste the image path on a fresh line
+            window.terminalAPI.writePty(terminalId, '\r' + filePath + '\r');
           });
         } else {
           const text = window.terminalAPI.clipboardRead();

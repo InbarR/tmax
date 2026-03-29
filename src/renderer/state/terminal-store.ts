@@ -495,6 +495,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const { pid } = await window.terminalAPI.createPty({
       id,
       shellPath: profile.path,
+      shellProfileId: profileId,
       args: profile.args,
       cwd,
       env: profile.env,

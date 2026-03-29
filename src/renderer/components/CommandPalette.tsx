@@ -38,7 +38,7 @@ const CommandPalette: React.FC = () => {
       { id: 'cycleGridColumns', label: 'Cycle Grid Layout', shortcut: 'Ctrl+Shift+L', action: () => store().cycleGridColumns() },
       { id: 'toggleDormant', label: 'Toggle Hide (Dormant)', shortcut: 'Ctrl+Shift+H', action: () => { const id = focusedId(); if (id) { const t = store().terminals.get(id); if (t?.mode === 'dormant') store().wakeFromDormant(id); else store().moveToDormant(id); } } },
       { id: 'equalize', label: 'Equalize Pane Sizes', shortcut: 'Ctrl+Shift+E', action: () => store().equalizeLayout() },
-      { id: 'zoomIn', label: 'Zoom In', shortcut: 'Ctrl+=', action: () => store().zoomIn() },
+      { id: 'zoomIn', label: 'Zoom In', shortcut: 'Ctrl++', action: () => store().zoomIn() },
       { id: 'zoomOut', label: 'Zoom Out', shortcut: 'Ctrl+-', action: () => store().zoomOut() },
       { id: 'zoomReset', label: 'Reset Zoom', shortcut: 'Ctrl+0', action: () => store().zoomReset() },
       { id: 'focusUp', label: 'Focus Up', shortcut: 'Shift+\u2191', action: () => store().focusDirection('up') },

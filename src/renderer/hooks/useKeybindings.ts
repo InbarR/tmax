@@ -50,6 +50,7 @@ const DEFAULT_BINDINGS: Record<string, string> = {
   'Ctrl+Shift+ArrowLeft': 'moveLeft',
   'Ctrl+Shift+ArrowUp': 'moveUp',
   'Ctrl+=': 'zoomIn',
+  'Ctrl++': 'zoomIn',
   'Ctrl+-': 'zoomOut',
   'Ctrl+0': 'zoomReset',
   'Ctrl+Shift+F': 'toggleFocusMode',

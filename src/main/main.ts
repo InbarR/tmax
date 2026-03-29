@@ -54,6 +54,7 @@ let copilotMonitor: CopilotSessionMonitor | null = null;
 let copilotWatcher: CopilotSessionWatcher | null = null;
 let claudeCodeMonitor: ClaudeCodeSessionMonitor | null = null;
 let claudeCodeWatcher: ClaudeCodeSessionWatcher | null = null;
+const wslWatchers: { copilot: CopilotSessionWatcher[]; claude: ClaudeCodeSessionWatcher[] } = { copilot: [], claude: [] };
 let versionChecker: VersionChecker | null = null;
 let clipboardTempDir: string | null = null;
 const sessionStore = new Store({ name: 'tmax-session' });
@@ -192,17 +193,19 @@ function setupConfigStore(): void {
 function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC.PTY_CREATE,
-    (_event, opts: { id: string; shellPath: string; args: string[]; cwd: string; env?: Record<string, string>; cols: number; rows: number }) => {
-      // Validate shell path against configured profiles to prevent arbitrary exec
+    (_event, opts: { id: string; shellPath: string; shellProfileId?: string; args: string[]; cwd: string; env?: Record<string, string>; cols: number; rows: number }) => {
+      // Validate shell against configured profiles to prevent arbitrary exec
       const shells = configStore!.get('shells');
-      const profile = shells.find((s: { path: string }) => s.path === opts.shellPath);
+      const profile = opts.shellProfileId
+        ? shells.find((s: { id: string }) => s.id === opts.shellProfileId)
+        : shells.find((s: { path: string }) => s.path === opts.shellPath);
       if (!profile) {
-        throw new Error(`Shell path not in configured profiles: ${opts.shellPath}`);
+        throw new Error(`Shell not in configured profiles: ${opts.shellProfileId || opts.shellPath}`);
       }
       // Clamp cols/rows to reasonable bounds
       const cols = Math.max(1, Math.min(500, opts.cols || 80));
       const rows = Math.max(1, Math.min(200, opts.rows || 24));
-      return ptyManager!.create({ ...opts, args: profile.args, cols, rows });
+      return ptyManager!.create({ ...opts, shellPath: profile.path, args: profile.args, cols, rows });
     }
   );
 
@@ -501,6 +504,59 @@ function setupClaudeCodeMonitor(): void {
   });
 }
 
+function getWslHomePaths(): string[] {
+  if (process.platform !== 'win32') return [];
+  try {
+    const { execSync } = require('child_process');
+    const raw = execSync('wsl -l -q', { encoding: 'utf16le', timeout: 3000 }).toString();
+    const distros = raw.split(/\r?\n/).map((s: string) => s.replace(/\0/g, '').trim()).filter(Boolean);
+    const paths: string[] = [];
+    for (const distro of distros) {
+      try {
+        // Get the WSL user's home directory
+        const home = execSync(`wsl -d ${distro} -- sh -c "echo $HOME"`, { encoding: 'utf8', timeout: 5000 }).trim();
+        const winPath = `\\\\wsl.localhost\\${distro}${home.replace(/\//g, '\\')}`;
+        if (fs.existsSync(winPath)) paths.push(winPath);
+      } catch { /* distro may not be running */ }
+    }
+    return paths;
+  } catch {
+    return [];
+  }
+}
+
+function setupWslSessionWatchers(): void {
+  const wslHomes = getWslHomePaths();
+  for (const home of wslHomes) {
+    // Claude Code sessions in WSL
+    const claudePath = path.join(home, '.claude', 'projects');
+    if (fs.existsSync(claudePath) && claudeCodeMonitor) {
+      const watcher = new ClaudeCodeSessionWatcher(claudePath, {
+        onFileChanged(filePath) { claudeCodeMonitor!.handleFileChanged(filePath); },
+        onNewFile(filePath) { claudeCodeMonitor!.handleNewFile(filePath); },
+        onFileRemoved(filePath) { claudeCodeMonitor!.handleFileRemoved(filePath); },
+      });
+      watcher.setStaleCheckCallback(() => { claudeCodeMonitor!.scanSessions(); });
+      watcher.start();
+      wslWatchers.claude.push(watcher);
+      diagLog('wsl:claude-watcher', { path: claudePath });
+    }
+
+    // Copilot sessions in WSL
+    const copilotPath = path.join(home, '.copilot', 'session-state');
+    if (fs.existsSync(copilotPath) && copilotMonitor) {
+      const watcher = new CopilotSessionWatcher(copilotPath, {
+        onEventsChanged(sessionId) { copilotMonitor!.handleEventsChanged(sessionId); },
+        onNewSession(sessionId) { copilotMonitor!.handleNewSession(sessionId); },
+        onSessionRemoved(sessionId) { copilotMonitor!.handleSessionRemoved(sessionId); },
+      });
+      watcher.start();
+      wslWatchers.copilot.push(watcher);
+      diagLog('wsl:copilot-watcher', { path: copilotPath });
+    }
+  }
+}
+
 process.on('uncaughtException', (error) => {
   console.error('Uncaught exception in main process:', error);
 });
@@ -517,6 +573,8 @@ app.whenReady().then(() => {
     console.log('Copilot monitor ready');
     setupClaudeCodeMonitor();
     console.log('Claude Code monitor ready');
+    setupWslSessionWatchers();
+    console.log('WSL session watchers ready');
     createWindow();
     console.log('Window created');
     registerIpcHandlers();
@@ -552,6 +610,8 @@ app.on('window-all-closed', async () => {
   copilotMonitor?.dispose();
   await claudeCodeWatcher?.stop();
   claudeCodeMonitor?.dispose();
+  for (const w of wslWatchers.copilot) await w.stop();
+  for (const w of wslWatchers.claude) await w.stop();
   versionChecker?.stop();
   clearNotificationCooldowns();
   app.quit();
