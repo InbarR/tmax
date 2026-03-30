@@ -246,18 +246,9 @@ function dispatchAction(action: string): void {
     case 'colorizeAllTabs':
       store.colorizeAllTabs();
       break;
-    case 'unfreezeTerminal': {
-      // Force re-focus and resize-ping all PTYs to unfreeze
-      for (const [id] of store.terminals) {
-        window.terminalAPI.resizePty(id, 80, 24).catch(() => {});
-      }
-      if (focusedId) {
-        // Send focus-in report + terminal reset to unstick input (fixes DEC 1004 desync)
-        window.terminalAPI.writePty(focusedId, '\x1b[I\x1b[?1h\x1b[?1l');
-        store.setFocus(focusedId);
-      }
+    case 'unfreezeTerminal':
+      if (focusedId) store.unfreezeTerminal(focusedId);
       break;
-    }
     case 'moveUp':
     case 'moveDown':
     case 'moveLeft':

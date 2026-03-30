@@ -370,6 +370,7 @@ interface TerminalStore {
   insertAtRoot: (id: TerminalId, side: 'left' | 'right' | 'top' | 'bottom') => void;
   moveToDormant: (id: TerminalId) => void;
   wakeFromDormant: (id: TerminalId) => void;
+  unfreezeTerminal: (id: TerminalId) => void;
   detachTerminal: (id: TerminalId) => Promise<void>;
   reattachTerminal: (id: TerminalId) => void;
   updateFloatingPanel: (id: TerminalId, partial: Partial<FloatingPanelState>) => void;
@@ -1001,6 +1002,16 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       ms: Math.round(performance.now() - t0),
       tiled: newRoot ? getLeafOrder(newRoot).length : 0,
     });
+  },
+
+  unfreezeTerminal: (id: TerminalId) => {
+    // Force re-focus and resize-ping all PTYs to unfreeze
+    for (const [tid] of get().terminals) {
+      window.terminalAPI.resizePty(tid, 80, 24).catch(() => {});
+    }
+    // Send a focus-in report and briefly toggle DECCKM to unstick input
+    window.terminalAPI.writePty(id, '\x1b[I\x1b[?1h\x1b[?1l');
+    get().setFocus(id);
   },
 
   detachTerminal: async (id: TerminalId) => {
