@@ -318,7 +318,7 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
             store().setFocus(position.terminalId);
             onClose();
           }}>
-            Unfreeze Terminal
+            Unfreeze Terminal <span className="shortcut">Ctrl+Shift+U</span>
           </button>
           {terminal?.aiSessionId && terminal?.startupCommand && (
             <button className="context-menu-item" onClick={() => {
