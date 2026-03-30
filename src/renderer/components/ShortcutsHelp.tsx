@@ -35,6 +35,7 @@ const shortcuts = [
     { key: 'Ctrl+Shift+C', action: 'AI Sessions panel' },
   ]},
   { category: 'Other', items: [
+    { key: 'Ctrl+Shift+U', action: 'Unfreeze terminal' },
     { key: 'Ctrl+Shift+B', action: 'Hide / show tab bar' },
     { key: 'Ctrl+Shift+?', action: 'Show this help' },
     { key: 'Double-click tab', action: 'Rename terminal' },
