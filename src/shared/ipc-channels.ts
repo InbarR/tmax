@@ -42,6 +42,9 @@ export const IPC = {
   PTY_GET_DIAG: 'pty:getDiag',
   DIAG_LOG: 'diag:log',
   DIAG_GET_LOG_PATH: 'diag:getLogPath',
+  // ── Transparency ────────────────────────────────────────────────────
+  SET_BACKGROUND_MATERIAL: 'transparency:setMaterial',
+  GET_PLATFORM_SUPPORTS_MATERIAL: 'transparency:platformSupports',
   // ── Diff editor ────────────────────────────────────────────────────
   DIFF_RESOLVE_GIT_ROOT: 'diff:resolveGitRoot',
   DIFF_GET_CODE_CHANGES: 'diff:getCodeChanges',

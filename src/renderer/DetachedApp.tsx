@@ -4,6 +4,12 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 
+function hexToTerminalRgba(hex: string, alpha: number): string {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return hex;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`;
+}
+
 interface DetachedAppProps {
   terminalId: string;
 }
@@ -21,16 +27,21 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
       const themeConfig = config?.theme as Record<string, string> | undefined;
       const termConfig = config?.terminal as Record<string, unknown> | undefined;
 
+      const materialActive = (config as any)?.backgroundMaterial && (config as any).backgroundMaterial !== 'none';
+      const bgOpacity = materialActive ? ((config as any)?.backgroundOpacity ?? 0.8) : 1;
+      const rawBg = themeConfig?.background ?? '#1e1e2e';
+      const bgColor = bgOpacity < 1 ? hexToTerminalRgba(rawBg, bgOpacity) : rawBg;
+
       const term = new Terminal({
         theme: themeConfig
           ? {
-              background: themeConfig.background,
+              background: bgColor,
               foreground: themeConfig.foreground,
               cursor: themeConfig.cursor,
               selectionBackground: themeConfig.selectionBackground,
             }
           : {
-              background: '#1e1e2e',
+              background: bgColor,
               foreground: '#cdd6f4',
               cursor: '#f5e0dc',
               selectionBackground: '#585b70',
@@ -42,6 +53,7 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
         scrollback: (termConfig?.scrollback as number) ?? 5000,
         cursorStyle: (termConfig?.cursorStyle as 'block') ?? 'block',
         cursorBlink: (termConfig?.cursorBlink as boolean) ?? true,
+        allowTransparency: bgOpacity < 1,
         allowProposedApi: true,
       });
 

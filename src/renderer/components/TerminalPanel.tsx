@@ -5,7 +5,14 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon } from '@xterm/addon-search';
 import { useTerminalStore } from '../state/terminal-store';
 import { registerTerminal, unregisterTerminal } from '../terminal-registry';
+import type { AppConfig } from '../state/types';
 import '@xterm/xterm/css/xterm.css';
+
+function hexToTerminalRgba(hex: string, alpha: number): string {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return hex;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`;
+}
 
 function ago(ts: number): string {
   if (!ts) return 'never';
@@ -125,7 +132,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     const themeConfig = config?.theme;
     const termConfig = config?.terminal;
 
-    const bgColor = themeConfig?.background ?? '#1e1e2e';
+    const rawBg = themeConfig?.background ?? '#1e1e2e';
+    const materialActive = (config as AppConfig)?.backgroundMaterial && (config as AppConfig).backgroundMaterial !== 'none';
+    const bgOpacity = materialActive ? ((config as AppConfig)?.backgroundOpacity ?? 0.8) : 1;
+    // Convert hex to rgba for terminal background when transparency is active
+    const bgColor = bgOpacity < 1 ? hexToTerminalRgba(rawBg, bgOpacity) : rawBg;
     const term = new Terminal({
       theme: themeConfig
         ? {
@@ -145,6 +156,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       scrollback: termConfig?.scrollback ?? 5000,
       cursorStyle: termConfig?.cursorStyle ?? 'block',
       cursorBlink: termConfig?.cursorBlink ?? true,
+      allowTransparency: bgOpacity < 1,
       allowProposedApi: true,
     });
 

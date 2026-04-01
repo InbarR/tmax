@@ -40,6 +40,9 @@ export interface TerminalAPI {
   getPtyDiag(id: string): Promise<PtyDiag | null>;
   diagLog(event: string, data?: Record<string, unknown>): void;
   getDiagLogPath(): Promise<string>;
+  // ── Transparency ──────────────────────────────────────────────────
+  setBackgroundMaterial(material: string): Promise<void>;
+  getPlatformSupportsMaterial(): Promise<boolean>;
   // ── Diff editor ──────────────────────────────────────────────────
   diffResolveGitRoot(cwd: string): Promise<string>;
   diffGetDiff(cwd: string, mode: DiffMode): Promise<DiffResult>;
@@ -294,6 +297,15 @@ const terminalAPI: TerminalAPI = {
     return () => {
       ipcRenderer.removeListener(IPC.VERSION_UPDATE_STATUS, listener);
     };
+  },
+
+  // ── Transparency ────────────────────────────────────────────────
+  setBackgroundMaterial(material: string) {
+    return ipcRenderer.invoke(IPC.SET_BACKGROUND_MATERIAL, material);
+  },
+
+  getPlatformSupportsMaterial(): Promise<boolean> {
+    return ipcRenderer.invoke(IPC.GET_PLATFORM_SUPPORTS_MATERIAL);
   },
 
   // ── Diff editor ──────────────────────────────────────────────────

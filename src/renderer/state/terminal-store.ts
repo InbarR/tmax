@@ -51,18 +51,36 @@ function adjustBrightness(hex: string, amount: number): string {
   return `#${[clamp(rgb.r + amount), clamp(rgb.g + amount), clamp(rgb.b + amount)].map(c => c.toString(16).padStart(2, '0')).join('')}`;
 }
 
-export function applyThemeToChromeVars(theme: Record<string, string>): void {
+function hexToRgba(hex: string, alpha: number): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+}
+
+export function applyThemeToChromeVars(theme: Record<string, string>, transparencyOpacity?: number): void {
   const bg = theme.background || '#1e1e2e';
   const fg = theme.foreground || '#cdd6f4';
   const isLight = luminance(bg) > 0.5;
   const step = isLight ? -15 : 15;
+  const useTransparency = transparencyOpacity !== undefined && transparencyOpacity < 1;
 
   const root = document.documentElement;
-  root.style.setProperty('--bg-primary', bg);
-  root.style.setProperty('--bg-secondary', adjustBrightness(bg, step));
+
+  if (useTransparency) {
+    root.style.setProperty('--bg-primary', hexToRgba(bg, transparencyOpacity));
+    root.style.setProperty('--bg-secondary', hexToRgba(adjustBrightness(bg, step), transparencyOpacity));
+    root.style.setProperty('--tab-bg', hexToRgba(adjustBrightness(bg, step), transparencyOpacity));
+    root.style.setProperty('--tab-active', hexToRgba(adjustBrightness(bg, step * 2), transparencyOpacity));
+    root.classList.add('transparency-active');
+  } else {
+    root.style.setProperty('--bg-primary', bg);
+    root.style.setProperty('--bg-secondary', adjustBrightness(bg, step));
+    root.style.setProperty('--tab-bg', adjustBrightness(bg, step));
+    root.style.setProperty('--tab-active', adjustBrightness(bg, step * 2));
+    root.classList.remove('transparency-active');
+  }
+
   root.style.setProperty('--border-color', adjustBrightness(bg, step * 2));
-  root.style.setProperty('--tab-bg', adjustBrightness(bg, step));
-  root.style.setProperty('--tab-active', adjustBrightness(bg, step * 2));
   root.style.setProperty('--text-primary', fg);
   root.style.setProperty('--text-secondary', adjustBrightness(fg, isLight ? 60 : -60));
   root.style.setProperty('--focus-border', theme.blue || '#89b4fa');
@@ -488,7 +506,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   loadConfig: async () => {
     const config = (await window.terminalAPI.getConfig()) as unknown as AppConfig;
-    if (config?.theme) applyThemeToChromeVars(config.theme);
+    const materialActive = config?.backgroundMaterial && config.backgroundMaterial !== 'none';
+    const opacity = materialActive ? (config?.backgroundOpacity ?? 0.8) : undefined;
+    if (config?.theme) applyThemeToChromeVars(config.theme, opacity);
     const updates: Record<string, unknown> = { config };
     if (config?.tabBarPosition) updates.tabBarPosition = config.tabBarPosition;
     if (typeof (config as any)?.hideTabTitles === 'boolean') updates.hideTabTitles = (config as any).hideTabTitles;
@@ -1200,7 +1220,11 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     for (const [key, value] of Object.entries(update)) {
       await window.terminalAPI.setConfig(key, value);
     }
-    if (update.theme) applyThemeToChromeVars(newConfig.theme);
+    if (update.theme || update.backgroundMaterial !== undefined || update.backgroundOpacity !== undefined) {
+      const materialActive = newConfig.backgroundMaterial && newConfig.backgroundMaterial !== 'none';
+      const opacity = materialActive ? (newConfig.backgroundOpacity ?? 0.8) : undefined;
+      applyThemeToChromeVars(newConfig.theme, opacity);
+    }
     const extra: Record<string, unknown> = { config: newConfig };
     // Sync store fontSize with config when terminal font size changes
     if (update.terminal?.fontSize) {

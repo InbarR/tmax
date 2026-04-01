@@ -31,6 +31,47 @@ body,
   color: var(--text-primary);
 }
 
+/* When mica/acrylic material is active, make root backgrounds transparent
+   so the system-drawn material shows through */
+html.transparency-active,
+html.transparency-active body,
+html.transparency-active #root {
+  background: transparent;
+}
+
+/* Make all chrome layers translucent so the material shows through terminals */
+html.transparency-active .app-shell {
+  background: transparent;
+}
+
+html.transparency-active .tab-bar {
+  background: var(--bg-secondary);
+}
+
+html.transparency-active .tab {
+  background: var(--tab-bg);
+}
+
+html.transparency-active .tab.active {
+  background: var(--bg-primary);
+}
+
+html.transparency-active .status-bar {
+  background: var(--bg-secondary);
+}
+
+html.transparency-active .terminal-panel {
+  background: transparent;
+}
+
+html.transparency-active .split-resizer {
+  background: transparent;
+}
+
+html.transparency-active .xterm-viewport {
+  background: transparent !important;
+}
+
 
 /* ===== App Shell ===== */
 .app-shell {

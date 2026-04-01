@@ -43,6 +43,8 @@ export interface TerminalDefaults {
   scrollback: number;
 }
 
+export type BackgroundMaterial = 'none' | 'auto' | 'mica' | 'acrylic' | 'tabbed';
+
 export interface AppConfig {
   shells: ShellProfile[];
   defaultShellId: string;
@@ -52,6 +54,8 @@ export interface AppConfig {
   copilotCommand?: string;
   claudeCodeCommand?: string;
   tabBarPosition?: 'top' | 'bottom' | 'left' | 'right';
+  backgroundMaterial?: BackgroundMaterial;
+  backgroundOpacity?: number; // 0.0–1.0, default 0.8
 }
 
 function findPwsh(): string | null {
@@ -160,6 +164,8 @@ const defaultConfig: AppConfig = {
   },
   copilotCommand: 'agency copilot',
   claudeCodeCommand: 'claude',
+  backgroundMaterial: 'none',
+  backgroundOpacity: 0.8,
 };
 
 export class ConfigStore {

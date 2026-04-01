@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 
-type Tab = 'terminal' | 'keybindings' | 'shells' | 'theme';
+type Tab = 'terminal' | 'keybindings' | 'shells' | 'theme' | 'appearance';
 
 const Settings: React.FC = () => {
   const show = useTerminalStore((s) => s.showSettings);
@@ -33,7 +33,7 @@ const Settings: React.FC = () => {
           <button className="shortcuts-close" onClick={close}>&#10005;</button>
         </div>
         <div className="settings-tabs">
-          {(['terminal', 'keybindings', 'shells', 'theme'] as Tab[]).map((t) => (
+          {(['terminal', 'keybindings', 'shells', 'theme', 'appearance'] as Tab[]).map((t) => (
             <button key={t} className={`settings-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
               {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
@@ -44,6 +44,7 @@ const Settings: React.FC = () => {
           {tab === 'keybindings' && <KeybindingsSettings />}
           {tab === 'shells' && <ShellsSettings />}
           {tab === 'theme' && <ThemeSettings />}
+          {tab === 'appearance' && <AppearanceSettings />}
         </div>
       </div>
     </div>
@@ -373,6 +374,77 @@ const ThemeSettings: React.FC = () => {
           </div>
         ))}
       </div>
+    </div>
+  );
+};
+
+// ── Appearance Settings ───────────────────────────────────────────
+
+const MATERIAL_OPTIONS: { value: string; label: string; description: string }[] = [
+  { value: 'none', label: 'None', description: 'Opaque background (default)' },
+  { value: 'mica', label: 'Mica', description: 'Subtle desktop-tinted material' },
+  { value: 'acrylic', label: 'Acrylic', description: 'Frosted glass blur effect' },
+  { value: 'tabbed', label: 'Tabbed', description: 'Tabbed title bar style' },
+  { value: 'auto', label: 'Auto', description: 'System decides the material' },
+];
+
+const AppearanceSettings: React.FC = () => {
+  const config = useTerminalStore((s) => s.config)!;
+  const update = useTerminalStore((s) => s.updateConfig);
+  const [platformSupported, setPlatformSupported] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    window.terminalAPI.getPlatformSupportsMaterial().then(setPlatformSupported);
+  }, []);
+
+  const currentMaterial = (config as any).backgroundMaterial || 'none';
+  const currentOpacity = (config as any).backgroundOpacity ?? 0.8;
+
+  if (platformSupported === false) {
+    return (
+      <div className="settings-section">
+        <div className="settings-hint" style={{ padding: '16px 0' }}>
+          Window transparency effects (Mica, Acrylic) require Windows 11 version 22H2 or later.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings-section">
+      <div className="settings-hint">
+        Background material effects are a Windows 11 feature. They apply a system-drawn translucent material behind the window.
+      </div>
+      <SettingRow label="Background Material" description="Window backdrop material type">
+        <select
+          className="settings-input"
+          value={currentMaterial}
+          onChange={(e) => update({ backgroundMaterial: e.target.value } as any)}
+        >
+          {MATERIAL_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label} — {opt.description}
+            </option>
+          ))}
+        </select>
+      </SettingRow>
+      {currentMaterial !== 'none' && (
+        <SettingRow label="Background Opacity" description={`UI chrome opacity: ${Math.round(currentOpacity * 100)}%`}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%' }}>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={Math.round(currentOpacity * 100)}
+              onChange={(e) => update({ backgroundOpacity: parseInt(e.target.value) / 100 } as any)}
+              style={{ flex: 1 }}
+            />
+            <span style={{ minWidth: 40, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+              {Math.round(currentOpacity * 100)}%
+            </span>
+          </div>
+        </SettingRow>
+      )}
     </div>
   );
 };

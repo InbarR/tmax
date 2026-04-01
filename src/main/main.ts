@@ -5,6 +5,7 @@ import path from 'node:path';
 import Store from 'electron-store';
 import { PtyManager } from './pty-manager';
 import { ConfigStore } from './config-store';
+import type { BackgroundMaterial } from './config-store';
 import { IPC } from '../shared/ipc-channels';
 import { CopilotSessionMonitor } from './copilot-session-monitor';
 import { CopilotSessionWatcher } from './copilot-session-watcher';
@@ -47,6 +48,59 @@ if (process.platform === 'win32') {
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
+/**
+ * Returns true if the current platform supports window background materials
+ * (Windows 11 22H2+ = build 22621+).
+ */
+function platformSupportsMaterial(): boolean {
+  if (process.platform !== 'win32') return false;
+  const release = os.release(); // e.g. "10.0.22621"
+  const parts = release.split('.');
+  const build = parseInt(parts[2], 10);
+  return !isNaN(build) && build >= 22621;
+}
+
+/**
+ * Converts a hex color + opacity (0-1) into an 8-digit hex string (#RRGGBBAA)
+ * that Electron accepts for backgroundColor.
+ */
+function hexWithAlpha(hex: string, opacity: number): string {
+  const clean = hex.replace('#', '');
+  // Normalize 3-char to 6-char, strip existing alpha
+  const normalized = clean.length === 3
+    ? clean.split('').map(c => c + c).join('')
+    : clean.substring(0, 6);
+
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255)
+      .toString(16).padStart(2, '0');
+    return `#1e1e2e${alpha}`;
+  }
+
+  const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255)
+    .toString(16)
+    .padStart(2, '0');
+  return `#${normalized}${alpha}`;
+}
+
+/**
+ * Returns the effective background material and background color for a window,
+ * based on the current config.
+ */
+function getWindowMaterialOpts(): { backgroundMaterial?: BackgroundMaterial; backgroundColor: string } {
+  const material = (configStore?.get('backgroundMaterial') as BackgroundMaterial) || 'none';
+  const opacity = configStore?.get('backgroundOpacity') as number ?? 0.8;
+  const themeBg = configStore?.get('theme')?.background || '#1e1e2e';
+
+  if (material !== 'none' && platformSupportsMaterial()) {
+    return {
+      backgroundMaterial: material,
+      backgroundColor: hexWithAlpha(themeBg, opacity),
+    };
+  }
+  return { backgroundColor: themeBg };
+}
+
 let mainWindow: BrowserWindow | null = null;
 let ptyManager: PtyManager | null = null;
 let configStore: ConfigStore | null = null;
@@ -68,6 +122,8 @@ function broadcastPtyEvent(channel: string, id: string, ...args: unknown[]) {
 }
 
 function createWindow(): void {
+  const materialOpts = getWindowMaterialOpts();
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -77,6 +133,7 @@ function createWindow(): void {
     title: 'tmax',
     icon: path.join(__dirname, '../../assets/icon.png'),
     autoHideMenuBar: true,
+    ...materialOpts,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -241,6 +298,24 @@ function registerIpcHandlers(): void {
     IPC.CONFIG_SET,
     (_event, key: string, value: unknown) => {
       configStore!.set(key as keyof ReturnType<ConfigStore['getAll']>, value as never);
+
+      // Dynamically apply background material changes
+      if (key === 'backgroundMaterial' || key === 'backgroundOpacity' || key === 'theme') {
+        const material = (configStore!.get('backgroundMaterial') || 'none') as BackgroundMaterial;
+        const opacity = configStore!.get('backgroundOpacity') as number ?? 0.8;
+        const themeBg = configStore!.get('theme')?.background || '#1e1e2e';
+        const allWindows = [mainWindow, ...detachedWindows.values()];
+        for (const win of allWindows) {
+          if (win && !win.isDestroyed() && platformSupportsMaterial()) {
+            (win as any).setBackgroundMaterial(material);
+            if (material !== 'none') {
+              win.setBackgroundColor(hexWithAlpha(themeBg, opacity));
+            } else {
+              win.setBackgroundColor(themeBg);
+            }
+          }
+        }
+      }
     }
   );
 
@@ -270,11 +345,13 @@ function registerIpcHandlers(): void {
       }
     }
 
+    const detachedMaterialOpts = getWindowMaterialOpts();
     const detachedWin = new BrowserWindow({
       width: 800,
       height: 600,
       title: 'tmax - Terminal',
       autoHideMenuBar: true,
+      ...detachedMaterialOpts,
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
@@ -402,6 +479,45 @@ function registerIpcHandlers(): void {
 
   ipcMain.on(IPC.VERSION_RESTART_AND_UPDATE, () => {
     versionChecker?.restartAndUpdate();
+  });
+
+  // ── Transparency IPC handlers ──────────────────────────────────────
+  ipcMain.handle(IPC.SET_BACKGROUND_MATERIAL, (_event, material: string) => {
+    if (!platformSupportsMaterial()) return;
+    const valid: BackgroundMaterial[] = ['none', 'auto', 'mica', 'acrylic', 'tabbed'];
+    if (!valid.includes(material as BackgroundMaterial)) return;
+    const mat = material as BackgroundMaterial;
+
+    // Persist to config
+    configStore!.set('backgroundMaterial', mat);
+
+    const opacity = configStore?.get('backgroundOpacity') as number ?? 0.8;
+    const themeBg = configStore?.get('theme')?.background || '#1e1e2e';
+
+    // Apply to main window
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      (mainWindow as any).setBackgroundMaterial(mat);
+      if (mat !== 'none') {
+        mainWindow.setBackgroundColor(hexWithAlpha(themeBg, opacity));
+      } else {
+        mainWindow.setBackgroundColor(themeBg);
+      }
+    }
+    // Apply to all detached windows
+    for (const [, win] of detachedWindows) {
+      if (!win.isDestroyed()) {
+        (win as any).setBackgroundMaterial(mat);
+        if (mat !== 'none') {
+          win.setBackgroundColor(hexWithAlpha(themeBg, opacity));
+        } else {
+          win.setBackgroundColor(themeBg);
+        }
+      }
+    }
+  });
+
+  ipcMain.handle(IPC.GET_PLATFORM_SUPPORTS_MATERIAL, () => {
+    return platformSupportsMaterial();
   });
 
   ipcMain.handle(IPC.CLIPBOARD_SAVE_IMAGE, (_event, base64Png: string) => {
