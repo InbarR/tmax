@@ -377,7 +377,7 @@ interface TerminalStore {
   focusNext: () => void;
   focusPrev: () => void;
   focusDirection: (dir: 'left' | 'right' | 'up' | 'down') => void;
-  renameTerminal: (id: TerminalId, title: string) => void;
+  renameTerminal: (id: TerminalId, title: string, custom?: boolean) => void;
   setTabColor: (id: TerminalId, color: string | undefined) => void;
   colorizeAllTabs: () => void;
   setDragging: (isDragging: boolean, terminalId?: TerminalId) => void;
