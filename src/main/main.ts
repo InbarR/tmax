@@ -196,6 +196,12 @@ function createWindow(): void {
     // Apply background material *after* the window is visible and maximized
     // so the native maximize button stays enabled.
     applyMaterialToWindow(mainWindow!);
+    // Force DWM to repaint the non-client area (title bar) so the old-style
+    // Win32 chrome is replaced by the themed frame when a background material
+    // (mica / acrylic / tabbed) is active.
+    if (materialOpts.backgroundMaterial) {
+      (mainWindow as any).setBackgroundMaterial(materialOpts.backgroundMaterial);
+    }
   });
 
   // Re-apply background material after maximize / restore state transitions
@@ -375,6 +381,7 @@ function registerIpcHandlers(): void {
     const detachedWin = new BrowserWindow({
       width: 800,
       height: 600,
+      show: false,
       title: 'tmax - Terminal',
       autoHideMenuBar: true,
       ...detachedConstructorOpts,
@@ -387,6 +394,14 @@ function registerIpcHandlers(): void {
     });
 
     detachedWin.setMenuBarVisibility(false);
+
+    detachedWin.once('ready-to-show', () => {
+      detachedWin.show();
+      // Force DWM to repaint the title bar when a background material is active
+      if (detachedMaterialOpts.backgroundMaterial) {
+        (detachedWin as any).setBackgroundMaterial(detachedMaterialOpts.backgroundMaterial);
+      }
+    });
     detachedWindows.set(terminalId, detachedWin);
 
     // Apply background material after window is ready (deferred).

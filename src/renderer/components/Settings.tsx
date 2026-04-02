@@ -54,6 +54,8 @@ const Settings: React.FC = () => {
 // ── Terminal Settings ──────────────────────────────────────────────
 
 const FONT_OPTIONS = [
+  'Berkeley Mono',
+  'BerkeleyMono Nerd Font',
   'Cascadia Code',
   'CaskaydiaCove Nerd Font',
   'Consolas',
@@ -314,7 +316,7 @@ const AppearanceSettings: React.FC = () => {
   );
   const [fontDropdownOpen, setFontDropdownOpen] = useState(false);
   const [fontTyping, setFontTyping] = useState(false);
-  const fontInputRef = React.useRef<HTMLDivElement>(null);
+  const fontInputRef = React.useRef<HTMLInputElement>(null);
   const fontDropdownRef = React.useRef<HTMLDivElement>(null);
   const [platformSupported, setPlatformSupported] = useState<boolean | null>(null);
 
@@ -325,6 +327,7 @@ const AppearanceSettings: React.FC = () => {
   const applyFont = (fontName: string) => {
     setFontInputValue(fontName);
     setFontDropdownOpen(false);
+    setFontTyping(false);
     update({ terminal: { ...config.terminal, fontFamily: `${fontName}, monospace` } });
   };
 
@@ -354,38 +357,69 @@ const AppearanceSettings: React.FC = () => {
         <input type="number" className="settings-input small" value={config.terminal.fontSize}
           onChange={(e) => update({ terminal: { ...config.terminal, fontSize: parseInt(e.target.value) || 14 } })} />
       </SettingRow>
-      <SettingRow label="Font Face" description="You can use multiple fonts by separating them with a comma">
+      <SettingRow label="Font Face" description="Type a font name or pick from the list">
         <div className="font-combobox">
-          <div
+          <input
             ref={fontInputRef}
             className="settings-input font-combobox-input"
-            tabIndex={0}
-            onClick={() => setFontDropdownOpen((v) => !v)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setFontDropdownOpen(false);
-              if (e.key === 'Enter' || e.key === ' ') setFontDropdownOpen((v) => !v);
+            type="text"
+            value={fontInputValue}
+            onChange={(e) => {
+              setFontInputValue(e.target.value);
+              setFontTyping(true);
+              setFontDropdownOpen(true);
             }}
-          >
-            {fontInputValue}
-          </div>
-          <span className="font-combobox-arrow">&#9662;</span>
-          {fontDropdownOpen && availableFonts.length > 0 && (
-            <div ref={fontDropdownRef} className="font-dropdown">
-              {availableFonts.map((f) => (
-                <div
-                  key={f}
-                  className="font-dropdown-item"
-                  style={{ fontFamily: `"${f}", monospace` }}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    applyFont(f);
-                  }}
-                >
-                  {f}
-                </div>
-              ))}
-            </div>
-          )}
+            onFocus={() => setFontDropdownOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setFontDropdownOpen(false);
+                setFontTyping(false);
+              }
+              if (e.key === 'Enter') {
+                const trimmed = fontInputValue.trim();
+                if (trimmed) applyFont(trimmed);
+              }
+            }}
+            onBlur={() => {
+              // delay to allow dropdown click to register
+              setTimeout(() => {
+                if (!fontDropdownRef.current?.contains(document.activeElement)) {
+                  setFontDropdownOpen(false);
+                  setFontTyping(false);
+                }
+              }, 150);
+            }}
+          />
+          <span
+            className="font-combobox-arrow"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setFontDropdownOpen((v) => !v);
+              setFontTyping(false);
+            }}
+          >&#9662;</span>
+          {fontDropdownOpen && (() => {
+            const filtered = fontTyping && fontInputValue.trim()
+              ? availableFonts.filter((f) => f.toLowerCase().includes(fontInputValue.trim().toLowerCase()))
+              : availableFonts;
+            return filtered.length > 0 ? (
+              <div ref={fontDropdownRef} className="font-dropdown">
+                {filtered.map((f) => (
+                  <div
+                    key={f}
+                    className="font-dropdown-item"
+                    style={{ fontFamily: `"${f}", monospace` }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      applyFont(f);
+                    }}
+                  >
+                    {f}
+                  </div>
+                ))}
+              </div>
+            ) : null;
+          })()}
         </div>
       </SettingRow>
       <SettingRow label="Default Tab Color" description="Background tint for all terminals without a custom color">
