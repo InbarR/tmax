@@ -72,6 +72,27 @@ html.transparency-active .xterm-viewport {
   background: transparent !important;
 }
 
+/* Keep dialogs/overlays opaque when transparency is active —
+   reset CSS variables inside overlays so all children are opaque too */
+html.transparency-active .settings-backdrop,
+html.transparency-active .shortcuts-backdrop,
+html.transparency-active .palette-backdrop {
+  --bg-primary: #1e1e2e;
+  --bg-secondary: #313244;
+  --tab-bg: #313244;
+  --tab-active: #45475a;
+  --border-color: #45475a;
+}
+
+html.transparency-active .settings-dialog,
+html.transparency-active .shortcuts-dialog,
+html.transparency-active .ai-prompts-dialog,
+html.transparency-active .context-menu,
+html.transparency-active .palette-dialog,
+html.transparency-active .input-dialog {
+  background: #313244;
+}
+
 
 /* ===== App Shell ===== */
 .app-shell {
