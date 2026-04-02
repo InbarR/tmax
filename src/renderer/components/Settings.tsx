@@ -316,7 +316,7 @@ const AppearanceSettings: React.FC = () => {
   );
   const [fontDropdownOpen, setFontDropdownOpen] = useState(false);
   const [fontTyping, setFontTyping] = useState(false);
-  const fontInputRef = React.useRef<HTMLDivElement>(null);
+  const fontInputRef = React.useRef<HTMLInputElement>(null);
   const fontDropdownRef = React.useRef<HTMLDivElement>(null);
   const [platformSupported, setPlatformSupported] = useState<boolean | null>(null);
 
@@ -360,7 +360,7 @@ const AppearanceSettings: React.FC = () => {
       <SettingRow label="Font Face" description="Type a font name or pick from the list">
         <div className="font-combobox">
           <input
-            ref={fontInputRef as React.RefObject<HTMLInputElement>}
+            ref={fontInputRef}
             className="settings-input font-combobox-input"
             type="text"
             value={fontInputValue}
