@@ -168,6 +168,13 @@ function createWindow(): void {
     mainWindow!.maximize();
     mainWindow!.show();
     mainWindow!.focus();
+
+    // Force DWM to repaint the non-client area (title bar) so the old-style
+    // Win32 chrome is replaced by the themed frame when a background material
+    // (mica / acrylic / tabbed) is active.
+    if (materialOpts.backgroundMaterial) {
+      (mainWindow as any).setBackgroundMaterial(materialOpts.backgroundMaterial);
+    }
   });
 
   // Prevent Chromium's built-in zoom — reset zoom level after any zoom attempt
@@ -349,6 +356,7 @@ function registerIpcHandlers(): void {
     const detachedWin = new BrowserWindow({
       width: 800,
       height: 600,
+      show: false,
       title: 'tmax - Terminal',
       autoHideMenuBar: true,
       ...detachedMaterialOpts,
@@ -361,6 +369,14 @@ function registerIpcHandlers(): void {
     });
 
     detachedWin.setMenuBarVisibility(false);
+
+    detachedWin.once('ready-to-show', () => {
+      detachedWin.show();
+      // Force DWM to repaint the title bar when a background material is active
+      if (detachedMaterialOpts.backgroundMaterial) {
+        (detachedWin as any).setBackgroundMaterial(detachedMaterialOpts.backgroundMaterial);
+      }
+    });
     detachedWindows.set(terminalId, detachedWin);
 
     // Open external links in the default browser for detached windows too
