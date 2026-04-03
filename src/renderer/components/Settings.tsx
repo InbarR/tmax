@@ -54,31 +54,46 @@ const Settings: React.FC = () => {
 // ── Terminal Settings ──────────────────────────────────────────────
 
 const FONT_OPTIONS = [
-  'Berkeley Mono',
-  'BerkeleyMono Nerd Font',
   'Cascadia Code',
-  'CaskaydiaCove Nerd Font',
+  'Cascadia Mono',
   'Consolas',
-  'Fira Code',
-  'JetBrains Mono',
-  'Source Code Pro',
-  'IBM Plex Mono',
-  'Hack',
-  'Inconsolata',
-  'Ubuntu Mono',
-  'Roboto Mono',
-  'SF Mono',
-  'Menlo',
-  'Monaco',
-  'DejaVu Sans Mono',
   'Courier New',
+  'Lucida Console',
 ];
 
 function useAvailableFonts(): string[] {
-  // Show all known monospace fonts — each item previews in its own font
-  // so the user can see which ones are actually installed (missing fonts
-  // fall back to the browser default and look identical).
-  return FONT_OPTIONS;
+  const [available, setAvailable] = useState<string[]>([]);
+  useEffect(() => {
+    // Detect installed fonts using canvas text measurement.
+    // Compare rendered width of test strings against multiple fallback fonts.
+    // If a font is installed, at least one test string will differ in width.
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { setAvailable(FONT_OPTIONS); return; }
+
+    const testStrings = ['abcdefghijklm', 'nopqrstuvwxyz', '0123456789', '!@#$%^&*()'];
+    const fallbacks = ['monospace', 'serif', 'sans-serif'];
+
+    // Measure each test string with each fallback
+    const fallbackWidths: number[][] = fallbacks.map((fb) =>
+      testStrings.map((s) => { ctx.font = `48px ${fb}`; return ctx.measureText(s).width; })
+    );
+
+    const installed = FONT_OPTIONS.filter((font) => {
+      for (let fi = 0; fi < fallbacks.length; fi++) {
+        for (let si = 0; si < testStrings.length; si++) {
+          ctx.font = `48px "${font}", ${fallbacks[fi]}`;
+          if (ctx.measureText(testStrings[si]).width !== fallbackWidths[fi][si]) {
+            return true;
+          }
+        }
+      }
+      return false;
+    });
+
+    setAvailable(installed.length > 0 ? installed : FONT_OPTIONS);
+  }, []);
+  return available;
 }
 
 const TerminalSettings: React.FC = () => {
@@ -402,8 +417,14 @@ const AppearanceSettings: React.FC = () => {
             const filtered = fontTyping && fontInputValue.trim()
               ? availableFonts.filter((f) => f.toLowerCase().includes(fontInputValue.trim().toLowerCase()))
               : availableFonts;
+            const inputRect = fontInputRef.current?.getBoundingClientRect();
+            const dropdownStyle = inputRect ? {
+              top: inputRect.bottom + 2,
+              left: inputRect.left,
+              width: Math.max(inputRect.width, 220),
+            } : {};
             return filtered.length > 0 ? (
-              <div ref={fontDropdownRef} className="font-dropdown">
+              <div ref={fontDropdownRef} className="font-dropdown" style={dropdownStyle}>
                 {filtered.map((f) => (
                   <div
                     key={f}
