@@ -1,5 +1,6 @@
 import { app, autoUpdater, Notification, BrowserWindow } from 'electron';
 import Store from 'electron-store';
+import { createServer } from 'http';
 import { IPC } from '../shared/ipc-channels';
 
 const GITHUB_REPO = 'InbarR/tmax';
@@ -57,7 +58,11 @@ export class VersionChecker {
 
   checkNow(): void {
     if (this.supportsAutoUpdate) {
-      autoUpdater.checkForUpdates();
+      if (process.platform === 'win32') {
+        this.checkWindowsUpdate();
+      } else {
+        autoUpdater.checkForUpdates();
+      }
     } else {
       this.checkGitHub();
     }
@@ -70,17 +75,7 @@ export class VersionChecker {
   }
 
   private setupAutoUpdater(): void {
-    const feedURL = `${UPDATE_SERVER}/${GITHUB_REPO}/${process.platform}-${process.arch}/${app.getVersion()}`;
-
-    try {
-      autoUpdater.setFeedURL({ url: feedURL });
-    } catch (err) {
-      console.error('Failed to set auto-update feed URL:', err);
-      this.supportsAutoUpdate = false;
-      this.setupGitHubPolling();
-      return;
-    }
-
+    // Register autoUpdater event handlers (common for all platforms)
     autoUpdater.on('checking-for-update', () => {
       this.setStatus('checking');
     });
@@ -128,11 +123,84 @@ export class VersionChecker {
       this.checkGitHub();
     });
 
-    // Start checking after initial delay
-    this.timeoutId = setTimeout(() => {
+    if (process.platform === 'win32') {
+      // On Windows, update.electronjs.org returns Setup.exe instead of .nupkg
+      // because the nupkg filename lacks an architecture qualifier. This breaks
+      // Squirrel auto-update. Bypass the update server and resolve the nupkg
+      // URL directly from the GitHub release assets.
+      this.timeoutId = setTimeout(() => {
+        this.checkWindowsUpdate();
+        this.intervalId = setInterval(() => this.checkWindowsUpdate(), CHECK_INTERVAL_MS);
+      }, INITIAL_DELAY_MS);
+    } else {
+      // macOS: update.electronjs.org correctly returns .zip files
+      const feedURL = `${UPDATE_SERVER}/${GITHUB_REPO}/${process.platform}-${process.arch}/${app.getVersion()}`;
+      try {
+        autoUpdater.setFeedURL({ url: feedURL });
+      } catch (err) {
+        console.error('Failed to set auto-update feed URL:', err);
+        this.supportsAutoUpdate = false;
+        this.setupGitHubPolling();
+        return;
+      }
+      this.timeoutId = setTimeout(() => {
+        autoUpdater.checkForUpdates();
+        this.intervalId = setInterval(() => autoUpdater.checkForUpdates(), CHECK_INTERVAL_MS);
+      }, INITIAL_DELAY_MS);
+    }
+  }
+
+  // Windows auto-update: fetch the latest release from GitHub, find the .nupkg
+  // asset URL, and serve it to Squirrel via a one-shot local HTTP server.
+  private async checkWindowsUpdate(): Promise<void> {
+    try {
+      const res = await fetch(GITHUB_RELEASES_URL, {
+        headers: { 'User-Agent': 'tmax-update-checker' },
+      });
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const tagName: string = data.tag_name;
+      if (this.compareVersions(tagName, app.getVersion()) <= 0) return;
+
+      // Find the .nupkg asset — Squirrel needs this for auto-update
+      const nupkgAsset = (data.assets as { name: string; browser_download_url: string }[])
+        ?.find((a) => a.name.endsWith('.nupkg'));
+      if (!nupkgAsset) {
+        this.checkGitHub();
+        return;
+      }
+
+      // Squirrel expects the feed URL to return JSON: { url, name, notes }
+      // Create a one-shot local server that returns the correct nupkg URL
+      const server = createServer((_req, resp) => {
+        resp.writeHead(200, { 'Content-Type': 'application/json' });
+        resp.end(JSON.stringify({
+          url: nupkgAsset.browser_download_url,
+          name: tagName,
+          notes: data.body || '',
+        }));
+        setTimeout(() => server.close(), 1000);
+      });
+
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const addr = server.address();
+      const port = typeof addr === 'object' && addr ? addr.port : 0;
+      if (!port) {
+        server.close();
+        this.checkGitHub();
+        return;
+      }
+
+      // Close the server if autoUpdater doesn't request within 30s
+      const safetyTimer = setTimeout(() => server.close(), 30_000);
+      server.on('close', () => clearTimeout(safetyTimer));
+
+      autoUpdater.setFeedURL({ url: `http://127.0.0.1:${port}` });
       autoUpdater.checkForUpdates();
-      this.intervalId = setInterval(() => autoUpdater.checkForUpdates(), CHECK_INTERVAL_MS);
-    }, INITIAL_DELAY_MS);
+    } catch {
+      this.checkGitHub();
+    }
   }
 
   private setupGitHubPolling(): void {
