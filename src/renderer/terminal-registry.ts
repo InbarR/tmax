@@ -24,3 +24,7 @@ export function unregisterTerminal(id: string): void {
 export function getTerminalEntry(id: string): TerminalEntry | undefined {
   return registry.get(id);
 }
+
+export function getAllTerminals(): Terminal[] {
+  return Array.from(registry.values()).map((e) => e.terminal);
+}

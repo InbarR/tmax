@@ -13,6 +13,7 @@ import type {
 } from './types';
 import type { CopilotSessionSummary } from '../../shared/copilot-types';
 import type { DiffMode } from '../../shared/diff-types';
+import { getAllTerminals } from '../terminal-registry';
 
 // ── Tab color palette ────────────────────────────────────────────────
 
@@ -84,6 +85,30 @@ export function applyThemeToChromeVars(theme: Record<string, string>, transparen
   root.style.setProperty('--text-primary', fg);
   root.style.setProperty('--text-secondary', adjustBrightness(fg, isLight ? 60 : -60));
   root.style.setProperty('--focus-border', theme.blue || '#89b4fa');
+
+  // Sync every live xterm.js instance so canvases match the new transparency
+  syncTerminalTransparency(theme, useTransparency ? transparencyOpacity! : undefined);
+}
+
+/**
+ * Update all live xterm.js terminal instances to match the current
+ * transparency / theme settings.  Without this, terminals created before
+ * the user changed the material or opacity keep stale `allowTransparency`
+ * and opaque background colours, causing ghosting artifacts.
+ */
+function syncTerminalTransparency(theme: Record<string, string>, opacity?: number): void {
+  const terminals = getAllTerminals();
+  const bg = theme.background || '#1e1e2e';
+  const useTransparency = opacity !== undefined && opacity < 1;
+  const bgColor = useTransparency ? hexToRgba(bg, opacity) : bg;
+
+  for (const term of terminals) {
+    term.options.allowTransparency = useTransparency;
+    term.options.theme = {
+      ...term.options.theme,
+      background: bgColor,
+    };
+  }
 }
 
 // ── Pure tree helper functions ───────────────────────────────────────
@@ -404,6 +429,7 @@ interface TerminalStore {
   toggleShortcuts: () => void;
   toggleCommandPalette: () => void;
   toggleSettings: () => void;
+  closeSettings: () => void;
   updateConfig: (update: Partial<AppConfig>) => Promise<void>;
   toggleTabBarPosition: () => void;
   toggleHideTabTitles: () => void;
@@ -1211,6 +1237,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   toggleSettings: () => {
     set((state) => ({ showSettings: !state.showSettings }));
+  },
+
+  closeSettings: () => {
+    set({ showSettings: false });
   },
 
   updateConfig: async (update: Partial<AppConfig>) => {

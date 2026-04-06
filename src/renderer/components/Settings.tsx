@@ -14,7 +14,7 @@ const Settings: React.FC = () => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        useTerminalStore.getState().toggleSettings();
+        useTerminalStore.getState().closeSettings();
       }
     };
     document.addEventListener('keydown', handleKey, true);
@@ -23,11 +23,11 @@ const Settings: React.FC = () => {
 
   if (!show || !config) return null;
 
-  const close = () => useTerminalStore.getState().toggleSettings();
+  const close = () => useTerminalStore.getState().closeSettings();
 
   return (
-    <div className="settings-backdrop" onClick={close}>
-      <div className="settings-dialog" onClick={(e) => e.stopPropagation()}>
+    <div className="settings-backdrop" onMouseDown={close}>
+      <div className="settings-dialog" onMouseDown={(e) => e.stopPropagation()}>
         <div className="settings-header">
           <span>Settings</span>
           <button className="shortcuts-close" onClick={close}>&#10005;</button>
