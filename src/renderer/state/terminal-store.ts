@@ -87,14 +87,14 @@ export function applyThemeToChromeVars(theme: Record<string, string>, transparen
   root.style.setProperty('--focus-border', theme.blue || '#89b4fa');
 
   // Sync every live xterm.js instance so canvases match the new transparency
-  syncTerminalTransparency(theme, useTransparency ? transparencyOpacity! : undefined);
+  syncTerminalTransparency(theme, useTransparency && transparencyOpacity !== undefined ? transparencyOpacity : undefined);
 }
 
 /**
  * Update all live xterm.js terminal instances to match the current
  * transparency / theme settings.  Without this, terminals created before
  * the user changed the material or opacity keep stale `allowTransparency`
- * and opaque background colours, causing ghosting artifacts.
+ * and opaque background colors, causing ghosting artifacts.
  */
 function syncTerminalTransparency(theme: Record<string, string>, opacity?: number): void {
   const terminals = getAllTerminals();
