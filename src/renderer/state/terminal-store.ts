@@ -106,6 +106,7 @@ function syncTerminalTransparency(theme: Record<string, string>, opacity?: numbe
       ...term.options.theme,
       background: bgColor,
     };
+    term.refresh(0, term.rows - 1);
   }
 }
 

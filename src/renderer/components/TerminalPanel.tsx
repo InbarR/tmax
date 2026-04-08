@@ -135,7 +135,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     const rawBg = themeConfig?.background ?? '#1e1e2e';
     const materialActive = (config as AppConfig)?.backgroundMaterial && (config as AppConfig).backgroundMaterial !== 'none';
     const bgOpacity = materialActive ? ((config as AppConfig)?.backgroundOpacity ?? 0.8) : 1;
-    // Convert hex to rgba for terminal background when transparency is active
     const bgColor = bgOpacity < 1 ? hexToTerminalRgba(rawBg, bgOpacity) : rawBg;
     const term = new Terminal({
       theme: themeConfig
