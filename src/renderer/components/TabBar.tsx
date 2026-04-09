@@ -166,6 +166,7 @@ const TAB_BAR_DEFAULT_WIDTH = 160;
 
 const TabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }> = ({ vertical, side }) => {
   const terminals = useTerminalStore((s) => s.terminals);
+  const tabGroups = useTerminalStore((s) => s.tabGroups);
   const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
   const renamingId = useTerminalStore((s) => s.renamingTerminalId);
   const tabMenuTerminalId = useTerminalStore((s) => s.tabMenuTerminalId);
@@ -229,24 +230,66 @@ const TabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }> = ({ ver
   const terminalIds = useMemo(() => terminalEntries.map(([id]) => id), [terminalEntries]);
   const sortStrategy = vertical ? verticalListSortingStrategy : horizontalListSortingStrategy;
 
+  // Build grouped tab sections
+  const sections = useMemo(() => {
+    const result: Array<
+      | { type: 'group'; groupId: string; name: string; color: string; collapsed: boolean }
+      | { type: 'tab'; id: string; terminal: typeof terminalEntries[0][1] }
+    > = [];
+    const usedIds = new Set<string>();
+
+    for (const [, group] of tabGroups) {
+      const groupTabs = terminalEntries.filter(([, t]) => t.groupId === group.id);
+      if (groupTabs.length === 0) continue;
+      result.push({ type: 'group', groupId: group.id, name: group.name, color: group.color, collapsed: group.collapsed });
+      for (const [id, terminal] of groupTabs) {
+        usedIds.add(id);
+        if (!group.collapsed) {
+          result.push({ type: 'tab', id, terminal });
+        }
+      }
+    }
+    for (const [id, terminal] of terminalEntries) {
+      if (!usedIds.has(id)) {
+        result.push({ type: 'tab', id, terminal });
+      }
+    }
+    return result;
+  }, [terminalEntries, tabGroups]);
+
   return (
     <div
       className={`tab-bar${vertical ? ' vertical' : ''}${resizing ? ' resizing' : ''}`}
       style={vertical ? { width: tabBarWidth, minWidth: tabBarWidth } : undefined}
     >
       <SortableContext items={terminalIds} strategy={sortStrategy}>
-        {terminalEntries.map(([id, terminal]) => (
-          <Tab
-            key={id}
-            terminalId={id}
-            title={terminal.title}
-            isActive={focusedTerminalId === id}
-            isRenaming={renamingId === id}
-            onActivate={() => useTerminalStore.getState().setFocus(id)}
-            onClose={() => useTerminalStore.getState().closeTerminal(id)}
-            onContextMenu={(e) => handleContextMenu(e, id)}
-          />
-        ))}
+        {sections.map((section) =>
+          section.type === 'group' ? (
+            <div
+              key={`group-${section.groupId}`}
+              className="tab-group-header"
+              style={{ borderLeftColor: section.color }}
+              onClick={() => useTerminalStore.getState().toggleTabGroupCollapse(section.groupId)}
+            >
+              <span className="tab-group-chevron">{section.collapsed ? '\u25B6' : '\u25BC'}</span>
+              <span className="tab-group-name">{section.name}</span>
+              <span className="tab-group-count">
+                {terminalEntries.filter(([, t]) => t.groupId === section.groupId).length}
+              </span>
+            </div>
+          ) : (
+            <Tab
+              key={section.id}
+              terminalId={section.id}
+              title={section.terminal.title}
+              isActive={focusedTerminalId === section.id}
+              isRenaming={renamingId === section.id}
+              onActivate={() => useTerminalStore.getState().setFocus(section.id)}
+              onClose={() => useTerminalStore.getState().closeTerminal(section.id)}
+              onContextMenu={(e) => handleContextMenu(e, section.id)}
+            />
+          )
+        )}
       </SortableContext>
       <button className="tab-add" onClick={handleCreate} title="New Terminal">
         +

@@ -57,6 +57,14 @@ export interface TerminalInstance {
   startupCommandSent?: boolean;
   aiSessionId?: string;
   aiAutoTitle?: boolean;
+  groupId?: string;
+}
+
+export interface TabGroup {
+  id: string;
+  name: string;
+  color: string;
+  collapsed: boolean;
 }
 
 // ── Configuration ────────────────────────────────────────────────────

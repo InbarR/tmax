@@ -85,6 +85,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResult, setSearchResult] = useState<{ resultIndex: number; resultCount: number } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [processStatus, setProcessStatus] = useState<'active' | 'idle' | 'exited-ok' | 'exited-error'>('idle');
+  const processStatusRef = useRef(processStatus);
   const [showDiag, setShowDiag] = useState(false);
   const [, tickDiag] = useReducer((x: number) => x + 1, 0);
   const diagRef = useRef({ keystrokeCount: 0, lastKeystrokeTime: 0, outputEventCount: 0, lastOutputTime: 0, outputBytes: 0, focusEventCount: 0, lastFocusTime: 0 });
@@ -285,6 +287,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
           diagRef.current.outputEventCount++;
           diagRef.current.lastOutputTime = Date.now();
           diagRef.current.outputBytes += data.length;
+          // Avoid re-render on every data chunk — the 1s timer handles active→idle
+          if (processStatusRef.current !== 'active') {
+            processStatusRef.current = 'active';
+            setProcessStatus('active');
+          }
           pendingData += data;
           if (!rafScheduled) {
             rafScheduled = true;
@@ -348,6 +355,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       (id: string, exitCode: number | undefined) => {
         if (id === terminalId) {
           window.terminalAPI.diagLog('renderer:pty-exit-received', { terminalId, exitCode });
+          setProcessStatus(exitCode && exitCode !== 0 ? 'exited-error' : 'exited-ok');
           term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n');
           setTimeout(() => {
             window.terminalAPI.diagLog('renderer:close-terminal-start', { terminalId });
@@ -534,6 +542,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     } catch { /* terminal may be disposed */ }
   }, [fontSize, configFontFamily, terminalId]);
 
+  // Keep ref in sync for use in closure
+  useEffect(() => { processStatusRef.current = processStatus; }, [processStatus]);
+
+  // Process status: detect idle after 5s of no output
+  useEffect(() => {
+    const id = setInterval(() => {
+      setProcessStatus((prev) => {
+        if (prev.startsWith('exited')) return prev;
+        return Date.now() - diagRef.current.lastOutputTime > 5000 ? 'idle' : 'active';
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
   // Programmatic focus when this terminal becomes focused in the store,
   // or when overlays close (to restore DEC focus reporting for Copilot CLI)
   useEffect(() => {
@@ -673,6 +695,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       )}
       {title && (
         <div className="terminal-pane-title">
+          <span
+            className={`terminal-status-dot ${processStatus}`}
+            title={processStatus === 'active' ? 'Active' : processStatus === 'exited-error' ? 'Exited with error' : processStatus === 'idle' ? 'Idle' : 'Exited'}
+          />
           <span className="terminal-pane-title-text">{title}</span>
           <button
             className="terminal-diff-btn"

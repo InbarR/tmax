@@ -10,6 +10,7 @@ import type {
   TerminalInstance,
   AppConfig,
   SplitDirection,
+  TabGroup,
 } from './types';
 import type { CopilotSessionSummary } from '../../shared/copilot-types';
 import type { DiffMode } from '../../shared/diff-types';
@@ -393,6 +394,8 @@ interface TerminalStore {
   diffReviewOpen: boolean;
   diffReviewTerminalId: TerminalId | null;
   diffReviewMode: DiffMode;
+  // Tab groups
+  tabGroups: Map<string, TabGroup>;
 
   // Actions
   loadConfig: () => Promise<void>;
@@ -477,6 +480,13 @@ interface TerminalStore {
   // Prompts dialog action
   showPromptsForTerminal: (terminalId: TerminalId) => void;
   clearPromptsDialogRequest: () => void;
+  // Tab group actions
+  createTabGroup: (name: string, color: string) => string;
+  deleteTabGroup: (groupId: string) => void;
+  renameTabGroup: (groupId: string, name: string) => void;
+  toggleTabGroupCollapse: (groupId: string) => void;
+  addToGroup: (terminalId: TerminalId, groupId: string) => void;
+  removeFromGroup: (terminalId: TerminalId) => void;
   // Diff review actions
   openDiffReview: (terminalId: TerminalId) => void;
   closeDiffReview: () => void;
@@ -510,6 +520,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   claudeCodeSessions: [],
   copilotSearchQuery: '',
   selectedCopilotSessionId: null,
+  tabGroups: new Map(),
   diffReviewOpen: false,
   diffReviewTerminalId: null,
   diffReviewMode: 'unstaged' as DiffMode,
@@ -2148,6 +2159,64 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         window.terminalAPI.writePty(id, cmd + '\r');
       }
     }
+  },
+
+  // ── Tab group actions ────────────────────────────────────────────
+  createTabGroup: (name: string, color: string) => {
+    const id = uuidv4();
+    const newGroups = new Map(get().tabGroups);
+    newGroups.set(id, { id, name, color, collapsed: false });
+    set({ tabGroups: newGroups });
+    return id;
+  },
+
+  deleteTabGroup: (groupId: string) => {
+    const { terminals, tabGroups } = get();
+    const newGroups = new Map(tabGroups);
+    newGroups.delete(groupId);
+    const newTerminals = new Map(terminals);
+    for (const [id, t] of newTerminals) {
+      if (t.groupId === groupId) {
+        newTerminals.set(id, { ...t, groupId: undefined });
+      }
+    }
+    set({ tabGroups: newGroups, terminals: newTerminals });
+  },
+
+  renameTabGroup: (groupId: string, name: string) => {
+    const { tabGroups } = get();
+    const group = tabGroups.get(groupId);
+    if (!group) return;
+    const newGroups = new Map(tabGroups);
+    newGroups.set(groupId, { ...group, name });
+    set({ tabGroups: newGroups });
+  },
+
+  toggleTabGroupCollapse: (groupId: string) => {
+    const { tabGroups } = get();
+    const group = tabGroups.get(groupId);
+    if (!group) return;
+    const newGroups = new Map(tabGroups);
+    newGroups.set(groupId, { ...group, collapsed: !group.collapsed });
+    set({ tabGroups: newGroups });
+  },
+
+  addToGroup: (terminalId: TerminalId, groupId: string) => {
+    const { terminals } = get();
+    const instance = terminals.get(terminalId);
+    if (!instance) return;
+    const newTerminals = new Map(terminals);
+    newTerminals.set(terminalId, { ...instance, groupId });
+    set({ terminals: newTerminals });
+  },
+
+  removeFromGroup: (terminalId: TerminalId) => {
+    const { terminals } = get();
+    const instance = terminals.get(terminalId);
+    if (!instance) return;
+    const newTerminals = new Map(terminals);
+    newTerminals.set(terminalId, { ...instance, groupId: undefined });
+    set({ terminals: newTerminals });
   },
 
   // ── Diff review actions ───────────────────────────────────────────

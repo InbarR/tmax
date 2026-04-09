@@ -23,7 +23,11 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
 
   const store = useTerminalStore.getState;
   const terminal = useTerminalStore((s) => s.terminals.get(position.terminalId));
+  const tabGroups = useTerminalStore((s) => s.tabGroups);
   const config = useTerminalStore((s) => s.config);
+  const [showGroupMenu, setShowGroupMenu] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const newGroupInputRef = useRef<HTMLInputElement>(null);
   const hasAnyColor = useTerminalStore((s) => s.autoColorTabs);
 
   // Close on outside click or Escape
@@ -298,6 +302,49 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
           }}>
             Hide Tab Bar <span className="context-menu-shortcut">Ctrl+Shift+B</span>
           </button>
+          <div className="context-menu-separator" />
+          <button className="context-menu-item" onClick={() => setShowGroupMenu((v) => !v)}>
+            {terminal?.groupId ? 'Change Group' : 'Add to Group'} &#9656;
+          </button>
+          {showGroupMenu && (
+            <div className="context-menu-sub">
+              {Array.from(tabGroups.values()).map((g) => (
+                <button key={g.id} className={`context-menu-item sub${terminal?.groupId === g.id ? ' active-check' : ''}`} onClick={() => {
+                  store().addToGroup(position.terminalId, g.id);
+                  onClose();
+                }}>
+                  <span className="color-dot" style={{ background: g.color, width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 6 }} />
+                  {g.name} {terminal?.groupId === g.id ? '\u2713' : ''}
+                </button>
+              ))}
+              {terminal?.groupId && (
+                <button className="context-menu-item" onClick={() => { store().removeFromGroup(position.terminalId); onClose(); }}>
+                  Remove from Group
+                </button>
+              )}
+              <div className="context-menu-separator" />
+              <div className="context-menu-inline-input">
+                <input
+                  ref={newGroupInputRef}
+                  type="text"
+                  placeholder="New group name..."
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter' && newGroupName.trim()) {
+                      const colors = ['#f38ba8', '#a6e3a1', '#89b4fa', '#f9e2af', '#cba6f7', '#fab387'];
+                      const color = colors[tabGroups.size % colors.length];
+                      const groupId = store().createTabGroup(newGroupName.trim(), color);
+                      store().addToGroup(position.terminalId, groupId);
+                      onClose();
+                    }
+                  }}
+                  onClick={(e) => { e.stopPropagation(); requestAnimationFrame(() => newGroupInputRef.current?.focus()); }}
+                />
+              </div>
+            </div>
+          )}
           <div className="context-menu-label">Tab Bar Position</div>
           {(['top', 'bottom', 'left', 'right'] as const).map((pos) => (
             <button key={pos} className={`context-menu-item sub${store().tabBarPosition === pos ? ' active-check' : ''}`} onClick={() => {
