@@ -2353,13 +2353,52 @@ select.settings-input {
   color: var(--text-primary);
 }
 
-.file-explorer-path {
+.file-explorer-breadcrumbs {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: center;
+  cursor: text;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.file-explorer-breadcrumbs:hover {
+  background: rgba(137, 180, 250, 0.08);
+}
+
+.file-explorer-crumb {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.file-explorer-crumb:hover {
+  color: var(--focus-border);
+  text-decoration: underline;
+}
+
+.file-explorer-crumb:last-child {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.file-explorer-sep {
+  color: var(--text-secondary);
+  opacity: 0.4;
+  margin: 0 2px;
+}
+
+.file-explorer-path-input {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--focus-border);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-size: 11px;
+  outline: none;
 }
 
 .file-explorer-list {

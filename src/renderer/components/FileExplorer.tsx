@@ -24,9 +24,12 @@ const FileExplorer: React.FC = () => {
   const [children, setChildren] = useState<Record<string, FileEntry[]>>({});
   const [filter, setFilter] = useState('');
   const [showHidden, setShowHidden] = useState(false);
+  const [editingPath, setEditingPath] = useState(false);
+  const [pathInputValue, setPathInputValue] = useState('');
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [resizing, setResizing] = useState(false);
   const filterRef = useRef<HTMLInputElement>(null);
+  const pathInputRef = useRef<HTMLInputElement>(null);
 
   const currentPath = browsePath || terminalCwd;
 
@@ -143,20 +146,57 @@ const FileExplorer: React.FC = () => {
     );
   };
 
-  const shortPath = currentPath.split(/[/\\]/).pop() || currentPath;
+  const pathParts = currentPath.split(/[/\\]/).filter(Boolean);
+  // On Windows, first part is drive letter like "C:"
+  const breadcrumbs = pathParts.map((part, i) => ({
+    label: part,
+    path: pathParts.slice(0, i + 1).join('\\') + (i === 0 && part.endsWith(':') ? '\\' : ''),
+  }));
 
   return (
     <div className={`file-explorer-panel${resizing ? ' resizing' : ''}`} style={{ width, minWidth: width }}>
       <div className="file-explorer-resize" onMouseDown={handleResizeStart} />
       <div className="file-explorer-header">
         <div className="file-explorer-nav">
+          <button className="file-explorer-nav-btn" onClick={() => { setExpanded({}); }} title="Collapse all">&#8722;</button>
           <button className="file-explorer-nav-btn" onClick={navigateUp} title="Go up">&#8593;</button>
           <button className="file-explorer-nav-btn" onClick={() => navigateTo(terminalCwd)} title="Go to terminal CWD">&#8962;</button>
         </div>
-        <span className="file-explorer-path" title={currentPath}>{shortPath}</span>
+        {editingPath ? (
+          <input
+            ref={pathInputRef}
+            className="file-explorer-path-input"
+            value={pathInputValue}
+            onChange={(e) => setPathInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === 'Enter' && pathInputValue.trim()) {
+                navigateTo(pathInputValue.trim());
+                setEditingPath(false);
+              }
+              if (e.key === 'Escape') setEditingPath(false);
+            }}
+            onBlur={() => setEditingPath(false)}
+          />
+        ) : (
+          <div
+            className="file-explorer-breadcrumbs"
+            onClick={() => { setEditingPath(true); setPathInputValue(currentPath); requestAnimationFrame(() => pathInputRef.current?.focus()); }}
+            title="Click to edit path"
+          >
+            {breadcrumbs.map((bc, i) => (
+              <span key={i}>
+                <span
+                  className="file-explorer-crumb"
+                  onClick={(e) => { e.stopPropagation(); navigateTo(bc.path); }}
+                >{bc.label}</span>
+                {i < breadcrumbs.length - 1 && <span className="file-explorer-sep">/</span>}
+              </span>
+            ))}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: '2px' }}>
           <button className="file-explorer-nav-btn" onClick={() => setShowHidden((v) => !v)} title={showHidden ? 'Hide dotfiles' : 'Show dotfiles'}>{showHidden ? '\u25C9' : '\u25CB'}</button>
-          <button className="file-explorer-nav-btn" onClick={() => { setExpanded({}); }} title="Collapse all">&#8722;</button>
           <button className="dir-panel-close" onClick={() => useTerminalStore.getState().toggleFileExplorer()}>&#10005;</button>
         </div>
       </div>
