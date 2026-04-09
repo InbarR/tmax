@@ -116,7 +116,7 @@ const TerminalSettings: React.FC = () => {
           onChange={(e) => update({ defaultCwd: e.target.value } as any)} />
       </SettingRow>
       <SettingRow label="Copilot Command" description="Base command for Copilot sessions (e.g., agency copilot, frodo)">
-        <input type="text" className="settings-input" value={config.copilotCommand || 'agency copilot'}
+        <input type="text" className="settings-input" value={config.copilotCommand ?? ''}
           placeholder="agency copilot"
           onChange={(e) => update({ copilotCommand: e.target.value } as any)} />
       </SettingRow>
