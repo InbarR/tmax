@@ -155,7 +155,7 @@ const FileExplorer: React.FC = () => {
     return (
       <div key={entry.path}>
         <div
-          className={`file-entry${entry.isDirectory ? ' dir' : ' file'}`}
+          className={`file-entry${entry.isDirectory ? ' dir' : ' file'}${preview?.path === entry.path ? ' previewing' : ''}`}
           style={{ paddingLeft: 12 + depth * 16 }}
           onClick={() => {
             if (entry.isDirectory) {

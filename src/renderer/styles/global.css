@@ -2429,6 +2429,11 @@ select.settings-input {
   background: rgba(137, 180, 250, 0.1);
 }
 
+.file-entry.previewing {
+  background: rgba(137, 180, 250, 0.15);
+  color: var(--focus-border);
+}
+
 .file-entry.dir {
   color: var(--text-primary);
 }
