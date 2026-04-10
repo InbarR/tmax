@@ -289,17 +289,16 @@ html.transparency-active .input-dialog {
 }
 
 .tab-group-slot {
-  border-top: 3px solid transparent;
   flex-shrink: 0;
 }
 
 .tab-group-slot .tab {
-  border-top: none;
+  border-top: 2px solid var(--group-color, transparent);
 }
 
-.tab-bar.vertical .tab-group-slot {
+.tab-bar.vertical .tab-group-slot .tab {
   border-top: none;
-  border-left: 3px solid transparent;
+  border-left: 2px solid var(--group-color, transparent);
 }
 
 .tab-bar.vertical .tab-group-header {

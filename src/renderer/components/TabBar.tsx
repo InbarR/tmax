@@ -279,7 +279,7 @@ const TabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }> = ({ ver
               </span>
             </div>
           ) : (
-            <div key={section.id} className="tab-group-slot" style={section.groupColor ? { borderTopColor: section.groupColor } : undefined}>
+            <div key={section.id} className="tab-group-slot" style={section.groupColor ? { '--group-color': section.groupColor } as React.CSSProperties : undefined}>
               <Tab
                 terminalId={section.id}
                 title={section.terminal.title}

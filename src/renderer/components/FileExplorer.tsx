@@ -27,6 +27,8 @@ const FileExplorer: React.FC = () => {
   const [showHidden, setShowHidden] = useState(false);
   const [editingPath, setEditingPath] = useState(false);
   const [pathInputValue, setPathInputValue] = useState('');
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; entry: FileEntry } | null>(null);
+  const ctxRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [resizing, setResizing] = useState(false);
   const filterRef = useRef<HTMLInputElement>(null);
@@ -100,6 +102,16 @@ const FileExplorer: React.FC = () => {
     window.addEventListener('mouseup', handleMouseUp);
   }, [width]);
 
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) setCtxMenu(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [ctxMenu]);
+
   if (!show) return null;
 
   const q = filter.toLowerCase();
@@ -107,17 +119,13 @@ const FileExplorer: React.FC = () => {
   const renderEntry = (entry: FileEntry, depth: number, parentMatches?: boolean): React.ReactNode => {
     const nameMatches = !q || entry.name.toLowerCase().includes(q);
     if (!nameMatches && !parentMatches) {
-      // For directories: show if any loaded children match, or if expanded (children loading)
-      if (entry.isDirectory) {
-        if (expanded[entry.path]) {
-          // Keep visible while expanded — children may still be loading
-        } else if (children[entry.path]) {
-          const hasMatch = children[entry.path].some((c) => c.name.toLowerCase().includes(q));
-          if (!hasMatch) return null;
-        } else {
-          return null;
-        }
+      if (entry.isDirectory && children[entry.path]) {
+        const hasMatch = children[entry.path].some((c) => c.name.toLowerCase().includes(q));
+        if (!hasMatch) return null;
+      } else if (!entry.isDirectory) {
+        return null;
       } else {
+        // Unloaded directory that doesn't match — hide it
         return null;
       }
     }
@@ -143,6 +151,11 @@ const FileExplorer: React.FC = () => {
             if (entry.isDirectory) {
               navigateTo(entry.path);
             }
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setCtxMenu({ x: e.clientX, y: e.clientY, entry });
           }}
         >
           {entry.isDirectory && (
@@ -227,6 +240,43 @@ const FileExplorer: React.FC = () => {
         {files.map((entry) => renderEntry(entry, 0))}
         {files.length === 0 && <div className="dir-panel-empty">No files</div>}
       </div>
+      {ctxMenu && (
+        <div ref={ctxRef} className="context-menu" style={{ left: ctxMenu.x, top: ctxMenu.y, zIndex: 1000 }}>
+          <button className="context-menu-item" onClick={() => {
+            handleFileClick(ctxMenu.entry.path);
+            setCtxMenu(null);
+          }}>
+            {ctxMenu.entry.isDirectory ? 'Open Folder' : 'Open File'}
+          </button>
+          {ctxMenu.entry.isDirectory && (
+            <button className="context-menu-item" onClick={() => {
+              navigateTo(ctxMenu.entry.path);
+              setCtxMenu(null);
+            }}>
+              Browse Here
+            </button>
+          )}
+          {ctxMenu.entry.isDirectory && (
+            <button className="context-menu-item" onClick={() => {
+              // cd to this directory in the focused terminal
+              const tid = useTerminalStore.getState().focusedTerminalId;
+              if (tid) {
+                const cdPath = wslDistro ? ctxMenu.entry.path : ctxMenu.entry.path;
+                window.terminalAPI.writePty(tid, `cd "${cdPath}"\r`);
+              }
+              setCtxMenu(null);
+            }}>
+              cd Here
+            </button>
+          )}
+          <button className="context-menu-item" onClick={() => {
+            window.terminalAPI.clipboardWrite(ctxMenu.entry.path);
+            setCtxMenu(null);
+          }}>
+            Copy Path
+          </button>
+        </div>
+      )}
     </div>
   );
 };
