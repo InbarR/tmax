@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 import { getLeafOrder } from '../state/terminal-store';
+import { formatKeyForPlatform } from '../utils/platform';
 
 interface UpdateInfoState {
   status: string;
@@ -118,28 +119,28 @@ const StatusBar: React.FC = () => {
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleHideTabTitles()}
-            title="Toggle Tab Bar (Ctrl+Shift+B)"
+            title={formatKeyForPlatform("Toggle Tab Bar (Ctrl+Shift+B)")}
           >
             &#9776; Tabs
           </button>
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleDirPicker()}
-            title="Directories (Ctrl+Shift+D)"
+            title={formatKeyForPlatform("Directories (Ctrl+Shift+D)")}
           >
             &#128193; Dirs
           </button>
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleFileExplorer()}
-            title="File Explorer (Ctrl+Shift+X)"
+            title={formatKeyForPlatform("File Explorer (Ctrl+Shift+X)")}
           >
             &#128196; Files
           </button>
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleCopilotPanel()}
-            title="AI Sessions (Ctrl+Shift+C)"
+            title={formatKeyForPlatform("AI Sessions (Ctrl+Shift+C)")}
           >
             &#129302; Sessions
           </button>
@@ -174,14 +175,14 @@ const StatusBar: React.FC = () => {
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().colorizeAllTabs()}
-            title="Toggle tab colors (Ctrl+Shift+O)"
+            title={formatKeyForPlatform("Toggle tab colors (Ctrl+Shift+O)")}
           >
             &#127912; {hasAnyColor ? 'Colors \u2713' : 'Colors'}
           </button>
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleViewMode()}
-            title="Toggle view mode (Ctrl+Shift+F)"
+            title={formatKeyForPlatform("Toggle view mode (Ctrl+Shift+F)")}
           >
             &#9638; {viewMode === 'focus' ? 'Focus' : viewMode === 'grid' ? (gridColumns ? `Grid ${gridColumns}col` : 'Grid') : 'Split'}
           </button>
@@ -211,7 +212,7 @@ const StatusBar: React.FC = () => {
           <button
             className="status-help-btn"
             onClick={() => useTerminalStore.getState().toggleCommandPalette()}
-            title="Show command palette (Ctrl+Shift+P)"
+            title={formatKeyForPlatform("Show command palette (Ctrl+Shift+P)")}
           >
             &#9776;
           </button>

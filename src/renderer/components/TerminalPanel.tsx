@@ -6,7 +6,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { useTerminalStore } from '../state/terminal-store';
 import { registerTerminal, unregisterTerminal } from '../terminal-registry';
 import type { AppConfig } from '../state/types';
-import { isMac } from '../utils/platform';
+import { isMac, formatKeyForPlatform } from '../utils/platform';
 import '@xterm/xterm/css/xterm.css';
 
 function hexToTerminalRgba(hex: string, alpha: number): string {
@@ -68,7 +68,7 @@ const DiagnosticsOverlay: React.FC<DiagnosticsOverlayProps> = ({ terminalId, dia
           <button className="terminal-diag-copy-btn" onClick={() => window.terminalAPI.clipboardWrite(logPath)} title="Copy path">⧉</button>
         </div>
       )}
-      <div className="terminal-diag-hint">Ctrl+Shift+` to close · refreshes every 500ms</div>
+      <div className="terminal-diag-hint">{formatKeyForPlatform('Ctrl+Shift+`')} to close · refreshes every 500ms</div>
     </div>
   );
 };

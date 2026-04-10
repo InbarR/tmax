@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
+import { formatKeyForPlatform } from '../utils/platform';
 import InputDialog from './InputDialog';
 
 interface Command {
@@ -231,7 +232,7 @@ const CommandPalette: React.FC = () => {
               onMouseEnter={() => setSelectedIndex(index)}
             >
               <span className="palette-label">{cmd.label}</span>
-              {cmd.shortcut && <kbd className="palette-shortcut">{cmd.shortcut}</kbd>}
+              {cmd.shortcut && <kbd className="palette-shortcut">{formatKeyForPlatform(cmd.shortcut)}</kbd>}
             </div>
           ))}
           {filtered.length === 0 && (

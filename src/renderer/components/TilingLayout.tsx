@@ -1,6 +1,7 @@
 import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { useTerminalStore } from '../state/terminal-store';
+import { isMac } from '../utils/platform';
 import type { LayoutNode, LayoutSplitNode } from '../state/types';
 import TerminalPanel from './TerminalPanel';
 import SplitResizer from './SplitResizer';
@@ -92,7 +93,7 @@ const TilingLayout: React.FC = () => {
   if (!tilingRoot) {
     return (
       <div className="empty-state">
-        Press Ctrl+Shift+N to create a new terminal
+        Press {isMac ? '⌘' : 'Ctrl'}+Shift+N to create a new terminal
       </div>
     );
   }

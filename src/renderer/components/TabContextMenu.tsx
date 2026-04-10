@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useTerminalStore, TAB_COLORS } from '../state/terminal-store';
+import { formatKeyForPlatform } from '../utils/platform';
 import type { TerminalId } from '../state/types';
 
 export interface ContextMenuPosition {
@@ -170,21 +171,21 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
       ) : (
         <>
           <button className="context-menu-item" onClick={handleRename}>
-            Rename <span className="shortcut">Ctrl+Shift+R</span>
+            Rename <span className="shortcut">{formatKeyForPlatform('Ctrl+Shift+R')}</span>
           </button>
           <div className="context-menu-separator" />
           <button className="context-menu-item" onClick={handleSplitRight}>
-            Split Right <span className="shortcut">Ctrl+Alt+→</span>
+            Split Right <span className="shortcut">{formatKeyForPlatform('Ctrl+Alt+→')}</span>
           </button>
           <button className="context-menu-item" onClick={handleSplitDown}>
-            Split Down <span className="shortcut">Ctrl+Alt+↓</span>
+            Split Down <span className="shortcut">{formatKeyForPlatform('Ctrl+Alt+↓')}</span>
           </button>
           <div className="context-menu-separator" />
           <button className="context-menu-item" onClick={() => {
             store().toggleViewMode();
             onClose();
           }}>
-            {store().viewMode === 'focus' ? 'Split Mode' : 'Focus Mode'} <span className="shortcut">Ctrl+Shift+F</span>
+            {store().viewMode === 'focus' ? 'Split Mode' : 'Focus Mode'} <span className="shortcut">{formatKeyForPlatform('Ctrl+Shift+F')}</span>
           </button>
           {selectedAtOpen.length >= 2 && (
             <button className="context-menu-item" onClick={() => {
@@ -207,7 +208,7 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
             {terminal?.mode === 'detached' ? 'Reattach' : 'Detach to Window'}
           </button>
           <button className="context-menu-item" onClick={handleToggleDormant}>
-            {isDormant ? 'Wake' : 'Hide (Dormant)'} <span className="shortcut">Ctrl+Shift+H</span>
+            {isDormant ? 'Wake' : 'Hide (Dormant)'} <span className="shortcut">{formatKeyForPlatform('Ctrl+Shift+H')}</span>
           </button>
           <div className="context-menu-separator" />
           {showColorPicker ? (
@@ -300,7 +301,7 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
             store().toggleHideTabTitles();
             onClose();
           }}>
-            Hide Tab Bar <span className="context-menu-shortcut">Ctrl+Shift+B</span>
+            Hide Tab Bar <span className="context-menu-shortcut">{formatKeyForPlatform('Ctrl+Shift+B')}</span>
           </button>
           <div className="context-menu-separator" />
           <button className="context-menu-item" onClick={() => setShowGroupMenu((v) => !v)}>
@@ -386,13 +387,13 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
             onClose();
             store().toggleCommandPalette();
           }}>
-            Command Palette <span className="shortcut">Ctrl+Shift+P</span>
+            Command Palette <span className="shortcut">{formatKeyForPlatform('Ctrl+Shift+P')}</span>
           </button>
           <button className="context-menu-item" onClick={() => {
             onClose();
             store().toggleSettings();
           }}>
-            Settings <span className="shortcut">Ctrl+,</span>
+            Settings <span className="shortcut">{formatKeyForPlatform('Ctrl+,')}</span>
           </button>
           <div className="context-menu-separator" />
           {config && config.shells.length > 1 && (
@@ -419,7 +420,7 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
             useTerminalStore.getState().clearSelection();
             (async () => { for (const id of ids) await useTerminalStore.getState().closeTerminal(id); })();
           }}>
-            Close{targetIds.length > 1 ? ` (${targetIds.length})` : ''} <span className="shortcut">Ctrl+Shift+W</span>
+            Close{targetIds.length > 1 ? ` (${targetIds.length})` : ''} <span className="shortcut">{formatKeyForPlatform('Ctrl+Shift+W')}</span>
           </button>
           <button className="context-menu-item danger" onClick={() => {
             onClose();
