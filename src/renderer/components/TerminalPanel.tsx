@@ -89,6 +89,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   const [processStatus, setProcessStatus] = useState<'active' | 'idle' | 'exited-ok' | 'exited-error'>('idle');
   const processStatusRef = useRef(processStatus);
   const [showDiag, setShowDiag] = useState(false);
+  const [isRenamingPane, setIsRenamingPane] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
   const [, tickDiag] = useReducer((x: number) => x + 1, 0);
   const diagRef = useRef({ keystrokeCount: 0, lastKeystrokeTime: 0, outputEventCount: 0, lastOutputTime: 0, outputBytes: 0, focusEventCount: 0, lastFocusTime: 0 });
   const mainDiagRef = useRef<{ pid: number; writeCount: number; lastWriteTime: number; dataCount: number; lastDataTime: number; dataBytes: number } | null>(null);
@@ -703,11 +705,50 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       )}
       {title && (
         <div className="terminal-pane-title">
-          <span
-            className={`terminal-status-dot ${processStatus}`}
-            title={processStatus === 'active' ? 'Active' : processStatus === 'exited-error' ? 'Exited with error' : processStatus === 'idle' ? 'Idle' : 'Exited'}
-          />
-          <span className="terminal-pane-title-text">{title}</span>
+          <div
+            className="status-dot-container"
+            onClick={(e) => {
+              e.stopPropagation();
+              useTerminalStore.getState().closeTerminal(terminalId);
+            }}
+          >
+            <span
+              className={`terminal-status-dot ${processStatus}`}
+              title={processStatus === 'active' ? 'Active' : processStatus === 'exited-error' ? 'Exited with error' : processStatus === 'idle' ? 'Idle' : 'Exited'}
+            />
+            <span className="pane-close-x" title="Close pane">✕</span>
+          </div>
+          {isRenamingPane ? (
+            <input
+              className="pane-rename-input"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const trimmed = renameValue.trim();
+                  if (trimmed) useTerminalStore.getState().renameTerminal(terminalId, trimmed, true);
+                  setIsRenamingPane(false);
+                } else if (e.key === 'Escape') {
+                  setIsRenamingPane(false);
+                }
+              }}
+              onBlur={() => {
+                const trimmed = renameValue.trim();
+                if (trimmed) useTerminalStore.getState().renameTerminal(terminalId, trimmed, true);
+                setIsRenamingPane(false);
+              }}
+              autoFocus
+              onFocus={(e) => e.target.select()}
+            />
+          ) : (
+            <span
+              className="terminal-pane-title-text"
+              onDoubleClick={() => {
+                setRenameValue(title || '');
+                setIsRenamingPane(true);
+              }}
+            >{title}</span>
+          )}
           <button
             className="terminal-diff-btn"
             title="Open diff review"
