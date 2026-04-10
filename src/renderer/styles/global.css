@@ -540,9 +540,8 @@ html.transparency-active .input-dialog {
 }
 
 .terminal-panel.focused .terminal-pane-title {
-  background: var(--focus-border);
-  color: var(--bg-primary);
-  border-bottom-color: var(--focus-border);
+  background: rgba(166, 227, 161, 0.3);
+  border-bottom-color: rgba(166, 227, 161, 0.4);
   opacity: 1;
 }
 

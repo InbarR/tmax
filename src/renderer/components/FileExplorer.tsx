@@ -76,23 +76,6 @@ const FileExplorer: React.FC = () => {
     });
   }, [children, wslDistro]);
 
-  const handleFileClick = useCallback((filePath: string, fileName: string) => {
-    const ext = fileName.includes('.') ? fileName.split('.').pop()?.toLowerCase() || '' : fileName.toLowerCase();
-    if (TEXT_EXTENSIONS.has(ext)) {
-      // Show inline preview
-      (window.terminalAPI as any).fileRead(filePath, wslDistro).then((content: string | null) => {
-        if (content !== null) {
-          setPreview({ name: fileName, content });
-        } else {
-          // Binary or too large — open externally
-          openFileExternally(filePath);
-        }
-      });
-    } else {
-      openFileExternally(filePath);
-    }
-  }, [wslDistro]);
-
   const openFileExternally = useCallback((filePath: string) => {
     if (wslDistro && filePath.startsWith('/')) {
       const uncPath = `\\\\wsl.localhost\\${wslDistro}${filePath.replace(/\//g, '\\')}`;
@@ -101,6 +84,23 @@ const FileExplorer: React.FC = () => {
       (window.terminalAPI as any).openPath(filePath);
     }
   }, [wslDistro]);
+
+  const handleFileClick = useCallback((filePath: string, fileName: string) => {
+    const ext = fileName.includes('.') ? fileName.split('.').pop()?.toLowerCase() || '' : fileName.toLowerCase();
+    if (TEXT_EXTENSIONS.has(ext)) {
+      (window.terminalAPI as any).fileRead(filePath, wslDistro).then((content: string | null) => {
+        if (content !== null) {
+          setPreview({ name: fileName, content });
+        } else {
+          openFileExternally(filePath);
+        }
+      }).catch(() => {
+        openFileExternally(filePath);
+      });
+    } else {
+      openFileExternally(filePath);
+    }
+  }, [wslDistro, openFileExternally]);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
