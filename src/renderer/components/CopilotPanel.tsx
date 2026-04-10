@@ -75,6 +75,7 @@ const CopilotPanel: React.FC = () => {
   const copilotSessions = useTerminalStore((s) => s.copilotSessions);
   const claudeCodeSessions = useTerminalStore((s) => s.claudeCodeSessions);
   const terminals = useTerminalStore((s) => s.terminals);
+  const summaryOverrides = useTerminalStore((s) => s.sessionNameOverrides);
 
   // Track which AI session IDs have open terminals
   const openSessionIds = useMemo(() => {
@@ -91,7 +92,6 @@ const CopilotPanel: React.FC = () => {
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; session: CopilotSessionSummary } | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; provider: SessionProvider; value: string } | null>(null);
-  const [summaryOverrides, setSummaryOverrides] = useState<Record<string, string>>({});
   const [promptsDialog, setPromptsDialog] = useState<{ title: string; prompts: string[]; terminalId: string | null } | null>(null);
   const [showRunningOnly, setShowRunningOnly] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -207,7 +207,7 @@ const CopilotPanel: React.FC = () => {
     if (!renaming) return;
     const newSummary = renaming.value.trim();
     if (newSummary) {
-      setSummaryOverrides((prev) => ({ ...prev, [renaming.id]: newSummary }));
+      useTerminalStore.getState().setSessionNameOverride(renaming.id, newSummary);
     }
     setRenaming(null);
   }, [renaming]);
