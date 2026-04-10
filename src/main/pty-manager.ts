@@ -133,9 +133,10 @@ export class PtyManager {
       setTimeout(() => ptyProcess.write(psSnippet + '\r'), 200);
       setTimeout(() => ptyProcess.write('cls\r'), 400);
     } else if (shellName.includes('bash') || shellName.includes('zsh')) {
-      // Bash/Zsh: use PROMPT_COMMAND / precmd
+      // Bash/Zsh: use PROMPT_COMMAND / precmd to emit OSC 7 (file URI for cwd tracking)
       const bashSnippet = 'PROMPT_COMMAND=\'printf "\\e]7;file:///%s\\a" "$(pwd)"\'' + '\r';
       setTimeout(() => ptyProcess.write(bashSnippet), 200);
+      setTimeout(() => ptyProcess.write('clear\r'), 400);
     }
     // CMD: relies on prompt regex fallback (no hook mechanism)
 
