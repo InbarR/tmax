@@ -194,6 +194,15 @@ export class CopilotSessionMonitor {
 
     const parsed = fs.existsSync(eventsPath) ? parseSessionEvents(eventsPath) : null;
 
+    // If no summary from workspace.yaml, use first prompt as the display name
+    if (!workspace.summary && workspace.name === id) {
+      const prompts = extractCopilotPrompts(eventsPath, 1);
+      if (prompts.length > 0) {
+        workspace.summary = prompts[0].slice(0, 60);
+        workspace.name = workspace.summary;
+      }
+    }
+
     return {
       id,
       status: parsed?.status ?? 'idle',
