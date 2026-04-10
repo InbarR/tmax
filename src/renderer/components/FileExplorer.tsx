@@ -33,6 +33,7 @@ const FileExplorer: React.FC = () => {
   const ctxRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<{ name: string; path: string; content: string } | null>(null);
   const [previewWidth, setPreviewWidth] = useState(50); // percentage
+  const [previewSide, setPreviewSide] = useState<'right' | 'left'>('right');
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [resizing, setResizing] = useState(false);
   const filterRef = useRef<HTMLInputElement>(null);
@@ -260,7 +261,7 @@ const FileExplorer: React.FC = () => {
       </div>
       {preview && ReactDOM.createPortal(
         <div
-          className="file-preview-overlay"
+          className={`file-preview-overlay ${previewSide}`}
           style={{ width: `${previewWidth}%` }}
           tabIndex={0}
           ref={(el) => el?.focus()}
@@ -273,7 +274,7 @@ const FileExplorer: React.FC = () => {
               const startX = e.clientX;
               const startWidth = previewWidth;
               const handleMove = (me: MouseEvent) => {
-                const delta = startX - me.clientX;
+                const delta = previewSide === 'right' ? startX - me.clientX : me.clientX - startX;
                 const newWidth = Math.max(20, Math.min(80, startWidth + (delta / window.innerWidth) * 100));
                 setPreviewWidth(newWidth);
               };
@@ -288,9 +289,10 @@ const FileExplorer: React.FC = () => {
           <div className="file-preview-sidebar">
             <div className="file-preview-header">
               <span className="file-preview-name">{preview.name}</span>
-              <div style={{ display: 'flex', gap: 4 }}>
-                <button className="file-explorer-nav-btn" onClick={() => openFileExternally(preview.path)} title="Open in editor">&#8599;</button>
-                <button className="dir-panel-close" onClick={() => setPreview(null)}>&#10005;</button>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="file-preview-btn" onClick={() => openFileExternally(preview.path)} title="Open in editor">Open in Editor</button>
+                <button className="file-preview-btn" onClick={() => setPreviewSide((s) => s === 'right' ? 'left' : 'right')} title="Move to other side">{previewSide === 'right' ? '\u25C0' : '\u25B6'}</button>
+                <button className="file-preview-btn close" onClick={() => setPreview(null)} title="Close (Esc)">&#10005;</button>
               </div>
             </div>
             <pre className="file-preview-content">{preview.content}</pre>

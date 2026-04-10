@@ -491,9 +491,7 @@ html.transparency-active .input-dialog {
 }
 
 .terminal-panel.focused {
-  border: 2px solid var(--focus-border);
-  border-top: none;
-  box-shadow: inset 0 0 8px rgba(137, 180, 250, 0.15);
+  box-shadow: inset 0 0 0 1px rgba(137, 180, 250, 0.3);
 }
 
 .terminal-pane-title {
@@ -2496,12 +2494,21 @@ select.settings-input {
 .file-preview-overlay {
   position: fixed;
   top: 0;
-  right: 0;
   bottom: 0;
   z-index: 500;
   display: flex;
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
   outline: none;
+}
+
+.file-preview-overlay.right {
+  right: 0;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
+}
+
+.file-preview-overlay.left {
+  left: 0;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+  flex-direction: row-reverse;
 }
 
 .file-preview-resize {
@@ -2541,6 +2548,25 @@ select.settings-input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.file-preview-btn {
+  padding: 3px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.file-preview-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+}
+
+.file-preview-btn.close {
+  padding: 3px 6px;
 }
 
 .file-preview-content {
