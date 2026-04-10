@@ -696,8 +696,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   // Apply tab color or default color as terminal background tint via CSS overlay
   const title = useTerminalStore((s) => s.terminals.get(terminalId)?.title);
   const tabColor = useTerminalStore((s) => s.terminals.get(terminalId)?.tabColor);
+  const groupId = useTerminalStore((s) => s.terminals.get(terminalId)?.groupId);
+  const groupColor = useTerminalStore((s) => groupId ? s.tabGroups.get(groupId)?.color : undefined);
   const defaultTabColor = useTerminalStore((s) => (s.config as any)?.defaultTabColor);
-  const bgTint = tabColor || defaultTabColor;
+  const bgTint = tabColor || groupColor || defaultTabColor;
 
   const handleSearch = useCallback((query: string, backward?: boolean) => {
     if (!searchAddonRef.current || !query) return;
