@@ -274,7 +274,6 @@ const CopilotPanel: React.FC = () => {
     } else {
       store.openCopilotSession(session.id);
     }
-    store.toggleCopilotPanel();
   }, []);
 
   const handleKeyDown = useCallback(
