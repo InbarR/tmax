@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, powerMonitor, session, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme, powerMonitor, session, shell } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -674,6 +674,9 @@ process.on('uncaughtException', (error) => {
 
 app.whenReady().then(() => {
   try {
+    // Force dark title bar/frame regardless of Windows system theme
+    nativeTheme.themeSource = 'dark';
+
     // On macOS, a null menu creates default accelerators (Cmd+C/V/X) that
     // intercept events before the renderer. Use a minimal menu instead.
     if (process.platform === 'darwin') {
