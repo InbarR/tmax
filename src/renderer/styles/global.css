@@ -2534,17 +2534,20 @@ select.settings-input {
 .file-preview-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 6px 10px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+  min-height: 32px;
 }
 
 .file-preview-name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

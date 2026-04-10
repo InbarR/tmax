@@ -292,7 +292,7 @@ const FileExplorer: React.FC = () => {
           <div className="file-preview-sidebar">
             <div className="file-preview-header">
               <span className="file-preview-name">{preview.name}</span>
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                 <button className="file-preview-btn" onClick={() => openFileExternally(preview.path)} title="Open externally">&#8599;</button>
                 <button className="file-preview-btn" onClick={() => setPreviewSide((s) => s === 'right' ? 'left' : 'right')} title="Move to other side">{previewSide === 'right' ? '\u25C0' : '\u25B6'}</button>
                 <button className="file-preview-btn close" onClick={() => setPreview(null)} title="Close (Esc)">&#10005;</button>
