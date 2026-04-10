@@ -32,6 +32,7 @@ const FileExplorer: React.FC = () => {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; entry: FileEntry } | null>(null);
   const ctxRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<{ name: string; path: string; content: string } | null>(null);
+  const [previewWidth, setPreviewWidth] = useState(50); // percentage
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [resizing, setResizing] = useState(false);
   const filterRef = useRef<HTMLInputElement>(null);
@@ -258,7 +259,32 @@ const FileExplorer: React.FC = () => {
         {files.length === 0 && <div className="dir-panel-empty">No files</div>}
       </div>
       {preview && ReactDOM.createPortal(
-        <div className="file-preview-overlay" tabIndex={0} ref={(el) => el?.focus()} onKeyDown={(e) => { if (e.key === 'Escape') setPreview(null); }}>
+        <div
+          className="file-preview-overlay"
+          style={{ width: `${previewWidth}%` }}
+          tabIndex={0}
+          ref={(el) => el?.focus()}
+          onKeyDown={(e) => { if (e.key === 'Escape') setPreview(null); }}
+        >
+          <div
+            className="file-preview-resize"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              const startX = e.clientX;
+              const startWidth = previewWidth;
+              const handleMove = (me: MouseEvent) => {
+                const delta = startX - me.clientX;
+                const newWidth = Math.max(20, Math.min(80, startWidth + (delta / window.innerWidth) * 100));
+                setPreviewWidth(newWidth);
+              };
+              const handleUp = () => {
+                window.removeEventListener('mousemove', handleMove);
+                window.removeEventListener('mouseup', handleUp);
+              };
+              window.addEventListener('mousemove', handleMove);
+              window.addEventListener('mouseup', handleUp);
+            }}
+          />
           <div className="file-preview-sidebar">
             <div className="file-preview-header">
               <span className="file-preview-name">{preview.name}</span>

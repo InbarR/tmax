@@ -2498,10 +2498,22 @@ select.settings-input {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 50%;
   z-index: 500;
   display: flex;
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
+  outline: none;
+}
+
+.file-preview-resize {
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.file-preview-resize:hover {
+  background: var(--focus-border);
+  opacity: 0.5;
 }
 
 .file-preview-sidebar {
