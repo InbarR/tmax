@@ -99,27 +99,35 @@ export class PtyManager {
       cwd = homedir();
     }
 
+    // Build env with shell integration: emit OSC 7 after every prompt so the
+    // renderer can track the terminal's current working directory reliably.
     const baseEnv = sanitizeEnv(opts.env ?? (process.env as Record<string, string>));
+    const shellName = opts.shellPath.toLowerCase();
+    const shellEnv: Record<string, string> = { TERM_PROGRAM: 'tmax', COLORTERM: 'truecolor' };
+
+    if (shellName.includes('bash') || shellName.includes('zsh')) {
+      // Bash reads PROMPT_COMMAND from env natively; zsh honors it via most
+      // frameworks (oh-my-zsh, prezto, etc.). Setting it as an env var avoids
+      // writing visible text into the terminal.
+      shellEnv.PROMPT_COMMAND = 'printf "\\e]7;file:///%s\\a" "$(pwd)"';
+    }
+
     const ptyProcess = spawn(opts.shellPath, opts.args, {
       name: 'xterm-256color',
       cols: opts.cols,
       rows: opts.rows,
       cwd,
       useConpty: true,
-      env: { ...baseEnv, TERM_PROGRAM: 'tmax', COLORTERM: 'truecolor' },
+      env: { ...baseEnv, ...shellEnv },
     });
 
     this.ptys.set(opts.id, ptyProcess);
     this.stats.set(opts.id, { pid: ptyProcess.pid, writeCount: 0, lastWriteTime: 0, dataCount: 0, lastDataTime: 0, dataBytes: 0 });
     diagLog('pty:created', { id: opts.id, pid: ptyProcess.pid, shell: opts.shellPath, cwd });
 
-    // Inject shell integration: emit OSC 7 after every prompt so the renderer
-    // can track the terminal's current working directory reliably.
-    const shellName = opts.shellPath.toLowerCase();
     if (shellName.includes('pwsh') || shellName.includes('powershell')) {
       // PowerShell: append to the prompt function to emit OSC 7 (file URI)
       const psSnippet = [
-        // Wrap in a function to avoid polluting the prompt output
         '$__tmax_origPrompt = $function:prompt;',
         'function prompt { ',
         '  $p = $__tmax_origPrompt.Invoke();',
@@ -132,11 +140,6 @@ export class PtyManager {
       // Send as a single line + Enter, then clear screen to hide the init noise
       setTimeout(() => ptyProcess.write(psSnippet + '\r'), 200);
       setTimeout(() => ptyProcess.write('cls\r'), 400);
-    } else if (shellName.includes('bash') || shellName.includes('zsh')) {
-      // Bash/Zsh: use PROMPT_COMMAND / precmd to emit OSC 7 (file URI for cwd tracking)
-      const bashSnippet = 'PROMPT_COMMAND=\'printf "\\e]7;file:///%s\\a" "$(pwd)"\'' + '\r';
-      setTimeout(() => ptyProcess.write(bashSnippet), 200);
-      setTimeout(() => ptyProcess.write('clear\r'), 400);
     }
     // CMD: relies on prompt regex fallback (no hook mechanism)
 
