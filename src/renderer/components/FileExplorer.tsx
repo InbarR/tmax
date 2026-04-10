@@ -308,6 +308,24 @@ const FileExplorer: React.FC = () => {
           }}>
             Copy Path
           </button>
+          <div className="context-menu-separator" />
+          <button className="context-menu-item" onClick={() => {
+            // Open file/folder in a new tmax terminal
+            const dir = ctxMenu.entry.isDirectory ? ctxMenu.entry.path : ctxMenu.entry.path.replace(/[/\\][^/\\]+$/, '');
+            const store = useTerminalStore.getState();
+            store.createTerminal().then(() => {
+              // After creation, cd to the directory in the new terminal
+              const newId = store.focusedTerminalId;
+              if (newId) {
+                setTimeout(() => {
+                  window.terminalAPI.writePty(newId, `cd "${dir}"\r`);
+                }, 500);
+              }
+            });
+            setCtxMenu(null);
+          }}>
+            Open in Terminal
+          </button>
         </div>
       )}
     </div>
