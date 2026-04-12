@@ -647,9 +647,23 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     try {
       if (isFocused && !anyOverlayOpen && terminalRef.current) {
         terminalRef.current.focus();
+        // Immediately refit in case the container size changed (e.g. focus
+        // mode shows this pane at full size while it was previously hidden at
+        // its split-ratio size).  Using rAF so the DOM layout has settled.
+        if (fitAddonRef.current) {
+          requestAnimationFrame(() => {
+            try {
+              fitAddonRef.current?.fit();
+              if (terminalRef.current) {
+                const { cols, rows } = terminalRef.current;
+                window.terminalAPI.resizePty(terminalId, cols, rows);
+              }
+            } catch { /* terminal may be disposed */ }
+          });
+        }
       }
     } catch { /* terminal may be disposed */ }
-  }, [isFocused, anyOverlayOpen]);
+  }, [isFocused, anyOverlayOpen, terminalId]);
 
   // Re-focus xterm when the OS window regains focus (alt-tab back)
   useEffect(() => {
