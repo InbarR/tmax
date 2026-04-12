@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, clipboard } from 'electron';
 import { IPC } from '../shared/ipc-channels';
 import type { DiffMode, DiffResult, AnnotatedFile } from '../shared/diff-types';
+import type { RepoWorktrees } from '../shared/worktree-types';
 
 export interface PtyDiag {
   pid: number;
@@ -40,6 +41,8 @@ export interface TerminalAPI {
   getPtyDiag(id: string): Promise<PtyDiag | null>;
   diagLog(event: string, data?: Record<string, unknown>): void;
   getDiagLogPath(): Promise<string>;
+  // ── Git worktree ────────────────────────────────────────────────
+  listWorktrees(cwd: string): Promise<RepoWorktrees>;
   // ── Diff editor ──────────────────────────────────────────────────
   diffResolveGitRoot(cwd: string): Promise<string>;
   diffGetDiff(cwd: string, mode: DiffMode): Promise<DiffResult>;
@@ -294,6 +297,11 @@ const terminalAPI: TerminalAPI = {
     return () => {
       ipcRenderer.removeListener(IPC.VERSION_UPDATE_STATUS, listener);
     };
+  },
+
+  // ── Git worktree ──────────────────────────────────────────────────
+  listWorktrees(cwd: string) {
+    return ipcRenderer.invoke(IPC.GIT_LIST_WORKTREES, cwd);
   },
 
   // ── Diff editor ──────────────────────────────────────────────────

@@ -14,6 +14,7 @@ import { ClaudeCodeSessionWatcher } from './claude-code-session-watcher';
 import { VersionChecker } from './version-checker';
 import { initDiagLogger, getDiagLogPath, diagLog } from './diag-logger';
 import { GitDiffService, resolveGitRoot } from './git-diff-service';
+import { listWorktrees } from './git-worktree-service';
 import type { DiffMode } from '../shared/diff-types';
 
 // Handle Squirrel.Windows lifecycle events (install, update, uninstall)
@@ -417,6 +418,10 @@ function registerIpcHandlers(): void {
 
   // ── Diff editor IPC handlers ────────────────────────────────────────
   const diffService = new GitDiffService();
+
+  ipcMain.handle(IPC.GIT_LIST_WORKTREES, async (_event, cwd: string) => {
+    return listWorktrees(cwd);
+  });
 
   ipcMain.handle(IPC.DIFF_RESOLVE_GIT_ROOT, async (_event, cwd: string) => {
     return resolveGitRoot(cwd);

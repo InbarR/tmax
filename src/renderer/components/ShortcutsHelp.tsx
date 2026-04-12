@@ -33,6 +33,7 @@ const shortcuts = [
   { category: 'AI', items: [
     { key: 'Ctrl+Shift+I', action: 'Jump to prompt in terminal' },
     { key: 'Ctrl+Shift+C', action: 'AI Sessions panel' },
+    { key: 'Ctrl+Shift+T', action: 'Worktrees panel' },
   ]},
   { category: 'Other', items: [
     { key: 'Ctrl+Shift+U', action: 'Unfreeze terminal' },

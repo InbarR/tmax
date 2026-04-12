@@ -20,6 +20,7 @@ import Settings from './components/Settings';
 import CommandPalette from './components/CommandPalette';
 import DirPanel from './components/DirPanel';
 import CopilotPanel from './components/CopilotPanel';
+import WorktreePanel from './components/WorktreePanel';
 import DiffReview from './components/DiffReview';
 
 const App: React.FC = () => {
@@ -169,6 +170,7 @@ const App: React.FC = () => {
           <div className="main-area">
             <DirPanel />
             <CopilotPanel />
+            <WorktreePanel />
             <div className="layout-area">
               <TilingLayout />
               <FloatingLayer />

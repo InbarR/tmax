@@ -13,6 +13,7 @@ import type {
 } from './types';
 import type { CopilotSessionSummary } from '../../shared/copilot-types';
 import type { DiffMode } from '../../shared/diff-types';
+import type { RepoWorktrees } from '../../shared/worktree-types';
 
 // ── Tab color palette ────────────────────────────────────────────────
 
@@ -350,6 +351,10 @@ interface TerminalStore {
   diffReviewOpen: boolean;
   diffReviewTerminalId: TerminalId | null;
   diffReviewMode: DiffMode;
+  // Worktree panel state
+  showWorktreePanel: boolean;
+  worktreeRepos: RepoWorktrees[];
+  worktreeLoading: boolean;
 
   // Actions
   loadConfig: () => Promise<void>;
@@ -437,6 +442,9 @@ interface TerminalStore {
   openDiffReview: (terminalId: TerminalId) => void;
   closeDiffReview: () => void;
   setDiffReviewMode: (mode: DiffMode) => void;
+  // Worktree panel actions
+  toggleWorktreePanel: () => void;
+  loadWorktrees: () => Promise<void>;
 }
 
 // Cached session extras (layouts, etc.) so saveSession doesn't need async load
@@ -469,6 +477,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   diffReviewOpen: false,
   diffReviewTerminalId: null,
   diffReviewMode: 'unstaged' as DiffMode,
+  showWorktreePanel: false,
+  worktreeRepos: [] as RepoWorktrees[],
+  worktreeLoading: false,
   tabMenuTerminalId: null,
   favoriteDirs: [],
   recentDirs: [],
@@ -2098,5 +2109,46 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
   setDiffReviewMode: (mode: DiffMode) => {
     set({ diffReviewMode: mode });
+  },
+
+  // ── Worktree panel actions ────────────────────────────────────────
+  toggleWorktreePanel: () => {
+    const wasShowing = get().showWorktreePanel;
+    set({ showWorktreePanel: !wasShowing });
+    if (!wasShowing) {
+      // Load worktrees when opening the panel
+      get().loadWorktrees();
+    }
+  },
+
+  loadWorktrees: async () => {
+    const { favoriteDirs, recentDirs } = get();
+    const allDirs = [...new Set([...favoriteDirs, ...recentDirs])];
+    if (allDirs.length === 0) {
+      set({ worktreeRepos: [], worktreeLoading: false });
+      return;
+    }
+
+    set({ worktreeLoading: true });
+
+    const results = await Promise.allSettled(
+      allDirs.map((dir) => (window.terminalAPI as any).listWorktrees(dir)),
+    );
+
+    // Deduplicate by git root
+    const seenRoots = new Set<string>();
+    const repos: RepoWorktrees[] = [];
+    for (const result of results) {
+      if (result.status !== 'fulfilled') continue;
+      const repo = result.value as RepoWorktrees;
+      if (!repo.gitRoot || seenRoots.has(repo.gitRoot)) continue;
+      seenRoots.add(repo.gitRoot);
+      // Only include repos that have worktrees
+      if (repo.worktrees.length > 0) {
+        repos.push(repo);
+      }
+    }
+
+    set({ worktreeRepos: repos, worktreeLoading: false });
   },
 }));
