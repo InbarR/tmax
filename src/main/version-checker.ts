@@ -9,9 +9,12 @@ import https from 'node:https';
 
 const GITHUB_REPO = 'InbarR/tmax';
 const UPDATE_SERVER = 'https://update.electronjs.org';
-const GITHUB_RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+// Allow overriding for local testing: set TMAX_UPDATE_TEST_URL=http://localhost:9999
+const GITHUB_RELEASES_URL = process.env.TMAX_UPDATE_TEST_URL
+  ? `${process.env.TMAX_UPDATE_TEST_URL}/releases/latest`
+  : `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
-const INITIAL_DELAY_MS = 10_000; // 10s — avoid first-run lock issues
+const INITIAL_DELAY_MS = process.env.TMAX_UPDATE_TEST_URL ? 3_000 : 10_000;
 
 export type UpdateStatus = 'idle' | 'checking' | 'downloading' | 'downloaded' | 'available' | 'error';
 
@@ -59,6 +62,9 @@ export class VersionChecker {
   }
 
   start(): void {
+    if (process.env.TMAX_UPDATE_TEST_URL) {
+      console.log(`[update] TEST MODE: using ${process.env.TMAX_UPDATE_TEST_URL} instead of GitHub API`);
+    }
     if (this.supportsAutoUpdate) {
       this.setupAutoUpdater();
     } else if (process.platform === 'linux' && app.isPackaged) {
@@ -517,7 +523,8 @@ export class VersionChecker {
           const ws = fs.createWriteStream(destPath);
           res.pipe(ws);
           ws.on('finish', () => { ws.close(); resolve(); });
-          ws.on('error', reject);
+          ws.on('error', (err: Error) => { res.destroy(); reject(err); });
+          res.on('error', (err: Error) => { ws.destroy(); reject(err); });
         }).on('error', reject);
       };
       doRequest(url);
