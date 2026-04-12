@@ -27,7 +27,7 @@ type SessionProvider = 'copilot' | 'claude-code';
 
 function buildResumeCommand(config: AppConfig, provider: SessionProvider, sessionId: string): string {
   const cmd = provider === 'copilot'
-    ? (config.copilotCommand || 'agency copilot')
+    ? (config.copilotCommand || 'copilot')
     : (config.claudeCodeCommand || 'claude');
   return `${cmd} --resume ${sessionId}`;
 }
@@ -1146,6 +1146,19 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const newTerminals = new Map(terminals);
     newTerminals.set(id, updatedInstance);
 
+    // Also remove from preGridRoot so restoring from grid mode won't
+    // bring back a dormant terminal.
+    const { preGridRoot, viewMode, gridColumns } = get();
+    const newPreGridRoot = preGridRoot ? removeLeaf(preGridRoot, id) : null;
+
+    // In grid mode, rebuild the grid so remaining terminals fill equally.
+    if (viewMode === 'grid' && newRoot) {
+      const remainingIds = getLeafOrder(newRoot);
+      if (remainingIds.length > 0) {
+        newRoot = buildGridTree(remainingIds, gridColumns || undefined) || newRoot;
+      }
+    }
+
     // Move focus to another terminal if this one was focused
     let newFocus = focusedTerminalId;
     if (focusedTerminalId === id) {
@@ -1159,6 +1172,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       terminals: newTerminals,
       layout: { tilingRoot: newRoot, floatingPanels: newFloating },
       focusedTerminalId: newFocus,
+      preGridRoot: newPreGridRoot,
     });
     window.terminalAPI.diagLog('renderer:move-to-dormant', {
       id,
@@ -1480,13 +1494,20 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         gridTabIds: {},
       });
     } else {
-      // Focus → Grid: build grid from all terminals
+      // Focus → Grid: build grid from all non-dormant terminals
       const root = layout.tilingRoot;
       if (!root) {
         set({ viewMode: 'grid' });
         return;
       }
-      const ids = getLeafOrder(root);
+      const ids = getLeafOrder(root).filter((id) => {
+        const t = get().terminals.get(id);
+        return t && t.mode !== 'dormant';
+      });
+      if (ids.length === 0) {
+        set({ viewMode: 'grid' });
+        return;
+      }
       const gridRoot = buildGridTree(ids, gridColumns || undefined);
       set({
         viewMode: 'grid',
@@ -2066,7 +2087,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       if (!matched && !alreadyLinked && !current.aiSessionId && session.cwd) {
         const proc = current.lastProcess.toLowerCase();
         const titleLower = current.title.toLowerCase();
-        const isCopilotProc = (s: string) => s.includes('copilot') || s.includes('agency') || s.includes('frodo');
+        const isCopilotProc = (s: string) => s.includes('copilot');
         const isClaudeProc = (s: string) => s.includes('claude') || s === 'cc';
         let isMatchingProcess = false;
         if (sessionType === 'copilot') {

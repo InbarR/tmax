@@ -162,7 +162,7 @@ const defaultConfig: AppConfig = {
     fontFamily: 'CaskaydiaCove Nerd Font, CaskaydiaCove NF, Cascadia Code, Consolas, monospace',
     scrollback: 5000,
   },
-  copilotCommand: 'agency copilot',
+  copilotCommand: 'copilot',
   claudeCodeCommand: 'claude',
   backgroundMaterial: 'none',
   backgroundOpacity: 0.8,

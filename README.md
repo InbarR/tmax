@@ -241,10 +241,10 @@ The commands used to resume Copilot and Claude Code sessions are configurable in
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Copilot Command | `agency copilot` | Base command for Copilot sessions |
+| Copilot Command | `copilot` | Base command for Copilot sessions |
 | Claude Code Command | `claude` | Base command for Claude Code sessions |
 
-This lets you use custom aliases (e.g., `frodo` instead of `agency copilot`) or wrapper scripts. The configured command is invoked as `<command> --resume <sessionId>`.
+This lets you use custom aliases or wrapper scripts. The configured command is invoked as `<command> --resume <sessionId>`.
 
 ## License
 

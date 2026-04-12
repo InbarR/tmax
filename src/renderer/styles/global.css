@@ -978,23 +978,29 @@ html.transparency-active .input-dialog {
 }
 
 /* Hide all panes except the focused one — without unmounting TerminalPanel.
-   Use visibility (not display) so child elements can override it. */
+   Use visibility (not display) so child elements can override it.
+   All tiling-leaves are positioned absolute at full size so xterm is always
+   fitted to the full container — switching focus only toggles visibility,
+   avoiding the brief text-shrink caused by refitting from a split-ratio size. */
 .tiling-focus-mode {
   position: relative;
   width: 100%;
   height: 100%;
 }
 
-.tiling-focus-mode .split-container,
+.tiling-focus-mode .split-container {
+  visibility: hidden;
+}
+
 .tiling-focus-mode .tiling-leaf {
+  position: absolute;
+  inset: 0;
   visibility: hidden;
 }
 
 .tiling-focus-mode .tiling-leaf:has(.terminal-panel.focused) {
   visibility: visible;
   display: flex;
-  position: absolute;
-  inset: 0;
   z-index: 10;
 }
 
