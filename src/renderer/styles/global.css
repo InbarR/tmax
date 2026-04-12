@@ -1789,6 +1789,11 @@ body,
   width: 14px;
   color: var(--text-secondary);
   flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.wt-repo-header.expanded .wt-repo-chevron {
+  transform: rotate(0deg);
 }
 
 .wt-repo-name {
@@ -1801,59 +1806,159 @@ body,
   text-overflow: ellipsis;
 }
 
-.wt-repo-count {
-  font-size: 10px;
-  color: var(--text-secondary);
-  background: rgba(137, 180, 250, 0.1);
-  padding: 1px 5px;
-  border-radius: 8px;
-  flex-shrink: 0;
+.wt-repo-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.wt-repo-header:hover .wt-repo-actions {
+  opacity: 1;
 }
 
 .wt-worktree-list {
-  padding: 0 0 4px;
+  padding: 0 8px 8px 8px;
 }
 
 .wt-worktree-item {
-  display: flex;
-  flex-direction: column;
-  padding: 4px 8px 4px 26px;
-  cursor: pointer;
-  border-left: 2px solid transparent;
+  padding: 8px 10px;
+  margin-top: 4px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--accent-color, #89b4fa);
+  transition: border-color 0.2s ease;
 }
 
 .wt-worktree-item:hover {
-  background: rgba(137, 180, 250, 0.08);
-  border-left-color: var(--focus-border);
+  border-color: var(--focus-border);
 }
 
-.wt-worktree-info {
+.wt-worktree-header {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.wt-worktree-name {
-  font-size: 12px;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .wt-worktree-branch {
-  font-size: 10px;
   color: var(--accent-color, #89b4fa);
-  white-space: nowrap;
-  flex-shrink: 0;
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 12px;
 }
 
 .wt-worktree-path {
-  font-size: 10px;
   color: var(--text-secondary);
-  white-space: nowrap;
+  font-size: 10px;
+  margin-top: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wt-worktree-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.wt-action-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wt-action-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--focus-border);
+  background: rgba(137, 180, 250, 0.08);
+}
+
+.wt-action-danger:hover {
+  color: #e94560;
+  border-color: #e94560;
+  background: rgba(233, 69, 96, 0.08);
+}
+
+.wt-action-primary {
+  background: var(--accent-color, #89b4fa);
+  color: var(--bg-primary);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.wt-action-primary:hover {
+  opacity: 0.9;
+  background: var(--accent-color, #89b4fa);
+  color: var(--bg-primary);
+}
+
+/* Create Worktree Modal */
+.wt-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.wt-modal {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  width: 340px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.wt-modal h3 {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.wt-modal-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.wt-modal-input {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  margin-bottom: 12px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.wt-modal-input:focus {
+  border-color: var(--focus-border);
+}
+
+.wt-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 /* ===== Dir Picker ===== */

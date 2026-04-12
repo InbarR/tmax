@@ -43,6 +43,9 @@ export interface TerminalAPI {
   getDiagLogPath(): Promise<string>;
   // ── Git worktree ────────────────────────────────────────────────
   listWorktrees(cwd: string): Promise<RepoWorktrees>;
+  createWorktree(repoPath: string, branchName: string, baseBranch: string): Promise<{ success: boolean; worktreePath?: string; error?: string }>;
+  deleteWorktree(repoPath: string, worktreePath: string): Promise<{ success: boolean; error?: string }>;
+  getBranches(repoPath: string): Promise<string[]>;
   // ── Diff editor ──────────────────────────────────────────────────
   diffResolveGitRoot(cwd: string): Promise<string>;
   diffGetDiff(cwd: string, mode: DiffMode): Promise<DiffResult>;
@@ -302,6 +305,18 @@ const terminalAPI: TerminalAPI = {
   // ── Git worktree ──────────────────────────────────────────────────
   listWorktrees(cwd: string) {
     return ipcRenderer.invoke(IPC.GIT_LIST_WORKTREES, cwd);
+  },
+
+  createWorktree(repoPath: string, branchName: string, baseBranch: string) {
+    return ipcRenderer.invoke(IPC.GIT_CREATE_WORKTREE, repoPath, branchName, baseBranch);
+  },
+
+  deleteWorktree(repoPath: string, worktreePath: string) {
+    return ipcRenderer.invoke(IPC.GIT_DELETE_WORKTREE, repoPath, worktreePath);
+  },
+
+  getBranches(repoPath: string) {
+    return ipcRenderer.invoke(IPC.GIT_GET_BRANCHES, repoPath);
   },
 
   // ── Diff editor ──────────────────────────────────────────────────

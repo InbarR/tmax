@@ -14,7 +14,7 @@ import { ClaudeCodeSessionWatcher } from './claude-code-session-watcher';
 import { VersionChecker } from './version-checker';
 import { initDiagLogger, getDiagLogPath, diagLog } from './diag-logger';
 import { GitDiffService, resolveGitRoot } from './git-diff-service';
-import { listWorktrees } from './git-worktree-service';
+import { listWorktrees, createWorktree, deleteWorktree, getBranches } from './git-worktree-service';
 import type { DiffMode } from '../shared/diff-types';
 
 // Handle Squirrel.Windows lifecycle events (install, update, uninstall)
@@ -421,6 +421,18 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.GIT_LIST_WORKTREES, async (_event, cwd: string) => {
     return listWorktrees(cwd);
+  });
+
+  ipcMain.handle(IPC.GIT_CREATE_WORKTREE, async (_event, repoPath: string, branchName: string, baseBranch: string) => {
+    return createWorktree(repoPath, branchName, baseBranch);
+  });
+
+  ipcMain.handle(IPC.GIT_DELETE_WORKTREE, async (_event, repoPath: string, worktreePath: string) => {
+    return deleteWorktree(repoPath, worktreePath);
+  });
+
+  ipcMain.handle(IPC.GIT_GET_BRANCHES, async (_event, repoPath: string) => {
+    return getBranches(repoPath);
   });
 
   ipcMain.handle(IPC.DIFF_RESOLVE_GIT_ROOT, async (_event, cwd: string) => {

@@ -27,15 +27,27 @@ async function git(cwd: string, ...args: string[]): Promise<string> {
  *   branch refs/heads/feature
  *   locked
  */
-function parseWorktreeOutput(output: string): WorktreeInfo[] {
+function parseWorktreeOutput(output: string, gitRoot: string): WorktreeInfo[] {
   const worktrees: WorktreeInfo[] = [];
   let current: Partial<WorktreeInfo> | null = null;
+  let isFirst = true;
+
+  const pushEntry = () => {
+    if (!current?.path) return;
+    // First entry from `git worktree list` is always the main worktree
+    const isMainWorktree = isFirst ||
+      current.path!.toLowerCase() === gitRoot.toLowerCase();
+    isFirst = false;
+    current.isWorktree = !isMainWorktree;
+    worktrees.push(current as WorktreeInfo);
+    current = null;
+  };
 
   for (const line of output.split('\n')) {
     const trimmed = line.trim();
 
     if (trimmed.startsWith('worktree ')) {
-      if (current?.path) worktrees.push(current as WorktreeInfo);
+      pushEntry();
       current = { path: trimmed.slice('worktree '.length).replace(/\//g, path.sep) };
     } else if (trimmed.startsWith('HEAD ') && current) {
       current.head = trimmed.slice('HEAD '.length);
@@ -51,10 +63,12 @@ function parseWorktreeOutput(output: string): WorktreeInfo[] {
       current.locked = true;
     } else if (trimmed.startsWith('prunable') && current) {
       current.prunable = true;
+    } else if (trimmed === '' && current) {
+      pushEntry();
     }
   }
 
-  if (current?.path) worktrees.push(current as WorktreeInfo);
+  pushEntry();
   return worktrees;
 }
 
@@ -68,14 +82,66 @@ export async function listWorktrees(cwd: string): Promise<RepoWorktrees> {
     const output = await git(root, 'worktree', 'list', '--porcelain');
     return {
       gitRoot: root,
-      worktrees: parseWorktreeOutput(output),
+      worktrees: parseWorktreeOutput(output, root),
+      isExpanded: true,
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    // Not a git repo — return empty
     if (msg.includes('not a git repository') || msg.includes('fatal:')) {
-      return { gitRoot: cwd, worktrees: [], error: 'Not a git repository' };
+      return { gitRoot: cwd, worktrees: [], isExpanded: true, error: 'Not a git repository' };
     }
-    return { gitRoot: cwd, worktrees: [], error: msg };
+    return { gitRoot: cwd, worktrees: [], isExpanded: true, error: msg };
+  }
+}
+
+/**
+ * Create a new worktree with a new branch.
+ * Places the worktree as a sibling directory with branch-name suffix.
+ */
+export async function createWorktree(
+  repoPath: string,
+  branchName: string,
+  baseBranch: string,
+): Promise<{ success: boolean; worktreePath?: string; error?: string }> {
+  try {
+    const repoName = path.basename(repoPath);
+    const parentDir = path.dirname(repoPath);
+    const safeBranchName = branchName.replace(/\//g, '-');
+    const worktreePath = path.join(parentDir, `${repoName}-${safeBranchName}`);
+
+    await git(repoPath, 'worktree', 'add', '-b', branchName, worktreePath, baseBranch);
+    return { success: true, worktreePath };
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * Remove a linked worktree.
+ */
+export async function deleteWorktree(
+  repoPath: string,
+  worktreePath: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await git(repoPath, 'worktree', 'remove', worktreePath, '--force');
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * Get list of local branches for a repository.
+ */
+export async function getBranches(repoPath: string): Promise<string[]> {
+  try {
+    const output = await git(repoPath, 'branch');
+    return output
+      .split('\n')
+      .map((b) => b.trim().replace(/^\* /, ''))
+      .filter((b) => b.length > 0);
+  } catch {
+    return ['main', 'master'];
   }
 }

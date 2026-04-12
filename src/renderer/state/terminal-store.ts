@@ -445,6 +445,8 @@ interface TerminalStore {
   // Worktree panel actions
   toggleWorktreePanel: () => void;
   loadWorktrees: () => Promise<void>;
+  createWorktree: (repoPath: string, branchName: string, baseBranch: string) => Promise<{ success: boolean; error?: string }>;
+  deleteWorktree: (repoPath: string, worktreePath: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 // Cached session extras (layouts, etc.) so saveSession doesn't need async load
@@ -2116,7 +2118,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const wasShowing = get().showWorktreePanel;
     set({ showWorktreePanel: !wasShowing });
     if (!wasShowing) {
-      // Load worktrees when opening the panel
       get().loadWorktrees();
     }
   },
@@ -2135,7 +2136,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       allDirs.map((dir) => (window.terminalAPI as any).listWorktrees(dir)),
     );
 
-    // Deduplicate by git root
+    // Deduplicate by git root, preserving existing expand state
+    const oldRepos = get().worktreeRepos;
+    const oldExpandState = new Map(oldRepos.map((r) => [r.gitRoot, r.isExpanded]));
     const seenRoots = new Set<string>();
     const repos: RepoWorktrees[] = [];
     for (const result of results) {
@@ -2143,12 +2146,30 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       const repo = result.value as RepoWorktrees;
       if (!repo.gitRoot || seenRoots.has(repo.gitRoot)) continue;
       seenRoots.add(repo.gitRoot);
-      // Only include repos that have worktrees
       if (repo.worktrees.length > 0) {
+        // Preserve expand state from previous load
+        const prevExpanded = oldExpandState.get(repo.gitRoot);
+        repo.isExpanded = prevExpanded !== undefined ? prevExpanded : true;
         repos.push(repo);
       }
     }
 
     set({ worktreeRepos: repos, worktreeLoading: false });
+  },
+
+  createWorktree: async (repoPath: string, branchName: string, baseBranch: string) => {
+    const result = await (window.terminalAPI as any).createWorktree(repoPath, branchName, baseBranch);
+    if (result.success) {
+      await get().loadWorktrees();
+    }
+    return result;
+  },
+
+  deleteWorktree: async (repoPath: string, worktreePath: string) => {
+    const result = await (window.terminalAPI as any).deleteWorktree(repoPath, worktreePath);
+    if (result.success) {
+      await get().loadWorktrees();
+    }
+    return result;
   },
 }));

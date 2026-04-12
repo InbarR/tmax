@@ -44,6 +44,9 @@ export const IPC = {
   DIAG_GET_LOG_PATH: 'diag:getLogPath',
   // ── Git worktree ────────────────────────────────────────────────────
   GIT_LIST_WORKTREES: 'git:listWorktrees',
+  GIT_CREATE_WORKTREE: 'git:createWorktree',
+  GIT_DELETE_WORKTREE: 'git:deleteWorktree',
+  GIT_GET_BRANCHES: 'git:getBranches',
   // ── Diff editor ────────────────────────────────────────────────────
   DIFF_RESOLVE_GIT_ROOT: 'diff:resolveGitRoot',
   DIFF_GET_CODE_CHANGES: 'diff:getCodeChanges',
