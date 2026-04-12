@@ -131,6 +131,13 @@ const StatusBar: React.FC = () => {
           </button>
           <button
             className="status-mode-btn"
+            onClick={() => useTerminalStore.getState().toggleWorktreePanel()}
+            title="Worktrees (Ctrl+Shift+T)"
+          >
+            &#127807; Trees
+          </button>
+          <button
+            className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleCopilotPanel()}
             title="AI Sessions (Ctrl+Shift+C)"
           >
