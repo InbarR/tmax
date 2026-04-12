@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 import type { RepoWorktrees, WorktreeInfo } from '../../shared/worktree-types';
 
@@ -20,6 +20,15 @@ const WorktreePanel: React.FC = () => {
   const [createModal, setCreateModal] = useState<CreateWorktreeModal | null>(null);
   const [newBranchName, setNewBranchName] = useState('');
   const [baseBranch, setBaseBranch] = useState('');
+  const activeResizeHandlersRef = useRef<{ move: ((e: MouseEvent) => void) | null; up: (() => void) | null }>({ move: null, up: null });
+
+  useEffect(() => {
+    return () => {
+      const { move, up } = activeResizeHandlersRef.current;
+      if (move) window.removeEventListener('mousemove', move);
+      if (up) window.removeEventListener('mouseup', up);
+    };
+  }, []);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -36,18 +45,20 @@ const WorktreePanel: React.FC = () => {
       setResizing(false);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      activeResizeHandlersRef.current = { move: null, up: null };
     };
 
+    activeResizeHandlersRef.current = { move: handleMouseMove, up: handleMouseUp };
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
   }, [width]);
 
   const toggleRepo = useCallback((gitRoot: string) => {
-    const store = useTerminalStore.getState();
-    const updated = store.worktreeRepos.map((r) =>
-      r.gitRoot === gitRoot ? { ...r, isExpanded: !r.isExpanded } : r,
-    );
-    useTerminalStore.setState({ worktreeRepos: updated });
+    useTerminalStore.setState((state) => ({
+      worktreeRepos: state.worktreeRepos.map((r) =>
+        r.gitRoot === gitRoot ? { ...r, isExpanded: !r.isExpanded } : r,
+      ),
+    }));
   }, []);
 
   const cdToWorktree = useCallback((wtPath: string) => {
@@ -59,10 +70,14 @@ const WorktreePanel: React.FC = () => {
   }, []);
 
   const showCreateWorktree = useCallback(async (repoPath: string) => {
-    const branches = await (window.terminalAPI as any).getBranches(repoPath);
-    setCreateModal({ repoPath, branches });
-    setNewBranchName('');
-    setBaseBranch(branches[0] || 'main');
+    try {
+      const branches = await window.terminalAPI.getBranches(repoPath);
+      setCreateModal({ repoPath, branches });
+      setNewBranchName('');
+      setBaseBranch(branches[0] || 'main');
+    } catch (error) {
+      alert('Error loading branches: ' + (error instanceof Error ? error.message : String(error)));
+    }
   }, []);
 
   const handleCreateWorktree = useCallback(async () => {
@@ -110,12 +125,15 @@ const WorktreePanel: React.FC = () => {
             className="wt-panel-refresh"
             onClick={() => useTerminalStore.getState().loadWorktrees()}
             title="Refresh worktrees"
+            aria-label="Refresh worktrees"
           >
             &#x21bb;
           </button>
           <button
             className="wt-panel-close"
             onClick={() => useTerminalStore.getState().toggleWorktreePanel()}
+            title="Close worktree panel"
+            aria-label="Close worktree panel"
           >
             &#10005;
           </button>
@@ -148,6 +166,7 @@ const WorktreePanel: React.FC = () => {
                   className="wt-action-btn"
                   onClick={() => showCreateWorktree(repo.gitRoot)}
                   title="New Worktree"
+                  aria-label="New Worktree"
                 >
                   🌿
                 </button>
@@ -156,6 +175,9 @@ const WorktreePanel: React.FC = () => {
 
             {repo.isExpanded && (
               <div className="wt-worktree-list">
+                {repo.error && repo.worktrees.length === 0 && (
+                  <div className="wt-panel-empty wt-repo-error-msg">⚠ {repo.error}</div>
+                )}
                 {repo.worktrees.map((wt) => (
                   <div key={wt.path} className="wt-worktree-item" title={wt.path}>
                     <div className="wt-worktree-header">
@@ -176,6 +198,7 @@ const WorktreePanel: React.FC = () => {
                         className="wt-action-btn"
                         onClick={() => openFolder(wt.path)}
                         title="Open in Explorer"
+                        aria-label="Open in Explorer"
                       >
                         📂
                       </button>
@@ -184,6 +207,7 @@ const WorktreePanel: React.FC = () => {
                           className="wt-action-btn wt-action-danger"
                           onClick={() => handleDeleteWorktree(repo.gitRoot, wt.path)}
                           title="Delete Worktree"
+                          aria-label="Delete Worktree"
                         >
                           🗑
                         </button>
@@ -200,7 +224,7 @@ const WorktreePanel: React.FC = () => {
       {/* Create Worktree Modal */}
       {createModal && (
         <div className="wt-modal-overlay" onClick={() => setCreateModal(null)}>
-          <div className="wt-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="wt-modal" role="dialog" aria-modal="true" aria-label="Create Worktree" onClick={(e) => e.stopPropagation()}>
             <h3>Create Worktree</h3>
             <label className="wt-modal-label">Branch Name</label>
             <input

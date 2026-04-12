@@ -87,7 +87,7 @@ export async function listWorktrees(cwd: string): Promise<RepoWorktrees> {
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('not a git repository') || msg.includes('fatal:')) {
+    if (msg.includes('not a git repository')) {
       return { gitRoot: cwd, worktrees: [], isExpanded: true, error: 'Not a git repository' };
     }
     return { gitRoot: cwd, worktrees: [], isExpanded: true, error: msg };
@@ -106,13 +106,27 @@ export async function createWorktree(
   try {
     const repoName = path.basename(repoPath);
     const parentDir = path.dirname(repoPath);
-    const safeBranchName = branchName.replace(/\//g, '-');
+    const safeBranchName = branchName
+      .replace(/\//g, '-')
+      .replace(/[^a-zA-Z0-9.\-_@]/g, '-')
+      .replace(/\.\.+/g, '-')
+      .replace(/^[-\.]+|[-\.]+$/g, '');
+
+    if (!safeBranchName) {
+      return { success: false, error: 'Branch name is invalid after sanitization' };
+    }
+
     const worktreePath = path.join(parentDir, `${repoName}-${safeBranchName}`);
+    const parent = path.resolve(parentDir);
+    const rel = path.relative(parent, path.resolve(worktreePath));
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      return { success: false, error: 'Invalid branch name: would escape parent directory' };
+    }
 
     await git(repoPath, 'worktree', 'add', '-b', branchName, worktreePath, baseBranch);
     return { success: true, worktreePath };
   } catch (err: unknown) {
-    return { success: false, error: (err as Error).message };
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
@@ -127,7 +141,7 @@ export async function deleteWorktree(
     await git(repoPath, 'worktree', 'remove', worktreePath, '--force');
     return { success: true };
   } catch (err: unknown) {
-    return { success: false, error: (err as Error).message };
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 

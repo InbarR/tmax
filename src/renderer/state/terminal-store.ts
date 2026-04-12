@@ -659,6 +659,9 @@ interface TerminalStore {
 // Cached session extras (layouts, etc.) so saveSession doesn't need async load
 let _sessionExtras: Record<string, unknown> = {};
 
+// Monotonically increasing counter to detect stale loadWorktrees() calls
+let _loadWorktreesSeq = 0;
+
 // ── Store implementation ─────────────────────────────────────────────
 
 export const useTerminalStore = create<TerminalStore>((set, get) => ({
@@ -2384,6 +2387,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   loadWorktrees: async () => {
+    const seq = ++_loadWorktreesSeq;
     const { favoriteDirs, recentDirs } = get();
     const allDirs = [...new Set([...favoriteDirs, ...recentDirs])];
     if (allDirs.length === 0) {
@@ -2394,8 +2398,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set({ worktreeLoading: true });
 
     const results = await Promise.allSettled(
-      allDirs.map((dir) => (window.terminalAPI as any).listWorktrees(dir)),
+      allDirs.map((dir) => window.terminalAPI.listWorktrees(dir)),
     );
+
+    if (seq !== _loadWorktreesSeq) return;
 
     // Deduplicate by git root, preserving existing expand state
     const oldRepos = get().worktreeRepos;
@@ -2407,8 +2413,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       const repo = result.value as RepoWorktrees;
       if (!repo.gitRoot || seenRoots.has(repo.gitRoot)) continue;
       seenRoots.add(repo.gitRoot);
-      if (repo.worktrees.length > 0) {
-        // Preserve expand state from previous load
+      // Include repos with worktrees, or repos that encountered a real error (not just non-git dirs)
+      if (repo.worktrees.length > 0 || (repo.error && repo.error !== 'Not a git repository')) {
         const prevExpanded = oldExpandState.get(repo.gitRoot);
         repo.isExpanded = prevExpanded !== undefined ? prevExpanded : true;
         repos.push(repo);
@@ -2419,7 +2425,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   createWorktree: async (repoPath: string, branchName: string, baseBranch: string) => {
-    const result = await (window.terminalAPI as any).createWorktree(repoPath, branchName, baseBranch);
+    const result = await window.terminalAPI.createWorktree(repoPath, branchName, baseBranch);
     if (result.success) {
       await get().loadWorktrees();
     }
@@ -2427,7 +2433,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   deleteWorktree: async (repoPath: string, worktreePath: string) => {
-    const result = await (window.terminalAPI as any).deleteWorktree(repoPath, worktreePath);
+    const result = await window.terminalAPI.deleteWorktree(repoPath, worktreePath);
     if (result.success) {
       await get().loadWorktrees();
     }
