@@ -20,6 +20,7 @@ export interface TerminalAPI {
     env?: Record<string, string>;
     cols: number;
     rows: number;
+    wslDistro?: string;
   }): Promise<{ id: string; pid: number }>;
   writePty(id: string, data: string): void;
   resizePty(id: string, cols: number, rows: number): Promise<void>;
@@ -49,7 +50,8 @@ export interface TerminalAPI {
   diffGetDiff(cwd: string, mode: DiffMode): Promise<DiffResult>;
   diffGetAnnotatedFile(cwd: string, filePath: string, mode: DiffMode): Promise<AnnotatedFile>;
   // ── File explorer ────────────────────────────────────────────────
-  fileList(dirPath: string): Promise<{ name: string; isDirectory: boolean; path: string }[]>;
+  fileList(dirPath: string, wslDistro?: string): Promise<{ name: string; isDirectory: boolean; path: string }[]>;
+  fileRead(filePath: string, wslDistro?: string): Promise<string | null>;
 }
 
 const terminalAPI: TerminalAPI = {
@@ -329,8 +331,12 @@ const terminalAPI: TerminalAPI = {
   },
 
   // ── File explorer ──────────────────────────────────────────────
-  fileList(dirPath: string) {
-    return ipcRenderer.invoke(IPC.FILE_LIST, dirPath);
+  fileList(dirPath: string, wslDistro?: string) {
+    return ipcRenderer.invoke(IPC.FILE_LIST, dirPath, wslDistro);
+  },
+
+  fileRead(filePath: string, wslDistro?: string) {
+    return ipcRenderer.invoke(IPC.FILE_READ, filePath, wslDistro);
   },
 
 };

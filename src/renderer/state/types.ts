@@ -58,6 +58,8 @@ export interface TerminalInstance {
   aiSessionId?: string;
   aiAutoTitle?: boolean;
   groupId?: string;
+  wsl?: boolean;
+  wslDistro?: string;
 }
 
 export interface TabGroup {

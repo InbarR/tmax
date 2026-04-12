@@ -39,7 +39,6 @@ const MAC_SHIFT_MAP: Record<string, string> = {
 };
 
 function matchesCombo(event: KeyboardEvent, combo: KeyCombo): boolean {
-  // event.key for arrows is "ArrowRight" etc, normalize both sides
   const eventKey = event.key.toLowerCase();
   // On macOS, Cmd (metaKey) is the primary app modifier instead of Ctrl
   if (isMac) {

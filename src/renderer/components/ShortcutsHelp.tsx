@@ -18,12 +18,12 @@ const shortcuts = [
   ]},
   { category: 'Navigation', items: [
     { key: 'Shift+Arrow', action: 'Move focus between panes' },
-    { key: 'Ctrl+Shift+Arrow', action: 'Move/swap terminal in direction' },
+    { key: 'Ctrl+Shift+Xrrow', action: 'Move/swap terminal in direction' },
   ]},
   { category: 'Layout', items: [
     { key: 'Ctrl+Alt+Arrow', action: 'Split in direction' },
     { key: 'Ctrl+Shift+F', action: 'Toggle float / dock' },
-    { key: 'Ctrl+Shift+Alt+Arrow', action: 'Resize pane' },
+    { key: 'Ctrl+Shift+Xlt+Arrow', action: 'Resize pane' },
     { key: 'Ctrl+Shift+E', action: 'Equalize all pane sizes' },
   ]},
   { category: 'Zoom', items: [

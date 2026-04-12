@@ -307,11 +307,14 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
           <button className="context-menu-item" onClick={() => setShowGroupMenu((v) => !v)}>
             {terminal?.groupId ? 'Change Group' : 'Add to Group'} &#9656;
           </button>
-          {showGroupMenu && (
+          {showGroupMenu && (() => {
+            // Apply group actions to all selected tabs, or just the right-clicked one
+            const targetIds = selectedAtOpen.length >= 2 ? selectedAtOpen : [position.terminalId];
+            return (
             <div className="context-menu-sub">
               {Array.from(tabGroups.values()).map((g) => (
                 <button key={g.id} className={`context-menu-item sub${terminal?.groupId === g.id ? ' active-check' : ''}`} onClick={() => {
-                  store().addToGroup(position.terminalId, g.id);
+                  for (const id of targetIds) store().addToGroup(id, g.id);
                   onClose();
                 }}>
                   <span className="color-dot" style={{ background: g.color, width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 6 }} />
@@ -319,9 +322,14 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
                 </button>
               ))}
               {terminal?.groupId && (
-                <button className="context-menu-item" onClick={() => { store().removeFromGroup(position.terminalId); onClose(); }}>
-                  Remove from Group
-                </button>
+                <>
+                  <button className="context-menu-item" onClick={() => { for (const id of targetIds) store().removeFromGroup(id); onClose(); }}>
+                    Remove from Group
+                  </button>
+                  <button className="context-menu-item" onClick={() => { store().deleteTabGroup(terminal.groupId!); onClose(); }}>
+                    Ungroup All
+                  </button>
+                </>
               )}
               <div className="context-menu-separator" />
               <div className="context-menu-inline-input">
@@ -337,7 +345,7 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
                       const colors = ['#f38ba8', '#a6e3a1', '#89b4fa', '#f9e2af', '#cba6f7', '#fab387'];
                       const color = colors[tabGroups.size % colors.length];
                       const groupId = store().createTabGroup(newGroupName.trim(), color);
-                      store().addToGroup(position.terminalId, groupId);
+                      for (const id of targetIds) store().addToGroup(id, groupId);
                       onClose();
                     }
                   }}
@@ -345,7 +353,8 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
                 />
               </div>
             </div>
-          )}
+            );
+          })()}
           <div className="context-menu-label">Tab Bar Position</div>
           {(['top', 'bottom', 'left', 'right'] as const).map((pos) => (
             <button key={pos} className={`context-menu-item sub${store().tabBarPosition === pos ? ' active-check' : ''}`} onClick={() => {

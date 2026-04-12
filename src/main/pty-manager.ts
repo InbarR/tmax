@@ -105,10 +105,11 @@ export class PtyManager {
     const shellName = opts.shellPath.toLowerCase();
     const shellEnv: Record<string, string> = { TERM_PROGRAM: 'tmax', COLORTERM: 'truecolor' };
 
-    if (shellName.includes('bash') || shellName.includes('zsh')) {
-      // Bash reads PROMPT_COMMAND from env natively; zsh honors it via most
-      // frameworks (oh-my-zsh, prezto, etc.). Setting it as an env var avoids
-      // writing visible text into the terminal.
+    // Set PROMPT_COMMAND via env var for native bash/zsh (not WSL — shell init takes longer).
+    // Bash reads PROMPT_COMMAND from env natively; zsh honors it via most
+    // frameworks (oh-my-zsh, prezto, etc.). Setting it as an env var avoids
+    // writing visible text into the terminal.
+    if (!shellName.includes('wsl') && (shellName.includes('bash') || shellName.includes('zsh'))) {
       shellEnv.PROMPT_COMMAND = 'printf "\\e]7;file:///%s\\a" "$(pwd)"';
     }
 
@@ -125,6 +126,7 @@ export class PtyManager {
     this.stats.set(opts.id, { pid: ptyProcess.pid, writeCount: 0, lastWriteTime: 0, dataCount: 0, lastDataTime: 0, dataBytes: 0 });
     diagLog('pty:created', { id: opts.id, pid: ptyProcess.pid, shell: opts.shellPath, cwd });
 
+    // Inject shell integration for PowerShell (needs to write to terminal)
     if (shellName.includes('pwsh') || shellName.includes('powershell')) {
       // PowerShell: append to the prompt function to emit OSC 7 (file URI)
       const psSnippet = [
