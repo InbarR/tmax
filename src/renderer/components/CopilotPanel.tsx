@@ -426,7 +426,7 @@ const CopilotPanel: React.FC = () => {
             <button
               className={`ai-filter-button${filterTab !== 'all' ? ' has-filter' : ''}`}
               onClick={() => setShowFilterDropdown((v) => !v)}
-              title={`Filter: ${filterTab === 'all' ? 'All providers' : PROVIDER_LABEL[filterTab as SessionProvider] || filterTab}`}
+              data-tooltip={`Filter by provider: ${filterTab === 'all' ? 'All' : PROVIDER_LABEL[filterTab as SessionProvider] || filterTab}`}
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="1" y1="3" x2="15" y2="3"/><line x1="3" y1="8" x2="13" y2="8"/><line x1="5.5" y1="13" x2="10.5" y2="13"/></svg>
               {filterTab !== 'all' && <span className="ai-filter-badge" />}
@@ -461,13 +461,13 @@ const CopilotPanel: React.FC = () => {
           <button
             className={`ai-session-tab${showRunningOnly ? ' active' : ''}`}
             onClick={() => setShowRunningOnly((v) => !v)}
-            title="Show only running sessions"
+            data-tooltip="Show only active/running sessions"
             style={{ fontSize: '10px', padding: '1px 6px' }}
           >
             Running
           </button>
-          <button className="dir-panel-close" onClick={handleRefresh} title="Refresh">&#8635;</button>
-          <button className="dir-panel-close" onClick={() => useTerminalStore.getState().toggleCopilotPanel()}>&#10005;</button>
+          <button className="dir-panel-close" onClick={handleRefresh} data-tooltip="Refresh sessions">&#8635;</button>
+          <button className="dir-panel-close" onClick={() => useTerminalStore.getState().toggleCopilotPanel()} data-tooltip="Close sessions panel">&#10005;</button>
         </div>
       </div>
 
