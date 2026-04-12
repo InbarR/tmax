@@ -57,6 +57,16 @@ export interface TerminalInstance {
   startupCommandSent?: boolean;
   aiSessionId?: string;
   aiAutoTitle?: boolean;
+  groupId?: string;
+  wsl?: boolean;
+  wslDistro?: string;
+}
+
+export interface TabGroup {
+  id: string;
+  name: string;
+  color: string;
+  collapsed: boolean;
 }
 
 // ── Configuration ────────────────────────────────────────────────────
@@ -91,6 +101,8 @@ export interface TerminalConfig {
   cursorBlink?: boolean;
 }
 
+export type BackgroundMaterial = 'none' | 'auto' | 'mica' | 'acrylic' | 'tabbed';
+
 export interface AppConfig {
   shells: ShellProfile[];
   defaultShellId: string;
@@ -100,6 +112,8 @@ export interface AppConfig {
   copilotCommand?: string;
   claudeCodeCommand?: string;
   tabBarPosition?: 'top' | 'bottom' | 'left' | 'right';
+  backgroundMaterial?: BackgroundMaterial;
+  backgroundOpacity?: number; // 0.0–1.0, default 0.8
 }
 
 // ── Drag & drop ──────────────────────────────────────────────────────

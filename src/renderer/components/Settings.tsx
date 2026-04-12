@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
+import { isMac, formatKeyForPlatform } from '../utils/platform';
 
-type Tab = 'terminal' | 'keybindings' | 'shells' | 'theme';
+type Tab = 'terminal' | 'keybindings' | 'shells' | 'theme' | 'appearance';
 
 const Settings: React.FC = () => {
   const show = useTerminalStore((s) => s.showSettings);
@@ -14,7 +15,7 @@ const Settings: React.FC = () => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        useTerminalStore.getState().toggleSettings();
+        useTerminalStore.getState().closeSettings();
       }
     };
     document.addEventListener('keydown', handleKey, true);
@@ -23,17 +24,17 @@ const Settings: React.FC = () => {
 
   if (!show || !config) return null;
 
-  const close = () => useTerminalStore.getState().toggleSettings();
+  const close = () => useTerminalStore.getState().closeSettings();
 
   return (
-    <div className="settings-backdrop" onClick={close}>
-      <div className="settings-dialog" onClick={(e) => e.stopPropagation()}>
+    <div className="settings-backdrop" onMouseDown={close}>
+      <div className="settings-dialog" onMouseDown={(e) => e.stopPropagation()}>
         <div className="settings-header">
           <span>Settings</span>
           <button className="shortcuts-close" onClick={close}>&#10005;</button>
         </div>
         <div className="settings-tabs">
-          {(['terminal', 'keybindings', 'shells', 'theme'] as Tab[]).map((t) => (
+          {(['terminal', 'keybindings', 'shells', 'theme', 'appearance'] as Tab[]).map((t) => (
             <button key={t} className={`settings-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
               {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
@@ -44,6 +45,7 @@ const Settings: React.FC = () => {
           {tab === 'keybindings' && <KeybindingsSettings />}
           {tab === 'shells' && <ShellsSettings />}
           {tab === 'theme' && <ThemeSettings />}
+          {tab === 'appearance' && <AppearanceSettings />}
         </div>
       </div>
     </div>
@@ -52,25 +54,53 @@ const Settings: React.FC = () => {
 
 // ── Terminal Settings ──────────────────────────────────────────────
 
+const FALLBACK_FONTS = [
+  'Cascadia Code', 'Cascadia Mono', 'Consolas', 'Courier New', 'Lucida Console',
+];
+
+function useAvailableFonts(): string[] {
+  const [available, setAvailable] = useState<string[]>([]);
+  useEffect(() => {
+    (async () => {
+      // Get all system fonts from the main process
+      let allFonts: string[];
+      try {
+        allFonts = await (window.terminalAPI as any).getSystemFonts();
+      } catch {
+        allFonts = [];
+      }
+      if (!allFonts || allFonts.length === 0) {
+        setAvailable(FALLBACK_FONTS);
+        return;
+      }
+
+      // Filter to monospace fonts using canvas measurement:
+      // A monospace font renders 'i' and 'W' at the same width.
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { setAvailable(FALLBACK_FONTS); return; }
+
+      const mono: string[] = [];
+      for (const font of allFonts) {
+        ctx.font = `16px "${font}"`;
+        const wi = ctx.measureText('iiiiii').width;
+        const wW = ctx.measureText('WWWWWW').width;
+        if (Math.abs(wi - wW) < 0.5) {
+          mono.push(font);
+        }
+      }
+      setAvailable(mono.length > 0 ? mono : FALLBACK_FONTS);
+    })();
+  }, []);
+  return available;
+}
+
 const TerminalSettings: React.FC = () => {
   const config = useTerminalStore((s) => s.config)!;
-  const fontSize = useTerminalStore((s) => s.fontSize);
   const update = useTerminalStore((s) => s.updateConfig);
-
-  const applyDefaultColor = (color: string) => {
-    update({ defaultTabColor: color } as any);
-  };
 
   return (
     <div className="settings-section">
-      <SettingRow label="Font Size" description="Terminal font size in pixels">
-        <input type="number" className="settings-input small" value={config.terminal.fontSize}
-          onChange={(e) => update({ terminal: { ...config.terminal, fontSize: parseInt(e.target.value) || 14 } })} />
-      </SettingRow>
-      <SettingRow label="Font Family" description="CSS font family string">
-        <input type="text" className="settings-input" value={config.terminal.fontFamily}
-          onChange={(e) => update({ terminal: { ...config.terminal, fontFamily: e.target.value } })} />
-      </SettingRow>
       <SettingRow label="Scrollback" description="Number of lines to keep in scroll buffer">
         <input type="number" className="settings-input small" value={config.terminal.scrollback}
           onChange={(e) => update({ terminal: { ...config.terminal, scrollback: parseInt(e.target.value) || 5000 } })} />
@@ -86,9 +116,9 @@ const TerminalSettings: React.FC = () => {
           placeholder="e.g. C:\Projects"
           onChange={(e) => update({ defaultCwd: e.target.value } as any)} />
       </SettingRow>
-      <SettingRow label="Copilot Command" description="Base command for Copilot sessions (e.g., agency copilot, frodo)">
-        <input type="text" className="settings-input" value={config.copilotCommand || 'agency copilot'}
-          placeholder="agency copilot"
+      <SettingRow label="Copilot Command" description="Base command for Copilot sessions">
+        <input type="text" className="settings-input" value={config.copilotCommand ?? ''}
+          placeholder="copilot"
           onChange={(e) => update({ copilotCommand: e.target.value } as any)} />
       </SettingRow>
       <SettingRow label="Claude Code Command" description="Base command for Claude Code sessions (e.g., claude)">
@@ -96,19 +126,9 @@ const TerminalSettings: React.FC = () => {
           placeholder="claude"
           onChange={(e) => update({ claudeCodeCommand: e.target.value } as any)} />
       </SettingRow>
-      <SettingRow label="Default Tab Color" description="Background tint for all terminals without a custom color">
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <input type="color" className="theme-color-picker"
-            value={(config as any).defaultTabColor || '#1e1e2e'}
-            onChange={(e) => { applyDefaultColor(e.target.value); }} />
-          <input type="text" className="settings-input small"
-            value={(config as any).defaultTabColor || ''}
-            placeholder="e.g. #f38ba8"
-            onChange={(e) => { applyDefaultColor(e.target.value); }} />
-          <button className="settings-reset-btn" onClick={() => { applyDefaultColor(''); }}>
-            Reset
-          </button>
-        </div>
+      <SettingRow label="Old Session Threshold" description="Days of inactivity before a session is marked as Old">
+        <input type="number" className="settings-input small" value={(config as any).oldSessionDays ?? 30}
+          onChange={(e) => update({ oldSessionDays: parseInt(e.target.value) || 30 } as any)} />
       </SettingRow>
     </div>
   );
@@ -139,7 +159,8 @@ const KeybindingsSettings: React.FC = () => {
       e.stopPropagation();
 
       const parts: string[] = [];
-      if (e.ctrlKey) parts.push('Ctrl');
+      // On Mac, record Cmd (metaKey) as Ctrl for cross-platform storage consistency
+      if (isMac ? e.metaKey : e.ctrlKey) parts.push('Ctrl');
       if (e.shiftKey) parts.push('Shift');
       if (e.altKey) parts.push('Alt');
 
@@ -179,7 +200,7 @@ const KeybindingsSettings: React.FC = () => {
             className={`keybinding-key${recording === binding.originalIndex ? ' recording' : ''}`}
             onClick={() => handleRecord(binding.originalIndex)}
           >
-            {recording === binding.originalIndex ? 'Press keys...' : binding.key}
+            {recording === binding.originalIndex ? 'Press keys...' : formatKeyForPlatform(binding.key)}
           </button>
         </div>
       ))}
@@ -291,6 +312,189 @@ const ThemeSettings: React.FC = () => {
           </div>
         ))}
       </div>
+    </div>
+  );
+};
+
+// ── Appearance Settings ───────────────────────────────────────────
+
+const MATERIAL_OPTIONS: { value: string; label: string; description: string }[] = [
+  { value: 'none', label: 'None', description: 'Opaque background (default)' },
+  { value: 'mica', label: 'Mica', description: 'Subtle desktop-tinted material' },
+  { value: 'acrylic', label: 'Acrylic', description: 'Frosted glass blur effect' },
+  { value: 'tabbed', label: 'Tabbed', description: 'Tabbed title bar style' },
+  { value: 'auto', label: 'Auto', description: 'System decides the material' },
+];
+
+const AppearanceSettings: React.FC = () => {
+  const config = useTerminalStore((s) => s.config)!;
+  const update = useTerminalStore((s) => s.updateConfig);
+  const availableFonts = useAvailableFonts();
+  const [fontInputValue, setFontInputValue] = useState(
+    config.terminal.fontFamily.split(',')[0].trim().replace(/^['"]|['"]$/g, '')
+  );
+  const [fontDropdownOpen, setFontDropdownOpen] = useState(false);
+  const [fontTyping, setFontTyping] = useState(false);
+  const fontInputRef = React.useRef<HTMLInputElement>(null);
+  const fontDropdownRef = React.useRef<HTMLDivElement>(null);
+  const [platformSupported, setPlatformSupported] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    window.terminalAPI.getPlatformSupportsMaterial().then(setPlatformSupported);
+  }, []);
+
+  const applyFont = (fontName: string) => {
+    setFontInputValue(fontName);
+    setFontDropdownOpen(false);
+    setFontTyping(false);
+    update({ terminal: { ...config.terminal, fontFamily: `${fontName}, monospace` } });
+  };
+
+  const applyDefaultColor = (color: string) => {
+    update({ defaultTabColor: color } as any);
+  };
+
+  // Close font dropdown on outside click
+  useEffect(() => {
+    if (!fontDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (fontDropdownRef.current && !fontDropdownRef.current.contains(e.target as Node) &&
+          fontInputRef.current && !fontInputRef.current.contains(e.target as Node)) {
+        setFontDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [fontDropdownOpen]);
+
+  const currentMaterial = (config as any).backgroundMaterial || 'none';
+  const currentOpacity = (config as any).backgroundOpacity ?? 0.8;
+
+  return (
+    <div className="settings-section">
+      <SettingRow label="Font Size" description="Terminal font size in pixels">
+        <input type="number" className="settings-input small" value={config.terminal.fontSize}
+          onChange={(e) => update({ terminal: { ...config.terminal, fontSize: parseInt(e.target.value) || 14 } })} />
+      </SettingRow>
+      <SettingRow label="Font Face" description="Type a font name or pick from the list">
+        <div className="font-combobox">
+          <input
+            ref={fontInputRef}
+            className="settings-input font-combobox-input"
+            type="text"
+            value={fontInputValue}
+            onChange={(e) => {
+              setFontInputValue(e.target.value);
+              setFontTyping(true);
+              setFontDropdownOpen(true);
+            }}
+            onFocus={() => setFontDropdownOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setFontDropdownOpen(false);
+                setFontTyping(false);
+              }
+              if (e.key === 'Enter') {
+                const trimmed = fontInputValue.trim();
+                if (trimmed) applyFont(trimmed);
+              }
+            }}
+            onBlur={() => {
+              // delay to allow dropdown click to register
+              setTimeout(() => {
+                if (!fontDropdownRef.current?.contains(document.activeElement)) {
+                  setFontDropdownOpen(false);
+                  setFontTyping(false);
+                }
+              }, 150);
+            }}
+          />
+          <span
+            className="font-combobox-arrow"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setFontDropdownOpen((v) => !v);
+              setFontTyping(false);
+            }}
+          >&#9662;</span>
+          {fontDropdownOpen && (() => {
+            const filtered = fontTyping && fontInputValue.trim()
+              ? availableFonts.filter((f) => f.toLowerCase().includes(fontInputValue.trim().toLowerCase()))
+              : availableFonts;
+            const inputRect = fontInputRef.current?.getBoundingClientRect();
+            const dropdownStyle = inputRect ? {
+              top: inputRect.bottom + 2,
+              left: inputRect.left,
+              width: Math.max(inputRect.width, 220),
+            } : {};
+            return filtered.length > 0 ? (
+              <div ref={fontDropdownRef} className="font-dropdown" style={dropdownStyle}>
+                {filtered.map((f) => (
+                  <div
+                    key={f}
+                    className="font-dropdown-item"
+                    style={{ fontFamily: `"${f}", monospace` }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      applyFont(f);
+                    }}
+                  >
+                    {f}
+                  </div>
+                ))}
+              </div>
+            ) : null;
+          })()}
+        </div>
+      </SettingRow>
+      <SettingRow label="Default Tab Color" description="Background tint for all terminals without a custom color">
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input type="color" className="theme-color-picker"
+            value={(config as any).defaultTabColor || '#1e1e2e'}
+            onChange={(e) => { applyDefaultColor(e.target.value); }} />
+          <input type="text" className="settings-input small"
+            value={(config as any).defaultTabColor || ''}
+            placeholder="e.g. #f38ba8"
+            onChange={(e) => { applyDefaultColor(e.target.value); }} />
+          <button className="settings-reset-btn" onClick={() => { applyDefaultColor(''); }}>
+            Reset
+          </button>
+        </div>
+      </SettingRow>
+      {platformSupported !== false && (
+        <>
+          <SettingRow label="Background Material" description="Window backdrop material (Windows 11)">
+            <select
+              className="settings-input"
+              value={currentMaterial}
+              onChange={(e) => update({ backgroundMaterial: e.target.value } as any)}
+            >
+              {MATERIAL_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label} — {opt.description}
+                </option>
+              ))}
+            </select>
+          </SettingRow>
+          {currentMaterial !== 'none' && (
+            <SettingRow label="Background Opacity" description={`UI chrome opacity: ${Math.round(currentOpacity * 100)}%`}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%' }}>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={Math.round(currentOpacity * 100)}
+                  onChange={(e) => update({ backgroundOpacity: parseInt(e.target.value) / 100 } as any)}
+                  style={{ flex: 1 }}
+                />
+                <span style={{ minWidth: 40, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {Math.round(currentOpacity * 100)}%
+                </span>
+              </div>
+            </SettingRow>
+          )}
+        </>
+      )}
     </div>
   );
 };

@@ -1,15 +1,18 @@
 import React, { useCallback, useState, useEffect, useRef, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import { SortableContext, useSortable, horizontalListSortingStrategy, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useTerminalStore } from '../state/terminal-store';
+import { useTerminalStore, TAB_COLORS } from '../state/terminal-store';
 import type { TerminalId } from '../state/types';
 import TabContextMenu, { type ContextMenuPosition } from './TabContextMenu';
+import { isMac } from '../utils/platform';
 
 interface TabProps {
   terminalId: TerminalId;
   title: string;
   isActive: boolean;
   isRenaming: boolean;
+  groupColor?: string;
   onActivate: () => void;
   onClose: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
@@ -20,6 +23,7 @@ const Tab: React.FC<TabProps> = ({
   title,
   isActive,
   isRenaming,
+  groupColor,
   onActivate,
   onClose,
   onContextMenu,
@@ -76,14 +80,13 @@ const Tab: React.FC<TabProps> = ({
 
   const className = `tab${isActive ? ' active' : ''}${isDormant ? ' dormant' : ''}${isDetached ? ' detached' : ''}${isSelected ? ' selected' : ''}${needsAttention ? ' needs-attention' : ''}${isThinking ? ' ai-thinking' : ''}`;
 
+  const effectiveColor = groupColor || tabColor;
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    ...(tabColor
-      ? isActive
-        ? { background: `${tabColor}cc`, borderBottom: `3px solid ${tabColor}`, color: '#fff', filter: 'brightness(1.2)' }
-        : { background: `${tabColor}44`, borderBottom: `2px solid ${tabColor}80`, color: '#aaa' }
+    ...(effectiveColor
+      ? { borderBottom: `3px solid ${effectiveColor}` }
       : {}),
   };
 
@@ -112,7 +115,7 @@ const Tab: React.FC<TabProps> = ({
       style={style}
       data-tab-id={terminalId}
       onClick={(e) => {
-        if (e.ctrlKey) {
+        if (isMac ? e.metaKey : e.ctrlKey) {
           const store = useTerminalStore.getState();
           // First Ctrl+Click: also select the currently focused tab
           if (Object.keys(store.selectedTerminalIds).length === 0 && store.focusedTerminalId && store.focusedTerminalId !== terminalId) {
@@ -166,10 +169,13 @@ const TAB_BAR_DEFAULT_WIDTH = 160;
 
 const TabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }> = ({ vertical, side }) => {
   const terminals = useTerminalStore((s) => s.terminals);
+  const tabGroups = useTerminalStore((s) => s.tabGroups);
   const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
   const renamingId = useTerminalStore((s) => s.renamingTerminalId);
   const tabMenuTerminalId = useTerminalStore((s) => s.tabMenuTerminalId);
   const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null);
+  const [groupMenu, setGroupMenu] = useState<{ x: number; y: number; groupId: string } | null>(null);
+  const groupMenuRef = useRef<HTMLDivElement>(null);
   const [tabBarWidth, setTabBarWidth] = useState(TAB_BAR_DEFAULT_WIDTH);
   const [resizing, setResizing] = useState(false);
 
@@ -194,6 +200,16 @@ const TabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }> = ({ ver
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
   }, [tabBarWidth]);
+
+  // Close group menu on outside click
+  useEffect(() => {
+    if (!groupMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (groupMenuRef.current && !groupMenuRef.current.contains(e.target as Node)) setGroupMenu(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [groupMenu]);
 
   // Open/toggle context menu from keyboard shortcut
   useEffect(() => {
@@ -229,24 +245,72 @@ const TabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }> = ({ ver
   const terminalIds = useMemo(() => terminalEntries.map(([id]) => id), [terminalEntries]);
   const sortStrategy = vertical ? verticalListSortingStrategy : horizontalListSortingStrategy;
 
+  // Build grouped tab sections
+  const sections = useMemo(() => {
+    const result: Array<
+      | { type: 'group'; groupId: string; name: string; color: string; collapsed: boolean }
+      | { type: 'tab'; id: string; terminal: typeof terminalEntries[0][1]; groupColor?: string }
+    > = [];
+    const usedIds = new Set<string>();
+
+    for (const [, group] of tabGroups) {
+      const groupTabs = terminalEntries.filter(([, t]) => t.groupId === group.id);
+      if (groupTabs.length === 0) continue;
+      result.push({ type: 'group', groupId: group.id, name: group.name, color: group.color, collapsed: group.collapsed });
+      for (const [id, terminal] of groupTabs) {
+        usedIds.add(id);
+        if (!group.collapsed) {
+          result.push({ type: 'tab', id, terminal, groupColor: group.color });
+        }
+      }
+    }
+    for (const [id, terminal] of terminalEntries) {
+      if (!usedIds.has(id)) {
+        result.push({ type: 'tab', id, terminal });
+      }
+    }
+    return result;
+  }, [terminalEntries, tabGroups]);
+
   return (
     <div
       className={`tab-bar${vertical ? ' vertical' : ''}${resizing ? ' resizing' : ''}`}
       style={vertical ? { width: tabBarWidth, minWidth: tabBarWidth } : undefined}
     >
       <SortableContext items={terminalIds} strategy={sortStrategy}>
-        {terminalEntries.map(([id, terminal]) => (
-          <Tab
-            key={id}
-            terminalId={id}
-            title={terminal.title}
-            isActive={focusedTerminalId === id}
-            isRenaming={renamingId === id}
-            onActivate={() => useTerminalStore.getState().setFocus(id)}
-            onClose={() => useTerminalStore.getState().closeTerminal(id)}
-            onContextMenu={(e) => handleContextMenu(e, id)}
-          />
-        ))}
+        {sections.map((section) =>
+          section.type === 'group' ? (
+            <div
+              key={`group-${section.groupId}`}
+              className="tab-group-header"
+              style={{ borderLeftColor: section.color }}
+              onClick={() => useTerminalStore.getState().toggleTabGroupCollapse(section.groupId)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setGroupMenu({ x: e.clientX, y: e.clientY, groupId: section.groupId });
+              }}
+            >
+              <span className="tab-group-chevron">{section.collapsed ? '\u25B6' : '\u25BC'}</span>
+              <span className="tab-group-name">{section.name}</span>
+              <span className="tab-group-count">
+                {terminalEntries.filter(([, t]) => t.groupId === section.groupId).length}
+              </span>
+            </div>
+          ) : (
+            <Tab
+              key={section.id}
+              terminalId={section.id}
+              title={section.terminal.title}
+              isActive={focusedTerminalId === section.id}
+              isRenaming={renamingId === section.id}
+              groupColor={section.groupColor}
+              onActivate={() => useTerminalStore.getState().setFocus(section.id)}
+              onClose={() => useTerminalStore.getState().closeTerminal(section.id)}
+              onContextMenu={(e) => handleContextMenu(e, section.id)}
+            />
+          )
+        )}
       </SortableContext>
       <button className="tab-add" onClick={handleCreate} title="New Terminal">
         +
@@ -257,6 +321,79 @@ const TabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }> = ({ ver
           selectedAtOpen={contextMenu.selectedAtOpen || []}
           onClose={() => setContextMenu(null)}
         />
+      )}
+      {groupMenu && ReactDOM.createPortal(
+        <div
+          ref={groupMenuRef}
+          className="context-menu"
+          style={{ left: groupMenu.x, top: groupMenu.y, zIndex: 1000 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="context-menu-inline-input">
+            <input
+              type="text"
+              defaultValue={tabGroups.get(groupMenu.groupId)?.name || ''}
+              placeholder="Group name..."
+              autoFocus
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') {
+                  const val = (e.target as HTMLInputElement).value.trim();
+                  if (val) useTerminalStore.getState().renameTabGroup(groupMenu.groupId, val);
+                  setGroupMenu(null);
+                }
+                if (e.key === 'Escape') setGroupMenu(null);
+              }}
+              onBlur={(e) => {
+                const val = e.target.value.trim();
+                if (val) useTerminalStore.getState().renameTabGroup(groupMenu.groupId, val);
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '6px 10px' }}>
+            {TAB_COLORS.map((c) => (
+              <div
+                key={c.value}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const { tabGroups: groups } = useTerminalStore.getState();
+                  const g = groups.get(groupMenu.groupId);
+                  if (g) {
+                    const newGroups = new Map(groups);
+                    newGroups.set(groupMenu.groupId, { ...g, color: c.value });
+                    useTerminalStore.setState({ tabGroups: newGroups });
+                  }
+                  setGroupMenu(null);
+                }}
+                style={{
+                  width: 16, height: 16, borderRadius: '50%', background: c.value, cursor: 'pointer',
+                  outline: tabGroups.get(groupMenu.groupId)?.color === c.value ? '2px solid #fff' : 'none',
+                  outlineOffset: 1,
+                }}
+              />
+            ))}
+          </div>
+          <div className="context-menu-separator" />
+          <button className="context-menu-item" onClick={() => {
+            useTerminalStore.getState().deleteTabGroup(groupMenu.groupId);
+            setGroupMenu(null);
+          }}>
+            Ungroup All
+          </button>
+          <button className="context-menu-item danger" onClick={() => {
+            const store = useTerminalStore.getState();
+            const ids = Array.from(store.terminals.entries())
+              .filter(([, t]) => t.groupId === groupMenu.groupId)
+              .map(([id]) => id);
+            store.deleteTabGroup(groupMenu.groupId);
+            (async () => { for (const id of ids) await store.closeTerminal(id); })();
+            setGroupMenu(null);
+          }}>
+            Close All
+          </button>
+        </div>,
+        document.body,
       )}
       {vertical && <div className="tab-bar-resize" onMouseDown={handleResizeStart} />}
     </div>

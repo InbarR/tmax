@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { formatKeyForPlatform } from '../utils/platform';
 
 interface ShortcutsHelpProps {
   onClose: () => void;
@@ -17,12 +18,12 @@ const shortcuts = [
   ]},
   { category: 'Navigation', items: [
     { key: 'Shift+Arrow', action: 'Move focus between panes' },
-    { key: 'Ctrl+Shift+Arrow', action: 'Move/swap terminal in direction' },
+    { key: 'Ctrl+Shift+Xrrow', action: 'Move/swap terminal in direction' },
   ]},
   { category: 'Layout', items: [
     { key: 'Ctrl+Alt+Arrow', action: 'Split in direction' },
     { key: 'Ctrl+Shift+F', action: 'Toggle float / dock' },
-    { key: 'Ctrl+Shift+Alt+Arrow', action: 'Resize pane' },
+    { key: 'Ctrl+Shift+Xlt+Arrow', action: 'Resize pane' },
     { key: 'Ctrl+Shift+E', action: 'Equalize all pane sizes' },
   ]},
   { category: 'Zoom', items: [
@@ -31,13 +32,14 @@ const shortcuts = [
     { key: 'Ctrl+0', action: 'Reset zoom' },
   ]},
   { category: 'AI', items: [
-    { key: 'Ctrl+Shift+I', action: 'Jump to prompt in terminal' },
+    { key: 'Ctrl+Shift+K', action: 'Jump to prompt in terminal' },
     { key: 'Ctrl+Shift+C', action: 'AI Sessions panel' },
     { key: 'Ctrl+Shift+T', action: 'Worktrees panel' },
   ]},
   { category: 'Other', items: [
     { key: 'Ctrl+Shift+U', action: 'Unfreeze terminal' },
     { key: 'Ctrl+Shift+B', action: 'Hide / show tab bar' },
+    { key: 'Ctrl+Shift+X', action: 'File explorer' },
     { key: 'Ctrl+Shift+?', action: 'Show this help' },
     { key: 'Double-click tab', action: 'Rename terminal' },
     { key: 'Right-click tab', action: 'Context menu' },
@@ -70,7 +72,7 @@ const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ onClose }) => {
               <div className="shortcuts-category">{group.category}</div>
               {group.items.map((item) => (
                 <div key={item.key} className="shortcuts-row">
-                  <kbd className="shortcuts-key">{item.key}</kbd>
+                  <kbd className="shortcuts-key">{formatKeyForPlatform(item.key)}</kbd>
                   <span className="shortcuts-action">{item.action}</span>
                 </div>
               ))}

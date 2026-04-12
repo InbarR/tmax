@@ -1,5 +1,23 @@
 node_modules/
 .vite/
 out/
+out-next/
 dist/
 *.node
+
+# Claude Code local settings
+.claude/
+CLAUDE.md
+AGENTS.md
+
+# Build/swap helpers
+_swap.cmd
+_swap_now.cmd
+_swap_helper.cmd
+
+# Misc
+excalidraw.log
+*.db.crypt14
+*.ab
+wa_key.bin
+nul

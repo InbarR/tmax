@@ -21,6 +21,7 @@ export interface TerminalAPI {
     env?: Record<string, string>;
     cols: number;
     rows: number;
+    wslDistro?: string;
   }): Promise<{ id: string; pid: number }>;
   writePty(id: string, data: string): void;
   resizePty(id: string, cols: number, rows: number): Promise<void>;
@@ -46,10 +47,17 @@ export interface TerminalAPI {
   createWorktree(repoPath: string, branchName: string, baseBranch: string): Promise<{ success: boolean; worktreePath?: string; error?: string }>;
   deleteWorktree(repoPath: string, worktreePath: string): Promise<{ success: boolean; error?: string }>;
   getBranches(repoPath: string): Promise<string[]>;
+  getSystemFonts(): Promise<string[]>;
+  // ── Transparency ──────────────────────────────────────────────────
+  setBackgroundMaterial(material: string): Promise<void>;
+  getPlatformSupportsMaterial(): Promise<boolean>;
   // ── Diff editor ──────────────────────────────────────────────────
   diffResolveGitRoot(cwd: string): Promise<string>;
   diffGetDiff(cwd: string, mode: DiffMode): Promise<DiffResult>;
   diffGetAnnotatedFile(cwd: string, filePath: string, mode: DiffMode): Promise<AnnotatedFile>;
+  // ── File explorer ────────────────────────────────────────────────
+  fileList(dirPath: string, wslDistro?: string): Promise<{ name: string; isDirectory: boolean; path: string }[]>;
+  fileRead(filePath: string, wslDistro?: string): Promise<string | null>;
 }
 
 const terminalAPI: TerminalAPI = {
@@ -292,6 +300,10 @@ const terminalAPI: TerminalAPI = {
     return ipcRenderer.invoke(IPC.DIAG_GET_LOG_PATH);
   },
 
+  getSystemFonts() {
+    return ipcRenderer.invoke(IPC.GET_SYSTEM_FONTS);
+  },
+
   onUpdateStatusChanged(cb: (info: { status: string; current: string; latest?: string; url?: string; error?: string }) => void): () => void {
     const listener = (_event: Electron.IpcRendererEvent, info: { status: string; current: string; latest?: string; url?: string; error?: string }) => {
       cb(info);
@@ -319,6 +331,15 @@ const terminalAPI: TerminalAPI = {
     return ipcRenderer.invoke(IPC.GIT_GET_BRANCHES, repoPath);
   },
 
+  // ── Transparency ────────────────────────────────────────────────
+  setBackgroundMaterial(material: string) {
+    return ipcRenderer.invoke(IPC.SET_BACKGROUND_MATERIAL, material);
+  },
+
+  getPlatformSupportsMaterial(): Promise<boolean> {
+    return ipcRenderer.invoke(IPC.GET_PLATFORM_SUPPORTS_MATERIAL);
+  },
+
   // ── Diff editor ──────────────────────────────────────────────────
   diffResolveGitRoot(cwd: string) {
     return ipcRenderer.invoke(IPC.DIFF_RESOLVE_GIT_ROOT, cwd);
@@ -332,6 +353,19 @@ const terminalAPI: TerminalAPI = {
     return ipcRenderer.invoke(IPC.DIFF_GET_ANNOTATED_FILE, cwd, filePath, mode);
   },
 
+  // ── File explorer ──────────────────────────────────────────────
+  fileList(dirPath: string, wslDistro?: string) {
+    return ipcRenderer.invoke(IPC.FILE_LIST, dirPath, wslDistro);
+  },
+
+  fileRead(filePath: string, wslDistro?: string) {
+    return ipcRenderer.invoke(IPC.FILE_READ, filePath, wslDistro);
+  },
+
 };
 
 contextBridge.exposeInMainWorld('terminalAPI', terminalAPI);
+contextBridge.exposeInMainWorld('platformInfo', {
+  platform: process.platform,
+  homeDir: require('os').homedir(),
+});

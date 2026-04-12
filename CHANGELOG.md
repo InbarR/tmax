@@ -4,7 +4,7 @@
 
 ### New Features
 
-- **Configurable AI session commands**: Copilot and Claude Code base commands are now customizable via Settings > Terminal — use custom aliases like `frodo` instead of the default `agency copilot` (#4)
+- **Configurable AI session commands**: Copilot and Claude Code base commands are now customizable via Settings > Terminal — use custom aliases or wrapper scripts (#4)
 
 ## v1.3.4
 

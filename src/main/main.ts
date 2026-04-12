@@ -1,16 +1,18 @@
-import { app, BrowserWindow, ipcMain, Menu, powerMonitor, session, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme, powerMonitor, session, shell } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Store from 'electron-store';
 import { PtyManager } from './pty-manager';
 import { ConfigStore } from './config-store';
+import type { BackgroundMaterial } from './config-store';
 import { IPC } from '../shared/ipc-channels';
 import { CopilotSessionMonitor } from './copilot-session-monitor';
 import { CopilotSessionWatcher } from './copilot-session-watcher';
 import { notifyCopilotSession, clearNotificationCooldowns } from './copilot-notification';
 import { ClaudeCodeSessionMonitor } from './claude-code-session-monitor';
 import { ClaudeCodeSessionWatcher } from './claude-code-session-watcher';
+import { WslSessionManager } from './wsl-session-manager';
 import { VersionChecker } from './version-checker';
 import { initDiagLogger, getDiagLogPath, diagLog } from './diag-logger';
 import { GitDiffService, resolveGitRoot } from './git-diff-service';
@@ -48,6 +50,79 @@ if (process.platform === 'win32') {
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
+/**
+ * Returns true if the current platform supports window background materials
+ * (Windows 11 22H2+ = build 22621+).
+ */
+function platformSupportsMaterial(): boolean {
+  if (process.platform !== 'win32') return false;
+  const release = os.release(); // e.g. "10.0.22621"
+  const parts = release.split('.');
+  const build = parseInt(parts[2], 10);
+  return !isNaN(build) && build >= 22621;
+}
+
+/**
+ * Converts a hex color + opacity (0-1) into an 8-digit hex string (#RRGGBBAA)
+ * that Electron accepts for backgroundColor.
+ */
+function hexWithAlpha(hex: string, opacity: number): string {
+  const clean = hex.replace('#', '');
+  // Normalize 3-char to 6-char, strip existing alpha
+  const normalized = clean.length === 3
+    ? clean.split('').map(c => c + c).join('')
+    : clean.substring(0, 6);
+
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255)
+      .toString(16).padStart(2, '0');
+    return `#1e1e2e${alpha}`;
+  }
+
+  const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255)
+    .toString(16)
+    .padStart(2, '0');
+  return `#${normalized}${alpha}`;
+}
+
+/**
+ * Returns the effective background material and background color for a window,
+ * based on the current config.
+ */
+function getWindowMaterialOpts(): { backgroundMaterial?: BackgroundMaterial; backgroundColor: string } {
+  const material = (configStore?.get('backgroundMaterial') as BackgroundMaterial) || 'none';
+  const opacity = configStore?.get('backgroundOpacity') as number ?? 0.8;
+  const themeBg = configStore?.get('theme')?.background || '#1e1e2e';
+
+  if (material !== 'none' && platformSupportsMaterial()) {
+    return {
+      backgroundMaterial: material,
+      backgroundColor: hexWithAlpha(themeBg, opacity),
+    };
+  }
+  return { backgroundColor: themeBg };
+}
+
+/**
+ * Applies the current background material and color to a window.
+ * Separated from getWindowMaterialOpts so material can be applied *after*
+ * window creation / maximize — passing backgroundMaterial in the BrowserWindow
+ * constructor causes Windows 11 to grey-out the maximize button (Electron bug).
+ */
+function applyMaterialToWindow(win: BrowserWindow): void {
+  if (!platformSupportsMaterial() || win.isDestroyed()) return;
+  const material = (configStore?.get('backgroundMaterial') as BackgroundMaterial) || 'none';
+  const opacity = configStore?.get('backgroundOpacity') as number ?? 0.8;
+  const themeBg = configStore?.get('theme')?.background || '#1e1e2e';
+
+  (win as any).setBackgroundMaterial(material);
+  if (material !== 'none') {
+    win.setBackgroundColor(hexWithAlpha(themeBg, opacity));
+  } else {
+    win.setBackgroundColor(themeBg);
+  }
+}
+
 let mainWindow: BrowserWindow | null = null;
 let ptyManager: PtyManager | null = null;
 let configStore: ConfigStore | null = null;
@@ -55,6 +130,7 @@ let copilotMonitor: CopilotSessionMonitor | null = null;
 let copilotWatcher: CopilotSessionWatcher | null = null;
 let claudeCodeMonitor: ClaudeCodeSessionMonitor | null = null;
 let claudeCodeWatcher: ClaudeCodeSessionWatcher | null = null;
+let wslSessionManager: WslSessionManager | null = null;
 let versionChecker: VersionChecker | null = null;
 let clipboardTempDir: string | null = null;
 const sessionStore = new Store({ name: 'tmax-session' });
@@ -69,6 +145,11 @@ function broadcastPtyEvent(channel: string, id: string, ...args: unknown[]) {
 }
 
 function createWindow(): void {
+  // Omit backgroundMaterial from constructor — passing it at creation time
+  // causes Windows 11 to grey-out the native maximize button (Electron bug).
+  // We apply the material *after* the window is shown via applyMaterialToWindow().
+  const { backgroundMaterial: _mat, ...constructorOpts } = getWindowMaterialOpts();
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -78,6 +159,7 @@ function createWindow(): void {
     title: 'tmax',
     icon: path.join(__dirname, '../../assets/icon.png'),
     autoHideMenuBar: true,
+    ...constructorOpts,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -112,11 +194,20 @@ function createWindow(): void {
     mainWindow!.maximize();
     mainWindow!.show();
     mainWindow!.focus();
+
+    // Apply background material *after* the window is visible and maximized
+    // so the native maximize button stays enabled.
+    applyMaterialToWindow(mainWindow!);
   });
+
+  // Re-apply background material after maximize / restore state transitions
+  mainWindow.on('maximize', () => { applyMaterialToWindow(mainWindow!); });
+  mainWindow.on('unmaximize', () => { applyMaterialToWindow(mainWindow!); });
 
   // Prevent Chromium's built-in zoom — reset zoom level after any zoom attempt
   mainWindow.webContents.on('before-input-event', (_event, input) => {
-    if (input.control && !input.shift && !input.alt) {
+    const primaryMod = process.platform === 'darwin' ? input.meta : input.control;
+    if (primaryMod && !input.shift && !input.alt) {
       if (input.key === '=' || input.key === '+' || input.key === '-' || input.key === '0') {
         mainWindow!.webContents.setZoomLevel(0);
       }
@@ -193,7 +284,7 @@ function setupConfigStore(): void {
 function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC.PTY_CREATE,
-    (_event, opts: { id: string; shellPath: string; args: string[]; cwd: string; env?: Record<string, string>; cols: number; rows: number }) => {
+    (_event, opts: { id: string; shellPath: string; args: string[]; cwd: string; env?: Record<string, string>; cols: number; rows: number; wslDistro?: string }) => {
       // Validate shell path against configured profiles to prevent arbitrary exec
       const shells = configStore!.get('shells');
       const profile = shells.find((s: { path: string }) => s.path === opts.shellPath);
@@ -203,7 +294,25 @@ function registerIpcHandlers(): void {
       // Clamp cols/rows to reasonable bounds
       const cols = Math.max(1, Math.min(500, opts.cols || 80));
       const rows = Math.max(1, Math.min(200, opts.rows || 24));
-      return ptyManager!.create({ ...opts, args: profile.args, cols, rows });
+      // For WSL sessions targeting a specific distro, use -d <distro> and --cd <cwd>
+      let args: string[];
+      if (opts.wslDistro) {
+        // Validate distro name: must be alphanumeric/dash/dot only (no shell metacharacters)
+        if (!/^[\w][\w.\-]*$/.test(opts.wslDistro)) {
+          throw new Error(`Invalid WSL distro name: ${opts.wslDistro}`);
+        }
+        args = ['-d', opts.wslDistro];
+        // If the renderer passed a Linux CWD (starts with /), use --cd to set it
+        if (opts.cwd && opts.cwd.startsWith('/')) {
+          args.push('--cd', opts.cwd);
+        }
+      } else {
+        args = profile.args;
+      }
+      const { wslDistro: _wsl, ...ptyOpts } = opts;
+      // For WSL with --cd, node-pty still needs a valid Windows cwd
+      const cwd = opts.wslDistro ? (os.homedir()) : ptyOpts.cwd;
+      return ptyManager!.create({ ...ptyOpts, args, cols, rows, cwd });
     }
   );
 
@@ -234,6 +343,20 @@ function registerIpcHandlers(): void {
     return getDiagLogPath();
   });
 
+  ipcMain.handle(IPC.GET_SYSTEM_FONTS, async () => {
+    if (process.platform !== 'win32') return [];
+    try {
+      const { execSync } = require('child_process');
+      const output = execSync(
+        "powershell -NoProfile -Command \"[System.Reflection.Assembly]::LoadWithPartialName('System.Drawing') | Out-Null; (New-Object System.Drawing.Text.InstalledFontCollection).Families | ForEach-Object { $_.Name }\"",
+        { encoding: 'utf8', timeout: 10000 }
+      );
+      return output.trim().split('\n').map((s: string) => s.trim()).filter(Boolean);
+    } catch {
+      return [];
+    }
+  });
+
   ipcMain.handle(IPC.CONFIG_GET, () => {
     return configStore!.getAll();
   });
@@ -242,6 +365,16 @@ function registerIpcHandlers(): void {
     IPC.CONFIG_SET,
     (_event, key: string, value: unknown) => {
       configStore!.set(key as keyof ReturnType<ConfigStore['getAll']>, value as never);
+
+      // Dynamically apply background material changes
+      if (key === 'backgroundMaterial' || key === 'backgroundOpacity' || key === 'theme') {
+        const allWindows = [mainWindow, ...detachedWindows.values()];
+        for (const win of allWindows) {
+          if (win && !win.isDestroyed()) {
+            applyMaterialToWindow(win);
+          }
+        }
+      }
     }
   );
 
@@ -271,11 +404,14 @@ function registerIpcHandlers(): void {
       }
     }
 
+    const { backgroundMaterial: _dMat, ...detachedConstructorOpts } = getWindowMaterialOpts();
     const detachedWin = new BrowserWindow({
       width: 800,
       height: 600,
+      show: false,
       title: 'tmax - Terminal',
       autoHideMenuBar: true,
+      ...detachedConstructorOpts,
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
@@ -285,6 +421,13 @@ function registerIpcHandlers(): void {
     });
 
     detachedWin.setMenuBarVisibility(false);
+
+    detachedWin.once('ready-to-show', () => {
+      detachedWin.show();
+      applyMaterialToWindow(detachedWin);
+    });
+    detachedWin.on('maximize', () => { applyMaterialToWindow(detachedWin); });
+    detachedWin.on('unmaximize', () => { applyMaterialToWindow(detachedWin); });
     detachedWindows.set(terminalId, detachedWin);
 
     // Open external links in the default browser for detached windows too
@@ -332,15 +475,19 @@ function registerIpcHandlers(): void {
 
   // ── Copilot IPC handlers ────────────────────────────────────────────
   ipcMain.handle(IPC.COPILOT_LIST_SESSIONS, () => {
-    return copilotMonitor?.scanSessions() ?? [];
+    const native = copilotMonitor?.scanSessions() ?? [];
+    const wsl = wslSessionManager?.scanCopilotSessions() ?? [];
+    return [...native, ...wsl];
   });
 
   ipcMain.handle(IPC.COPILOT_GET_SESSION, (_event, id: string) => {
-    return copilotMonitor?.getSession(id) ?? null;
+    return copilotMonitor?.getSession(id) ?? wslSessionManager?.getCopilotSession(id) ?? null;
   });
 
   ipcMain.handle(IPC.COPILOT_SEARCH_SESSIONS, (_event, query: string) => {
-    return copilotMonitor?.searchSessions(query) ?? [];
+    const native = copilotMonitor?.searchSessions(query) ?? [];
+    const wsl = wslSessionManager?.searchCopilotSessions(query) ?? [];
+    return [...native, ...wsl];
   });
 
   ipcMain.handle(IPC.COPILOT_START_WATCHING, async () => {
@@ -356,20 +503,26 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle(IPC.COPILOT_GET_PROMPTS, (_event, id: string) => {
-    return copilotMonitor?.getPrompts(id) ?? [];
+    const native = copilotMonitor?.getPrompts(id) ?? [];
+    if (native.length > 0) return native;
+    return wslSessionManager?.getCopilotPrompts(id) ?? [];
   });
 
   // ── Claude Code IPC handlers ──────────────────────────────────────────
   ipcMain.handle(IPC.CLAUDE_CODE_LIST_SESSIONS, () => {
-    return claudeCodeMonitor?.scanSessions() ?? [];
+    const native = claudeCodeMonitor?.scanSessions() ?? [];
+    const wsl = wslSessionManager?.scanClaudeCodeSessions() ?? [];
+    return [...native, ...wsl];
   });
 
   ipcMain.handle(IPC.CLAUDE_CODE_GET_SESSION, (_event, id: string) => {
-    return claudeCodeMonitor?.getSession(id) ?? null;
+    return claudeCodeMonitor?.getSession(id) ?? wslSessionManager?.getClaudeCodeSession(id) ?? null;
   });
 
   ipcMain.handle(IPC.CLAUDE_CODE_SEARCH_SESSIONS, (_event, query: string) => {
-    return claudeCodeMonitor?.searchSessions(query) ?? [];
+    const native = claudeCodeMonitor?.searchSessions(query) ?? [];
+    const wsl = wslSessionManager?.searchClaudeCodeSessions(query) ?? [];
+    return [...native, ...wsl];
   });
 
   ipcMain.handle(IPC.CLAUDE_CODE_START_WATCHING, async () => {
@@ -385,7 +538,9 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle(IPC.CLAUDE_CODE_GET_PROMPTS, (_event, id: string) => {
-    return claudeCodeMonitor?.getPrompts(id) ?? [];
+    const native = claudeCodeMonitor?.getPrompts(id) ?? [];
+    if (native.length > 0) return native;
+    return wslSessionManager?.getClaudeCodePrompts(id) ?? [];
   });
 
   // ── Version check IPC handlers ──────────────────────────────────────
@@ -403,6 +558,28 @@ function registerIpcHandlers(): void {
 
   ipcMain.on(IPC.VERSION_RESTART_AND_UPDATE, () => {
     versionChecker?.restartAndUpdate();
+  });
+
+  // ── Transparency IPC handlers ──────────────────────────────────────
+  ipcMain.handle(IPC.SET_BACKGROUND_MATERIAL, (_event, material: string) => {
+    if (!platformSupportsMaterial()) return;
+    const valid: BackgroundMaterial[] = ['none', 'auto', 'mica', 'acrylic', 'tabbed'];
+    if (!valid.includes(material as BackgroundMaterial)) return;
+
+    configStore!.set('backgroundMaterial', material as BackgroundMaterial);
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      applyMaterialToWindow(mainWindow);
+    }
+    for (const [, win] of detachedWindows) {
+      if (!win.isDestroyed()) {
+        applyMaterialToWindow(win);
+      }
+    }
+  });
+
+  ipcMain.handle(IPC.GET_PLATFORM_SUPPORTS_MATERIAL, () => {
+    return platformSupportsMaterial();
   });
 
   ipcMain.handle(IPC.CLIPBOARD_SAVE_IMAGE, (_event, base64Png: string) => {
@@ -449,6 +626,52 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.DIFF_GET_ANNOTATED_FILE, async (_event, cwd: string, filePath: string, mode: DiffMode) => {
     return diffService.getAnnotatedFile(cwd, filePath, mode);
+  });
+
+  // ── File explorer IPC ──────────────────────────────────────────────
+  ipcMain.handle(IPC.FILE_LIST, async (_event, dirPath: string, wslDistro?: string) => {
+    try {
+      // For WSL terminals, translate Linux paths to UNC paths for fs access
+      let fsPath = dirPath;
+      if (wslDistro && dirPath.startsWith('/')) {
+        if (!/^[\w][\w.\-]*$/.test(wslDistro)) return [];
+        fsPath = `\\\\wsl.localhost\\${wslDistro}${dirPath.replace(/\//g, '\\')}`;
+      }
+      const entries = fs.readdirSync(fsPath, { withFileTypes: true });
+      return entries
+        .map((e: any) => ({
+          name: e.name,
+          isDirectory: e.isDirectory(),
+          // Return Linux-style paths for WSL so the explorer stays consistent
+          path: wslDistro ? dirPath.replace(/\/$/, '') + '/' + e.name : path.join(dirPath, e.name),
+        }))
+        .sort((a: any, b: any) => {
+          // Directories first, then alphabetical
+          if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        });
+    } catch {
+      return [];
+    }
+  });
+
+  ipcMain.handle(IPC.FILE_READ, async (_event, filePath: string, wslDistro?: string) => {
+    try {
+      let fsPath = filePath;
+      if (wslDistro && filePath.startsWith('/')) {
+        if (!/^[\w][\w.\-]*$/.test(wslDistro)) return null;
+        fsPath = `//wsl.localhost/${wslDistro}${filePath}`;
+      }
+      const stat = fs.statSync(fsPath);
+      // Only read text files under 1MB
+      if (stat.size > 1024 * 1024) return null;
+      const content = fs.readFileSync(fsPath, 'utf-8');
+      // Check if content looks like binary
+      if (content.includes('\0')) return null;
+      return content;
+    } catch {
+      return null;
+    }
   });
 }
 
@@ -518,13 +741,74 @@ function setupClaudeCodeMonitor(): void {
   });
 }
 
+async function setupWslSessionManager(): Promise<void> {
+  if (process.platform !== 'win32') return;
+
+  wslSessionManager = new WslSessionManager();
+
+  wslSessionManager.setCallbacks({
+    onCopilotSessionUpdated(session) {
+      mainWindow?.webContents.send(IPC.COPILOT_SESSION_UPDATED, session);
+      notifyCopilotSession(session);
+    },
+    onCopilotSessionAdded(session) {
+      mainWindow?.webContents.send(IPC.COPILOT_SESSION_ADDED, session);
+    },
+    onCopilotSessionRemoved(sessionId) {
+      mainWindow?.webContents.send(IPC.COPILOT_SESSION_REMOVED, sessionId);
+    },
+    onClaudeCodeSessionUpdated(session) {
+      mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_UPDATED, session);
+    },
+    onClaudeCodeSessionAdded(session) {
+      mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_ADDED, session);
+    },
+    onClaudeCodeSessionRemoved(sessionId) {
+      mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_REMOVED, sessionId);
+    },
+  });
+
+  await wslSessionManager.start();
+}
+
 process.on('uncaughtException', (error) => {
   console.error('Uncaught exception in main process:', error);
 });
 
 app.whenReady().then(() => {
   try {
-    Menu.setApplicationMenu(null);
+    // Force dark title bar/frame regardless of Windows system theme
+    nativeTheme.themeSource = 'dark';
+
+    // On macOS, a null menu creates default accelerators (Cmd+C/V/X) that
+    // intercept events before the renderer. Use a minimal menu instead.
+    if (process.platform === 'darwin') {
+      const macMenu = Menu.buildFromTemplate([
+        {
+          label: app.name,
+          submenu: [
+            { role: 'about' },
+            { type: 'separator' },
+            { role: 'quit' },
+          ],
+        },
+        {
+          label: 'Edit',
+          submenu: [
+            { role: 'undo' },
+            { role: 'redo' },
+            { type: 'separator' },
+            { role: 'cut' },
+            { role: 'copy' },
+            { role: 'paste' },
+            { role: 'selectAll' },
+          ],
+        },
+      ]);
+      Menu.setApplicationMenu(macMenu);
+    } else {
+      Menu.setApplicationMenu(null);
+    }
     initDiagLogger();
     setupConfigStore();
     console.log('Config store ready');
@@ -541,6 +825,13 @@ app.whenReady().then(() => {
     versionChecker = new VersionChecker(mainWindow!);
     versionChecker.start();
     console.log('Version checker started');
+    // Start WSL discovery after window is visible — WSL distro detection
+    // uses synchronous subprocess calls that can block for several seconds
+    setupWslSessionManager().then(() => {
+      console.log('WSL session manager ready');
+    }).catch((err) => {
+      console.error('WSL session manager failed:', err);
+    });
   } catch (error) {
     console.error('Startup error:', error);
   }
@@ -569,6 +860,7 @@ app.on('window-all-closed', async () => {
   copilotMonitor?.dispose();
   await claudeCodeWatcher?.stop();
   claudeCodeMonitor?.dispose();
+  await wslSessionManager?.stop();
   versionChecker?.stop();
   clearNotificationCooldowns();
   app.quit();

@@ -5,7 +5,67 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon } from '@xterm/addon-search';
 import { useTerminalStore } from '../state/terminal-store';
 import { registerTerminal, unregisterTerminal } from '../terminal-registry';
+import { isMac } from '../utils/platform';
+import type { AppConfig } from '../state/types';
 import '@xterm/xterm/css/xterm.css';
+
+function hexToTerminalRgba(hex: string, alpha: number): string {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return hex;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`;
+}
+
+const WSL_PROMPT_DEBOUNCE_MS = 200;
+const WSL_PROMPT_FALLBACK_MS = 5000;
+
+/**
+ * Sends a command to a WSL terminal after detecting the shell prompt.
+ * Uses debounce to avoid firing on MOTD/banner text, with a fallback timeout.
+ * Returns a cleanup function for useEffect teardown.
+ */
+function sendCommandOnWslPrompt(
+  terminalId: string,
+  cmd: string,
+  onSent?: (cmd: string) => void,
+): () => void {
+  let promptSent = false;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const checkPrompt = (id: string, data: string) => {
+    if (id !== terminalId || promptSent) return;
+    const clean = data.replace(/\x1b\[[^m]*m/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
+    // $/#/% = sh/bash/zsh; ❯/➜ = Oh-My-Zsh/Starship; > = fish/generic
+    if (/[$#%❯➜>]\s*$/.test(clean)) {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (!promptSent) {
+          promptSent = true;
+          promptUnsub();
+          window.terminalAPI.writePty(terminalId, cmd + '\r');
+          onSent?.(cmd);
+        }
+      }, WSL_PROMPT_DEBOUNCE_MS);
+    }
+  };
+
+  const promptUnsub = window.terminalAPI.onPtyData(checkPrompt);
+
+  const fallbackTimer = setTimeout(() => {
+    if (!promptSent) {
+      promptSent = true;
+      promptUnsub();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      window.terminalAPI.writePty(terminalId, cmd + '\r');
+      onSent?.(cmd);
+    }
+  }, WSL_PROMPT_FALLBACK_MS);
+
+  return () => {
+    promptUnsub();
+    clearTimeout(fallbackTimer);
+    if (debounceTimer) clearTimeout(debounceTimer);
+  };
+}
 
 function ago(ts: number): string {
   if (!ts) return 'never';
@@ -78,7 +138,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResult, setSearchResult] = useState<{ resultIndex: number; resultCount: number } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [processStatus, setProcessStatus] = useState<'active' | 'idle' | 'exited-ok' | 'exited-error'>('idle');
+  const processStatusRef = useRef(processStatus);
   const [showDiag, setShowDiag] = useState(false);
+  const [isRenamingPane, setIsRenamingPane] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
   const [, tickDiag] = useReducer((x: number) => x + 1, 0);
   const diagRef = useRef({ keystrokeCount: 0, lastKeystrokeTime: 0, outputEventCount: 0, lastOutputTime: 0, outputBytes: 0, focusEventCount: 0, lastFocusTime: 0 });
   const mainDiagRef = useRef<{ pid: number; writeCount: number; lastWriteTime: number; dataCount: number; lastDataTime: number; dataBytes: number } | null>(null);
@@ -93,6 +157,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   );
   const aiResumeCommandRef = useRef<string>('');
   const aiSessionStartedRef = useRef(false);
+  const wslPromptCleanupRef = useRef<(() => void) | null>(null);
   const isFocused = focusedTerminalId === terminalId;
 
   const handleFocus = useCallback(() => {
@@ -125,16 +190,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     const themeConfig = config?.theme;
     const termConfig = config?.terminal;
 
+    const rawBg = themeConfig?.background ?? '#1e1e2e';
+    const materialActive = (config as AppConfig)?.backgroundMaterial && (config as AppConfig).backgroundMaterial !== 'none';
+    const bgOpacity = materialActive ? ((config as AppConfig)?.backgroundOpacity ?? 0.8) : 1;
+    const bgColor = bgOpacity < 1 ? hexToTerminalRgba(rawBg, bgOpacity) : rawBg;
     const term = new Terminal({
       theme: themeConfig
         ? {
-            background: themeConfig.background,
+            background: bgColor,
             foreground: themeConfig.foreground,
             cursor: themeConfig.cursor,
             selectionBackground: themeConfig.selectionBackground,
           }
         : {
-            background: '#1e1e2e',
+            background: bgColor,
             foreground: '#cdd6f4',
             cursor: '#f5e0dc',
             selectionBackground: '#585b70',
@@ -144,6 +213,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       scrollback: termConfig?.scrollback ?? 5000,
       cursorStyle: termConfig?.cursorStyle ?? 'block',
       cursorBlink: termConfig?.cursorBlink ?? true,
+      allowTransparency: bgOpacity < 1,
       allowProposedApi: true,
     });
 
@@ -171,13 +241,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     // Keyboard shortcuts handled inside terminal
     term.attachCustomKeyEventHandler((event) => {
       if (event.type !== 'keydown') return true;
-      // Ctrl+Shift+`: toggle diagnostics overlay
-      if (event.ctrlKey && event.shiftKey && event.key === '`') {
+      // Ctrl+Shift+` (Cmd+Shift+` on Mac): toggle diagnostics overlay
+      if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && event.key === '`') {
         setShowDiag((v) => !v);
         return false;
       }
-      // Ctrl+F: open search
-      if (event.ctrlKey && !event.shiftKey && (event.key === 'f' || event.key === 'F')) {
+      // Ctrl+F (Cmd+F on Mac): open search
+      if ((isMac ? event.metaKey : event.ctrlKey) && !event.shiftKey && (event.key === 'f' || event.key === 'F')) {
         setShowSearch(true);
         requestAnimationFrame(() => searchInputRef.current?.focus());
         return false;
@@ -195,14 +265,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
         }
         return false;
       }
-      // Ctrl+C with selection: copy instead of SIGINT
-      if (event.ctrlKey && !event.shiftKey && (event.key === 'c' || event.key === 'C') && term.hasSelection()) {
+      // Ctrl+C with selection: copy instead of SIGINT (Cmd+C on Mac)
+      if ((isMac ? event.metaKey : event.ctrlKey) && !event.shiftKey && (event.key === 'c' || event.key === 'C') && term.hasSelection()) {
         window.terminalAPI.clipboardWrite(term.getSelection());
         term.clearSelection();
         return false;
       }
-      // Ctrl+Shift+C: always copy selection
-      if (event.ctrlKey && event.shiftKey && (event.key === 'c' || event.key === 'C')) {
+      // Ctrl+Shift+C (Cmd+Shift+C on Mac): always copy selection
+      if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && (event.key === 'c' || event.key === 'C')) {
         const sel = term.getSelection();
         if (sel) window.terminalAPI.clipboardWrite(sel);
         return false;
@@ -273,6 +343,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
           diagRef.current.outputEventCount++;
           diagRef.current.lastOutputTime = Date.now();
           diagRef.current.outputBytes += data.length;
+          // Only mark as active for substantial output (>50 bytes), not cursor/prompt redraws
+          if (data.length > 50 && processStatusRef.current !== 'active') {
+            processStatusRef.current = 'active';
+            setProcessStatus('active');
+          }
           pendingData += data;
           if (!rafScheduled) {
             rafScheduled = true;
@@ -284,10 +359,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
           // 3. Prompt regex fallback: "PS C:\path>" or "C:\path>"
           let detectedDir: string | null = null;
 
+          // Check if this is a WSL terminal (preserve Linux-style paths)
+          const termInst = useTerminalStore.getState().terminals.get(terminalId);
+          const isWsl = termInst?.wsl === true;
+
           // Try OSC 7 (file URI)
           const osc7Match = data.match(/\x1b\]7;file:\/\/[^/]*\/([^\x07\x1b]+)(?:\x07|\x1b\\)/);
           if (osc7Match) {
-            detectedDir = decodeURIComponent(osc7Match[1]).replace(/\//g, '\\');
+            const decoded = decodeURIComponent(osc7Match[1]);
+            // For WSL terminals, keep Linux-style forward slashes; prefix with / for absolute path
+            detectedDir = isWsl ? '/' + decoded : decoded.replace(/\//g, '\\');
           }
 
           // Try OSC 9;9 (Windows Terminal / ConPTY)
@@ -316,7 +397,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
               const newTerminals = new Map(store.terminals);
               newTerminals.set(terminalId, { ...terminal, cwd: detectedDir });
               useTerminalStore.setState({ terminals: newTerminals });
-              store.addRecentDir(detectedDir);
+              // For WSL terminals, translate Linux path to UNC for the Dirs panel
+              if (terminal.wslDistro && detectedDir.startsWith('/')) {
+                store.addRecentDir(`\\\\wsl.localhost\\${terminal.wslDistro}${detectedDir.replace(/\//g, '\\')}`);
+              } else {
+                store.addRecentDir(detectedDir);
+              }
             }
             // Shell prompt appeared after AI session exited — pre-fill resume command
             if (aiSessionStartedRef.current && aiResumeCommandRef.current) {
@@ -336,6 +422,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       (id: string, exitCode: number | undefined) => {
         if (id === terminalId) {
           window.terminalAPI.diagLog('renderer:pty-exit-received', { terminalId, exitCode });
+          setProcessStatus(exitCode && exitCode !== 0 ? 'exited-error' : 'exited-ok');
           term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n');
           setTimeout(() => {
             window.terminalAPI.diagLog('renderer:close-terminal-start', { terminalId });
@@ -349,16 +436,24 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     const termInstance = useTerminalStore.getState().terminals.get(terminalId);
     if (termInstance?.startupCommand && !termInstance.startupCommandSent) {
       const cmd = termInstance.startupCommand;
-      // Save resume command for AI sessions so we can pre-fill it on exit
-      if (termInstance.aiSessionId) {
-        aiResumeCommandRef.current = cmd;
+      if (termInstance.wsl) {
+        // WSL: wait for the shell prompt before sending the command
+        wslPromptCleanupRef.current = sendCommandOnWslPrompt(terminalId, cmd, (sentCmd) => {
+          if (termInstance.aiSessionId) {
+            aiResumeCommandRef.current = sentCmd;
+            aiSessionStartedRef.current = true;
+          }
+        });
+      } else {
+        setTimeout(() => {
+          window.terminalAPI.writePty(terminalId, cmd + '\r');
+          // Arm the re-send mechanism for native AI sessions only.
+          if (termInstance.aiSessionId) {
+            aiResumeCommandRef.current = cmd;
+            aiSessionStartedRef.current = true;
+          }
+        }, 1500);
       }
-      setTimeout(() => {
-        window.terminalAPI.writePty(terminalId, cmd + '\r');
-        if (termInstance.aiSessionId) {
-          aiSessionStartedRef.current = true;
-        }
-      }, 1500);
       // Mark as sent so it doesn't re-run on hot reload, but keep the value for session save
       const store = useTerminalStore.getState();
       const newTerminals = new Map(store.terminals);
@@ -387,7 +482,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
         const hasFileExtension = /\.\w{1,5}$/i.test(trimmed);
         if (looksLikePath && !hasFileExtension) {
           updates.cwd = trimmed;
-          store.addRecentDir(trimmed);
+          if (terminal.wslDistro && trimmed.startsWith('/')) {
+            store.addRecentDir(`\\\\wsl.localhost\\${terminal.wslDistro}${trimmed.replace(/\//g, '\\')}`);
+          } else {
+            store.addRecentDir(trimmed);
+          }
         }
         const newTerminals = new Map(store.terminals);
         newTerminals.set(terminalId, { ...terminal, ...updates });
@@ -491,6 +590,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       dataDisposable.dispose();
       unsubscribePtyData();
       unsubscribePtyExit();
+      wslPromptCleanupRef.current?.();
       if (textareaEl) {
         textareaEl.removeEventListener('focus', handleFocus);
         textareaEl.removeEventListener('blur', handleBlur);
@@ -506,17 +606,42 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     };
   }, [terminalId, handleFocus]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // React to fontSize changes from zoom
+  // React to fontSize and fontFamily changes
+  const configFontFamily = config?.terminal?.fontFamily;
   useEffect(() => {
     try {
       if (terminalRef.current && fitAddonRef.current) {
         terminalRef.current.options.fontSize = fontSize;
+        if (configFontFamily) {
+          terminalRef.current.options.fontFamily = configFontFamily;
+        }
         fitAddonRef.current.fit();
         const { cols, rows } = terminalRef.current;
         window.terminalAPI.resizePty(terminalId, cols, rows);
       }
     } catch { /* terminal may be disposed */ }
-  }, [fontSize, terminalId]);
+  }, [fontSize, configFontFamily, terminalId]);
+
+  // Keep ref in sync for use in closure
+  useEffect(() => { processStatusRef.current = processStatus; }, [processStatus]);
+
+  // Process status: detect idle after 3s of no substantial output
+  useEffect(() => {
+    let lastBytes = 0;
+    const id = setInterval(() => {
+      setProcessStatus((prev) => {
+        if (prev.startsWith('exited')) return prev;
+        const now = Date.now();
+        const elapsed = now - diagRef.current.lastOutputTime;
+        const bytesDelta = diagRef.current.outputBytes - lastBytes;
+        lastBytes = diagRef.current.outputBytes;
+        // Active only if recent output AND substantial volume
+        if (elapsed < 3000 && bytesDelta > 50) return 'active';
+        return 'idle';
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Programmatic focus when this terminal becomes focused in the store,
   // or when overlays close (to restore DEC focus reporting for Copilot CLI)
@@ -524,9 +649,23 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     try {
       if (isFocused && !anyOverlayOpen && terminalRef.current) {
         terminalRef.current.focus();
+        // Immediately refit in case the container size changed (e.g. focus
+        // mode shows this pane at full size while it was previously hidden at
+        // its split-ratio size).  Using rAF so the DOM layout has settled.
+        if (fitAddonRef.current) {
+          requestAnimationFrame(() => {
+            try {
+              fitAddonRef.current?.fit();
+              if (terminalRef.current) {
+                const { cols, rows } = terminalRef.current;
+                window.terminalAPI.resizePty(terminalId, cols, rows);
+              }
+            } catch { /* terminal may be disposed */ }
+          });
+        }
       }
     } catch { /* terminal may be disposed */ }
-  }, [isFocused, anyOverlayOpen]);
+  }, [isFocused, anyOverlayOpen, terminalId]);
 
   // Re-focus xterm when the OS window regains focus (alt-tab back)
   useEffect(() => {
@@ -582,8 +721,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   // Apply tab color or default color as terminal background tint via CSS overlay
   const title = useTerminalStore((s) => s.terminals.get(terminalId)?.title);
   const tabColor = useTerminalStore((s) => s.terminals.get(terminalId)?.tabColor);
+  const groupId = useTerminalStore((s) => s.terminals.get(terminalId)?.groupId);
+  const groupColor = useTerminalStore((s) => groupId ? s.tabGroups.get(groupId)?.color : undefined);
   const defaultTabColor = useTerminalStore((s) => (s.config as any)?.defaultTabColor);
-  const bgTint = tabColor || defaultTabColor;
+  const bgTint = groupColor || tabColor || defaultTabColor;
 
   const handleSearch = useCallback((query: string, backward?: boolean) => {
     if (!searchAddonRef.current || !query) return;
@@ -655,32 +796,64 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
           <button className="terminal-search-btn" onClick={handleCloseSearch} title="Close">&#10005;</button>
         </div>
       )}
-      {title && <div className="terminal-pane-title">{title}</div>}
+      {title && (
+        <div className="terminal-pane-title">
+          <div
+            className="status-dot-container"
+            onClick={(e) => {
+              e.stopPropagation();
+              useTerminalStore.getState().closeTerminal(terminalId);
+            }}
+          >
+            <span
+              className={`terminal-status-dot ${processStatus}`}
+              title={processStatus === 'active' ? 'Active' : processStatus === 'exited-error' ? 'Exited with error' : processStatus === 'idle' ? 'Idle' : 'Exited'}
+            />
+            <span className="pane-close-x" title="Close pane">✕</span>
+          </div>
+          {isRenamingPane ? (
+            <input
+              className="pane-rename-input"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const trimmed = renameValue.trim();
+                  if (trimmed) useTerminalStore.getState().renameTerminal(terminalId, trimmed, true);
+                  setIsRenamingPane(false);
+                } else if (e.key === 'Escape') {
+                  setIsRenamingPane(false);
+                }
+              }}
+              onBlur={() => {
+                const trimmed = renameValue.trim();
+                if (trimmed) useTerminalStore.getState().renameTerminal(terminalId, trimmed, true);
+                setIsRenamingPane(false);
+              }}
+              autoFocus
+              onFocus={(e) => e.target.select()}
+            />
+          ) : (
+            <span
+              className="terminal-pane-title-text"
+              onDoubleClick={() => {
+                setRenameValue(title || '');
+                setIsRenamingPane(true);
+              }}
+            >{title}</span>
+          )}
+          <button
+            className="terminal-diff-btn"
+            title="Open diff review"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              useTerminalStore.getState().openDiffReview(terminalId);
+            }}
+          >Diff</button>
+        </div>
+      )}
       {showDiag && <DiagnosticsOverlay terminalId={terminalId} diagRef={diagRef} mainDiag={mainDiagRef.current} logPath={logPathRef.current} onClose={() => setShowDiag(false)} />}
       <div ref={containerRef} className="xterm-container" />
-      <button
-        className="terminal-diff-btn"
-        title="Open diff review"
-        onMouseDown={(e) => {
-          e.stopPropagation();
-          useTerminalStore.getState().openDiffReview(terminalId);
-        }}
-      >&#9998;</button>
-      <button
-        className="terminal-refocus-btn"
-        title="Re-focus terminal (use if stuck)"
-        onMouseDown={(e) => {
-          e.stopPropagation();
-          try {
-            if (fitAddonRef.current) fitAddonRef.current.fit();
-            if (terminalRef.current) {
-              const { cols, rows } = terminalRef.current;
-              window.terminalAPI.resizePty(terminalId, cols, rows);
-              terminalRef.current.focus();
-            }
-          } catch { /* terminal may be disposed */ }
-        }}
-      >&#8635;</button>
       {bgTint && <div className="terminal-color-overlay" style={{ background: bgTint + '18' }} />}
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 import { getLeafOrder } from '../state/terminal-store';
+import { formatKeyForPlatform } from '../utils/platform';
 
 interface UpdateInfoState {
   status: string;
@@ -118,14 +119,14 @@ const StatusBar: React.FC = () => {
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleHideTabTitles()}
-            title="Toggle Tab Bar (Ctrl+Shift+B)"
+            title={formatKeyForPlatform("Toggle Tab Bar (Ctrl+Shift+B)")}
           >
             &#9776; Tabs
           </button>
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleDirPicker()}
-            title="Directories (Ctrl+Shift+D)"
+            title={formatKeyForPlatform("Directories (Ctrl+Shift+D)")}
           >
             &#128193; Dirs
           </button>
@@ -138,8 +139,15 @@ const StatusBar: React.FC = () => {
           </button>
           <button
             className="status-mode-btn"
+            onClick={() => useTerminalStore.getState().toggleFileExplorer()}
+            title={formatKeyForPlatform("File Explorer (Ctrl+Shift+X)")}
+          >
+            &#128196; Explorer
+          </button>
+          <button
+            className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleCopilotPanel()}
-            title="AI Sessions (Ctrl+Shift+C)"
+            title={formatKeyForPlatform("AI Sessions (Ctrl+Shift+C)")}
           >
             &#129302; Sessions
           </button>

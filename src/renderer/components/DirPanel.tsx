@@ -163,7 +163,7 @@ const DirPanel: React.FC = () => {
     <div className={`dir-panel${resizing ? ' resizing' : ''}`} style={{ width, minWidth: width }}>
       <div className="dir-panel-resize" onMouseDown={handleResizeStart} />
       <div className="dir-panel-header">
-        <span>Directories</span>
+        <span>📁 Directories</span>
         <button className="dir-panel-close" onClick={() => useTerminalStore.getState().toggleDirPicker()}>&#10005;</button>
       </div>
 

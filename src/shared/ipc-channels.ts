@@ -47,11 +47,18 @@ export const IPC = {
   GIT_CREATE_WORKTREE: 'git:createWorktree',
   GIT_DELETE_WORKTREE: 'git:deleteWorktree',
   GIT_GET_BRANCHES: 'git:getBranches',
+  GET_SYSTEM_FONTS: 'system:getFonts',
+  // ── Transparency ────────────────────────────────────────────────────
+  SET_BACKGROUND_MATERIAL: 'transparency:setMaterial',
+  GET_PLATFORM_SUPPORTS_MATERIAL: 'transparency:platformSupports',
   // ── Diff editor ────────────────────────────────────────────────────
   DIFF_RESOLVE_GIT_ROOT: 'diff:resolveGitRoot',
   DIFF_GET_CODE_CHANGES: 'diff:getCodeChanges',
   DIFF_GET_DIFF: 'diff:getDiff',
   DIFF_GET_ANNOTATED_FILE: 'diff:getAnnotatedFile',
+  // ── File explorer ──────────────────────────────────────────────────
+  FILE_LIST: 'file:list',
+  FILE_READ: 'file:read',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

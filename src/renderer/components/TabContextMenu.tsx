@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useTerminalStore, TAB_COLORS } from '../state/terminal-store';
+import { formatKeyForPlatform } from '../utils/platform';
 import type { TerminalId } from '../state/types';
 
 export interface ContextMenuPosition {
@@ -23,7 +24,11 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
 
   const store = useTerminalStore.getState;
   const terminal = useTerminalStore((s) => s.terminals.get(position.terminalId));
+  const tabGroups = useTerminalStore((s) => s.tabGroups);
   const config = useTerminalStore((s) => s.config);
+  const [showGroupMenu, setShowGroupMenu] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const newGroupInputRef = useRef<HTMLInputElement>(null);
   const hasAnyColor = useTerminalStore((s) => s.autoColorTabs);
 
   // Close on outside click or Escape
@@ -166,21 +171,21 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
       ) : (
         <>
           <button className="context-menu-item" onClick={handleRename}>
-            Rename <span className="shortcut">Ctrl+Shift+R</span>
+            Rename <span className="shortcut">{formatKeyForPlatform('Ctrl+Shift+R')}</span>
           </button>
           <div className="context-menu-separator" />
           <button className="context-menu-item" onClick={handleSplitRight}>
-            Split Right <span className="shortcut">Ctrl+Alt+→</span>
+            Split Right <span className="shortcut">{formatKeyForPlatform('Ctrl+Alt+→')}</span>
           </button>
           <button className="context-menu-item" onClick={handleSplitDown}>
-            Split Down <span className="shortcut">Ctrl+Alt+↓</span>
+            Split Down <span className="shortcut">{formatKeyForPlatform('Ctrl+Alt+↓')}</span>
           </button>
           <div className="context-menu-separator" />
           <button className="context-menu-item" onClick={() => {
             store().toggleViewMode();
             onClose();
           }}>
-            {store().viewMode === 'focus' ? 'Split Mode' : 'Focus Mode'} <span className="shortcut">Ctrl+Shift+F</span>
+            {store().viewMode === 'focus' ? 'Split Mode' : 'Focus Mode'} <span className="shortcut">{formatKeyForPlatform('Ctrl+Shift+F')}</span>
           </button>
           {selectedAtOpen.length >= 2 && (
             <button className="context-menu-item" onClick={() => {
@@ -203,7 +208,7 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
             {terminal?.mode === 'detached' ? 'Reattach' : 'Detach to Window'}
           </button>
           <button className="context-menu-item" onClick={handleToggleDormant}>
-            {isDormant ? 'Wake' : 'Hide (Dormant)'} <span className="shortcut">Ctrl+Shift+H</span>
+            {isDormant ? 'Wake' : 'Hide (Dormant)'} <span className="shortcut">{formatKeyForPlatform('Ctrl+Shift+H')}</span>
           </button>
           <div className="context-menu-separator" />
           {showColorPicker ? (
@@ -296,8 +301,60 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
             store().toggleHideTabTitles();
             onClose();
           }}>
-            Hide Tab Bar <span className="context-menu-shortcut">Ctrl+Shift+B</span>
+            Hide Tab Bar <span className="context-menu-shortcut">{formatKeyForPlatform('Ctrl+Shift+B')}</span>
           </button>
+          <div className="context-menu-separator" />
+          <button className="context-menu-item" onClick={() => setShowGroupMenu((v) => !v)}>
+            {terminal?.groupId ? 'Change Group' : 'Add to Group'} &#9656;
+          </button>
+          {showGroupMenu && (() => {
+            // Apply group actions to all selected tabs, or just the right-clicked one
+            const targetIds = selectedAtOpen.length >= 2 ? selectedAtOpen : [position.terminalId];
+            return (
+            <div className="context-menu-sub">
+              {Array.from(tabGroups.values()).map((g) => (
+                <button key={g.id} className={`context-menu-item sub${terminal?.groupId === g.id ? ' active-check' : ''}`} onClick={() => {
+                  for (const id of targetIds) store().addToGroup(id, g.id);
+                  onClose();
+                }}>
+                  <span className="color-dot" style={{ background: g.color, width: 8, height: 8, borderRadius: '50%', display: 'inline-block', marginRight: 6 }} />
+                  {g.name} {terminal?.groupId === g.id ? '\u2713' : ''}
+                </button>
+              ))}
+              {terminal?.groupId && (
+                <>
+                  <button className="context-menu-item" onClick={() => { for (const id of targetIds) store().removeFromGroup(id); onClose(); }}>
+                    Remove from Group
+                  </button>
+                  <button className="context-menu-item" onClick={() => { store().deleteTabGroup(terminal.groupId!); onClose(); }}>
+                    Ungroup All
+                  </button>
+                </>
+              )}
+              <div className="context-menu-separator" />
+              <div className="context-menu-inline-input">
+                <input
+                  ref={newGroupInputRef}
+                  type="text"
+                  placeholder="New group name..."
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter' && newGroupName.trim()) {
+                      const colors = ['#f38ba8', '#a6e3a1', '#89b4fa', '#f9e2af', '#cba6f7', '#fab387'];
+                      const color = colors[tabGroups.size % colors.length];
+                      const groupId = store().createTabGroup(newGroupName.trim(), color);
+                      for (const id of targetIds) store().addToGroup(id, groupId);
+                      onClose();
+                    }
+                  }}
+                  onClick={(e) => { e.stopPropagation(); requestAnimationFrame(() => newGroupInputRef.current?.focus()); }}
+                />
+              </div>
+            </div>
+            );
+          })()}
           <div className="context-menu-label">Tab Bar Position</div>
           {(['top', 'bottom', 'left', 'right'] as const).map((pos) => (
             <button key={pos} className={`context-menu-item sub${store().tabBarPosition === pos ? ' active-check' : ''}`} onClick={() => {
@@ -333,13 +390,13 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
             onClose();
             store().toggleCommandPalette();
           }}>
-            Command Palette <span className="shortcut">Ctrl+Shift+P</span>
+            Command Palette <span className="shortcut">{formatKeyForPlatform('Ctrl+Shift+P')}</span>
           </button>
           <button className="context-menu-item" onClick={() => {
             onClose();
             store().toggleSettings();
           }}>
-            Settings <span className="shortcut">Ctrl+,</span>
+            Settings <span className="shortcut">{formatKeyForPlatform('Ctrl+,')}</span>
           </button>
           <div className="context-menu-separator" />
           {config && config.shells.length > 1 && (
@@ -366,7 +423,7 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
             useTerminalStore.getState().clearSelection();
             (async () => { for (const id of ids) await useTerminalStore.getState().closeTerminal(id); })();
           }}>
-            Close{targetIds.length > 1 ? ` (${targetIds.length})` : ''} <span className="shortcut">Ctrl+Shift+W</span>
+            Close{targetIds.length > 1 ? ` (${targetIds.length})` : ''} <span className="shortcut">{formatKeyForPlatform('Ctrl+Shift+W')}</span>
           </button>
           <button className="context-menu-item danger" onClick={() => {
             onClose();

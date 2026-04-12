@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
+import { formatKeyForPlatform } from '../utils/platform';
 import InputDialog from './InputDialog';
 
 interface Command {
@@ -66,7 +67,16 @@ const CommandPalette: React.FC = () => {
       { id: 'colorizeAllTabs', label: 'Toggle Tab Colors', shortcut: 'Ctrl+Shift+O', action: () => store().colorizeAllTabs() },
       { id: 'toggleTabBar', label: 'Toggle Tab Bar: Top / Left', action: () => store().toggleTabBarPosition() },
       { id: 'hideTabBar', label: 'Hide / Show Tab Bar', shortcut: 'Ctrl+Shift+B', action: () => store().toggleHideTabTitles() },
-      { id: 'jumpToPrompt', label: 'Jump to Prompt', shortcut: 'Ctrl+Shift+I', action: () => { const id = focusedId(); if (id) store().showPromptsForTerminal(id); } },
+      { id: 'fileExplorer', label: 'File Explorer', shortcut: 'Ctrl+Shift+X', action: () => store().toggleFileExplorer() },
+      { id: 'refocus', label: 'Re-focus Terminal (fix stuck input)', action: () => {
+        const id = focusedId();
+        if (id) {
+          window.terminalAPI.resizePty(id, 80, 24).catch(() => {});
+          window.terminalAPI.writePty(id, '\x1b[I\x1b[?1h\x1b[?1l');
+          store().setFocus(id);
+        }
+      }},
+      { id: 'jumpToPrompt', label: 'Jump to Prompt', shortcut: 'Ctrl+Shift+K', action: () => { const id = focusedId(); if (id) store().showPromptsForTerminal(id); } },
       { id: 'shortcuts', label: 'Show Keyboard Shortcuts', shortcut: 'Ctrl+Shift+?', action: () => store().toggleShortcuts() },
       { id: 'settings', label: 'Open Settings', shortcut: 'Ctrl+,', action: () => store().toggleSettings() },
       { id: 'checkForUpdates', label: 'Check for Updates', action: () => {
@@ -211,7 +221,7 @@ const CommandPalette: React.FC = () => {
               onMouseEnter={() => setSelectedIndex(index)}
             >
               <span className="palette-label">{cmd.label}</span>
-              {cmd.shortcut && <kbd className="palette-shortcut">{cmd.shortcut}</kbd>}
+              {cmd.shortcut && <kbd className="palette-shortcut">{formatKeyForPlatform(cmd.shortcut)}</kbd>}
             </div>
           ))}
           {filtered.length === 0 && (

@@ -6,6 +6,7 @@ export type CopilotSessionStatus =
   | 'waitingForUser';
 
 export type SessionProvider = 'copilot' | 'claude-code';
+export type SessionLifecycle = 'active' | 'completed' | 'old';
 
 export interface CopilotSessionSummary {
   id: string;
@@ -19,6 +20,8 @@ export interface CopilotSessionSummary {
   toolCallCount: number;
   lastActivityTime: number;
   model?: string;
+  wsl?: boolean;
+  wslDistro?: string;
 }
 
 export interface CopilotWorkspaceMetadata {
