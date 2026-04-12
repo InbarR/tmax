@@ -428,7 +428,7 @@ const CopilotPanel: React.FC = () => {
               onClick={() => setShowFilterDropdown((v) => !v)}
               title={`Filter: ${filterTab === 'all' ? 'All providers' : PROVIDER_LABEL[filterTab as SessionProvider] || filterTab}`}
             >
-              ⚙
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="1" y1="3" x2="15" y2="3"/><line x1="3" y1="8" x2="13" y2="8"/><line x1="5.5" y1="13" x2="10.5" y2="13"/></svg>
               {filterTab !== 'all' && <span className="ai-filter-badge" />}
             </button>
             {showFilterDropdown && (
