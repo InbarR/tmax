@@ -4,7 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon } from '@xterm/addon-search';
 import { useTerminalStore } from '../state/terminal-store';
-import { registerTerminal, unregisterTerminal, getTerminalEntry, addTerminalCleanup, stashTerminal, unstashTerminal, disposeTerminal } from '../terminal-registry';
+import { registerTerminal, unregisterTerminal, getTerminalEntry, addTerminalCleanup, stashTerminal, unstashTerminal, disposeTerminal, setWebglAddon } from '../terminal-registry';
 import { isMac } from '../utils/platform';
 import type { AppConfig } from '../state/types';
 import '@xterm/xterm/css/xterm.css';
@@ -217,7 +217,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
             const { cols, rows } = term;
             window.terminalAPI.resizePty(terminalId, cols, rows);
           } catch { /* ignore */ }
-        }, 100);
+        }, 30);
       });
       resizeObserver.observe(containerRef.current);
 
@@ -295,9 +295,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
           },
       fontSize: termConfig?.fontSize ?? 14,
       fontFamily: termConfig?.fontFamily ?? "'Cascadia Code', 'Consolas', monospace",
+      fontWeight: '400',
+      fontWeightBold: '700',
+      letterSpacing: 0,
       scrollback: termConfig?.scrollback ?? 5000,
       cursorStyle: termConfig?.cursorStyle ?? 'block',
       cursorBlink: termConfig?.cursorBlink ?? true,
+      drawBoldTextInBrightColors: true,
+      minimumContrastRatio: 1,
       allowTransparency: bgOpacity < 1,
       allowProposedApi: true,
     });
@@ -390,6 +395,26 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     });
 
     term.open(containerRef.current);
+
+    // Load WebGL renderer for GPU-accelerated rendering (5-10x faster).
+    // WebGL doesn't support allowTransparency — fall back to canvas in that case.
+    if (!term.options.allowTransparency) {
+      import('@xterm/addon-webgl').then(({ WebglAddon }) => {
+        // Guard: terminal may have been disposed by the time import resolves
+        if (!terminalRef.current || terminalRef.current !== term) return;
+        try {
+          const webgl = new WebglAddon();
+          webgl.onContextLoss(() => {
+            try { webgl.dispose(); } catch { /* ignore */ }
+            setWebglAddon(terminalId, null);
+          });
+          term.loadAddon(webgl);
+          setWebglAddon(terminalId, webgl);
+        } catch {
+          // WebGL not available — canvas fallback is automatic
+        }
+      }).catch(() => { /* import failed — canvas fallback */ });
+    }
 
     terminalRef.current = term;
     fitAddonRef.current = fitAddon;
@@ -628,7 +653,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
         } catch {
           // Ignore resize errors during teardown
         }
-      }, 100);
+      }, 30);
     });
     resizeObserver.observe(containerRef.current);
 

@@ -10,11 +10,13 @@
 import type { Terminal } from '@xterm/xterm';
 import type { SearchAddon } from '@xterm/addon-search';
 import type { FitAddon } from '@xterm/addon-fit';
+import type { WebglAddon } from '@xterm/addon-webgl';
 
 interface TerminalEntry {
   terminal: Terminal;
   searchAddon: SearchAddon;
   fitAddon: FitAddon;
+  webglAddon: WebglAddon | null;
   stashed: boolean;
   /** Cleanup callbacks created during TerminalPanel setup (PTY subs, etc.).
    *  Called only on actual terminal close, NOT on layout-induced unmounts. */
@@ -42,7 +44,13 @@ export function registerTerminal(
   searchAddon: SearchAddon,
   fitAddon: FitAddon,
 ): void {
-  registry.set(id, { terminal, searchAddon, fitAddon, stashed: false, cleanups: [] });
+  registry.set(id, { terminal, searchAddon, fitAddon, webglAddon: null, stashed: false, cleanups: [] });
+}
+
+/** Store the WebGL addon reference for lifecycle management. */
+export function setWebglAddon(id: string, addon: WebglAddon | null): void {
+  const entry = registry.get(id);
+  if (entry) entry.webglAddon = addon;
 }
 
 /** Store a cleanup callback that will run when the terminal is fully disposed. */
@@ -61,6 +69,11 @@ export function getTerminalEntry(id: string): (TerminalEntry & { stashed: boolea
 
 export function getAllTerminals(): Terminal[] {
   return Array.from(registry.values()).map((e) => e.terminal);
+}
+
+/** Iterate all terminal entries with their IDs. */
+export function getAllTerminalEntries(): Array<[string, TerminalEntry]> {
+  return Array.from(registry.entries());
 }
 
 /** Move the xterm DOM element to the off-screen stash container.
@@ -96,6 +109,7 @@ export function disposeTerminal(id: string): void {
   for (const cleanup of entry.cleanups) {
     try { cleanup(); } catch { /* ignore */ }
   }
+  try { entry.webglAddon?.dispose(); } catch { /* ignore */ }
   try { entry.terminal.dispose(); } catch { /* already disposed */ }
   registry.delete(id);
 }

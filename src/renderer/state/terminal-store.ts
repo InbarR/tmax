@@ -14,7 +14,7 @@ import type {
 } from './types';
 import type { CopilotSessionSummary } from '../../shared/copilot-types';
 import type { DiffMode } from '../../shared/diff-types';
-import { getAllTerminals, disposeTerminal } from '../terminal-registry';
+import { getAllTerminals, getAllTerminalEntries, setWebglAddon, disposeTerminal } from '../terminal-registry';
 
 // Session IDs must be alphanumeric/dash/dot/underscore only (prevent shell injection)
 const SAFE_SESSION_ID = /^[a-zA-Z0-9._-]+$/;
@@ -238,18 +238,40 @@ export function applyThemeToChromeVars(theme: Record<string, string>, transparen
  * transparency / theme settings so terminals don't keep stale backgrounds.
  */
 function syncTerminalTransparency(theme: Record<string, string>, opacity?: number): void {
-  const terminals = getAllTerminals();
+  const entries = getAllTerminalEntries();
   const bg = theme.background || '#1e1e2e';
   const useTransparency = opacity !== undefined && opacity < 1;
   const bgColor = useTransparency ? hexToRgba(bg, opacity) : bg;
 
-  for (const term of terminals) {
+  for (const [id, entry] of entries) {
+    const term = entry.terminal;
+    const wasTransparent = term.options.allowTransparency;
+
     term.options.allowTransparency = useTransparency;
     term.options.theme = {
       ...term.options.theme,
       background: bgColor,
     };
-    term.refresh(0, term.rows - 1);
+
+    // WebGL doesn't support transparency — manage addon lifecycle on toggle
+    if (useTransparency && !wasTransparent && entry.webglAddon) {
+      // Switching to transparent: dispose WebGL, fall back to canvas
+      try { entry.webglAddon.dispose(); } catch {}
+      setWebglAddon(id, null);
+    } else if (!useTransparency && wasTransparent && !entry.webglAddon) {
+      // Switching to opaque: try to load WebGL renderer
+      import('@xterm/addon-webgl').then(({ WebglAddon }) => {
+        try {
+          const webgl = new WebglAddon();
+          webgl.onContextLoss(() => {
+            try { webgl.dispose(); } catch {}
+            setWebglAddon(id, null);
+          });
+          term.loadAddon(webgl);
+          setWebglAddon(id, webgl);
+        } catch {}
+      }).catch(() => {});
+    }
   }
 }
 

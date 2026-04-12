@@ -488,6 +488,9 @@ html.transparency-active .input-dialog {
   position: relative;
   display: flex;
   flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  contain: layout style;
 }
 
 .terminal-panel.focused {
@@ -734,6 +737,8 @@ html.transparency-active .input-dialog {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  contain: strict;
+  will-change: contents;
 }
 
 /* Thin scrollbar for xterm terminals */

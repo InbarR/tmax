@@ -60,28 +60,45 @@ export interface PtyStats {
   dataBytes: number;
 }
 
-const BATCH_INTERVAL = 12; // ms — flush PTY output batches (~1 frame at 60fps + margin)
 
 export class PtyManager {
   private ptys = new Map<string, IPty>();
   private stats = new Map<string, PtyStats>();
   private callbacks: PtyCallbacks;
   private pendingData = new Map<string, string>();
-  private batchTimer: ReturnType<typeof setTimeout> | null = null;
+  private flushScheduled = false;
 
   constructor(callbacks: PtyCallbacks) {
     this.callbacks = callbacks;
   }
 
+  // Hybrid batching: flush on next tick via setImmediate for low-latency,
+  // but enforce a minimum 8ms interval between flushes to cap IPC rate at
+  // ~125 msgs/sec and prevent flooding during sustained output (e.g. cat).
+  private static readonly MIN_FLUSH_INTERVAL = 8;
+  private lastFlushTime = 0;
+
   private scheduleBatchFlush(): void {
-    if (this.batchTimer) return;
-    this.batchTimer = setTimeout(() => {
-      this.batchTimer = null;
-      for (const [id, data] of this.pendingData) {
-        this.callbacks.onData(id, data);
-      }
-      this.pendingData.clear();
-    }, BATCH_INTERVAL);
+    if (this.flushScheduled) return;
+    this.flushScheduled = true;
+
+    const elapsed = Date.now() - this.lastFlushTime;
+    if (elapsed >= PtyManager.MIN_FLUSH_INTERVAL) {
+      // Enough time has passed — flush on next tick
+      setImmediate(() => this.doFlush());
+    } else {
+      // Too soon — delay to respect rate cap
+      setTimeout(() => this.doFlush(), PtyManager.MIN_FLUSH_INTERVAL - elapsed);
+    }
+  }
+
+  private doFlush(): void {
+    this.flushScheduled = false;
+    this.lastFlushTime = Date.now();
+    for (const [id, data] of this.pendingData) {
+      this.callbacks.onData(id, data);
+    }
+    this.pendingData.clear();
   }
 
   getStats(id: string): PtyStats | null {
