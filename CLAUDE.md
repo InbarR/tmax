@@ -1,4 +1,16 @@
 
+# Cross-Platform Development Guidelines
+
+tmax supports Windows, macOS, and Linux. All code changes MUST be compatible with all three platforms:
+
+- **Keyboard shortcuts**: Use `isMac ? event.metaKey : event.ctrlKey` for the primary modifier. Never use bare `event.ctrlKey` for app shortcuts — it won't work on Mac.
+- **UI text**: Use `formatKeyForPlatform()` from `utils/platform.ts` to display shortcuts (renders Ctrl as ⌘ and Alt as ⌥ on Mac).
+- **File paths**: Support both `\` (Windows) and `/` (Unix). Use `path.join()` or forward slashes for UNC paths.
+- **WSL paths**: Use `//wsl.localhost/` (forward slashes) for Node.js `fs` compatibility, not `\\wsl.localhost\`.
+- **Shell detection**: Account for PowerShell, CMD, bash, zsh, and WSL shells.
+- **Home directory**: Use `(window as any).platformInfo?.homeDir` or `os.homedir()`, not hardcoded paths.
+- **Electron APIs**: Check `process.platform` before using platform-specific features (e.g., `backgroundMaterial` for Windows 11, macOS app menu).
+
 <!-- BACKLOG.MD GUIDELINES START -->
 # Instructions for the usage of Backlog.md CLI Tool
 
