@@ -6,8 +6,9 @@ dist/
 *.node
 
 # Claude Code local settings
-.claude/settings.local.json
-.claude/commands/
+.claude/
+CLAUDE.md
+AGENTS.md
 
 # Build/swap helpers
 _swap.cmd
