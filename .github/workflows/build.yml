@@ -80,15 +80,31 @@ jobs:
         run: |
           codesign --force --deep --sign - out/tmax-darwin-${{ matrix.arch }}/tmax.app
 
-      # Rename Windows setup exe to include architecture
-      - name: Rename Windows installer
+      # Rename Windows Squirrel artifacts to include architecture
+      - name: Rename Windows installer and Squirrel artifacts
         if: matrix.platform == 'win32'
         shell: bash
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          for f in out/make/squirrel.windows/${{ matrix.arch }}/*.exe; do
-            mv "$f" "$(dirname "$f")/tmax-${VERSION}-${{ matrix.arch }}-Setup.exe"
+          SQDIR="out/make/squirrel.windows/${{ matrix.arch }}"
+
+          # Rename Setup.exe to include arch
+          for f in "$SQDIR"/*.exe; do
+            mv "$f" "$SQDIR/tmax-${VERSION}-${{ matrix.arch }}-Setup.exe"
           done
+
+          # Rename nupkg to include arch (e.g. tmax-1.4.8-x64-full.nupkg)
+          for f in "$SQDIR"/*.nupkg; do
+            base=$(basename "$f")
+            newname=$(echo "$base" | sed "s/-full\.nupkg/-${{ matrix.arch }}-full.nupkg/")
+            mv "$f" "$SQDIR/$newname"
+          done
+
+          # Rewrite RELEASES file entries to match renamed nupkg, then rename it
+          if [ -f "$SQDIR/RELEASES" ]; then
+            sed -i "s/-full\.nupkg/-${{ matrix.arch }}-full.nupkg/g" "$SQDIR/RELEASES"
+            mv "$SQDIR/RELEASES" "$SQDIR/RELEASES-${{ matrix.arch }}"
+          fi
 
       # Create portable ZIP for Windows
       - name: Create Windows portable ZIP
@@ -108,7 +124,7 @@ jobs:
             out/make/**/*.deb
             out/make/**/*.rpm
             out/make/**/*.nupkg
-            out/make/**/RELEASES
+            out/make/**/RELEASES*
             out/*.zip
           if-no-files-found: warn
 
@@ -152,7 +168,7 @@ jobs:
             artifacts/**/*.deb
             artifacts/**/*.rpm
             artifacts/**/*.nupkg
-            artifacts/**/RELEASES
+            artifacts/**/RELEASES*
           draft: false
           prerelease: false
           generate_release_notes: true
