@@ -62,6 +62,9 @@ const App: React.FC = () => {
           if (!restored) {
             await createTerminal();
           }
+        } else {
+          // Session already active (e.g. hot-reload) — load persisted overrides
+          await useTerminalStore.getState().restoreSession();
         }
         // Check for stale active sessions (>30 days) — must run after restoreSession
         // so sessionLifecycleOverrides are loaded before saveSession() is triggered

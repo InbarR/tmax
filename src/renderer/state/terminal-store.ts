@@ -670,6 +670,11 @@ interface TerminalStore {
 // Cached session extras (layouts, etc.) so saveSession doesn't need async load
 let _sessionExtras: Record<string, unknown> = {};
 
+// Guard: prevents saveSession() from writing before restoreSession() has loaded
+// persisted state (e.g. sessionLifecycleOverrides). Without this, any early
+// saveSession() call would overwrite the file with empty initial values.
+let _sessionHydrated = false;
+
 // ── Store implementation ─────────────────────────────────────────────
 
 export const useTerminalStore = create<TerminalStore>((set, get) => ({
@@ -1893,6 +1898,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   saveSession: async () => {
+    if (!_sessionHydrated) return; // Don't overwrite persisted data before restore
     const { terminals, layout, favoriteDirs, recentDirs, config, copilotSessions, claudeCodeSessions } = get();
 
     // For AI sessions, always derive the command from session type to avoid stale
@@ -1937,7 +1943,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   restoreSession: async () => {
     const session = (await window.terminalAPI.loadSession()) as Record<string, unknown> | null;
-    if (!session) return false;
+    if (!session) { _sessionHydrated = true; return false; }
     // Cache session extras (layouts, etc.) so saveSession doesn't need async load
     _sessionExtras = { ...session };
 
@@ -1954,9 +1960,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     }
 
     const { config } = get();
-    if (!config) return false;
-
-    // New tree format
+    if (!config) { _sessionHydrated = true; return false; }
     if (session.tree || session.floating) {
       async function createTerm(info: { title: string; shellProfileId: string; cwd: string; startupCommand?: string; aiSessionId?: string; aiAutoTitle?: boolean; tabColor?: string; customTitle?: boolean; wsl?: boolean; wslDistro?: string }): Promise<{ id: TerminalId; instance: TerminalInstance } | null> {
         const profile = config!.shells.find((s) => s.id === info.shellProfileId) ?? config!.shells[0];
@@ -2042,6 +2046,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         set({ terminals: newTerminals, layout: { ...layout, tilingRoot: newRoot }, focusedTerminalId: id });
       } catch { /* skip */ }
     }
+    _sessionHydrated = true;
     return true;
   },
 
