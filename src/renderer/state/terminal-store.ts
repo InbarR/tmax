@@ -2278,9 +2278,19 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   setSessionNameOverride: (sessionId: string, name: string) => {
-    set((s) => ({
-      sessionNameOverrides: { ...s.sessionNameOverrides, [sessionId]: name },
-    }));
+    set((s) => {
+      // Also sync the terminal pane/tab title for any terminal linked to this session
+      const updatedTerminals = new Map(s.terminals);
+      for (const [id, inst] of updatedTerminals) {
+        if (inst.aiSessionId === sessionId) {
+          updatedTerminals.set(id, { ...inst, title: name, customTitle: true, aiAutoTitle: false });
+        }
+      }
+      return {
+        sessionNameOverrides: { ...s.sessionNameOverrides, [sessionId]: name },
+        terminals: updatedTerminals,
+      };
+    });
     get().saveSession();
   },
 
