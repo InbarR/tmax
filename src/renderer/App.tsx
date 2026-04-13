@@ -5,6 +5,7 @@ import {
   pointerWithin,
 } from '@dnd-kit/core';
 import { useTerminalStore } from './state/terminal-store';
+import { initPipelineIpc } from './state/pipeline-store';
 import type { CopilotSessionSummary } from '../shared/copilot-types';
 import { useKeybindings } from './hooks/useKeybindings';
 import { useDragTerminal } from './hooks/useDragTerminal';
@@ -112,6 +113,9 @@ const App: React.FC = () => {
     });
 
     // Periodic stale session check (every 6 hours)
+    // Pipeline tracker IPC subscription
+    const unsubPipeline = initPipelineIpc();
+
     const staleCheckInterval = setInterval(() => {
       useTerminalStore.getState().checkStaleActiveSessions();
     }, 6 * 60 * 60 * 1000);
@@ -124,6 +128,7 @@ const App: React.FC = () => {
       clearInterval(heartbeatInterval);
       clearInterval(staleCheckInterval);
       unsubDetached?.();
+      unsubPipeline?.();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

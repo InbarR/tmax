@@ -14,6 +14,7 @@ import { ClaudeCodeSessionMonitor } from './claude-code-session-monitor';
 import { ClaudeCodeSessionWatcher } from './claude-code-session-watcher';
 import { WslSessionManager } from './wsl-session-manager';
 import { VersionChecker } from './version-checker';
+import { PipelineWatcher } from './pipeline-watcher';
 import { initDiagLogger, getDiagLogPath, diagLog } from './diag-logger';
 import { GitDiffService, resolveGitRoot } from './git-diff-service';
 import type { DiffMode } from '../shared/diff-types';
@@ -131,6 +132,7 @@ let claudeCodeMonitor: ClaudeCodeSessionMonitor | null = null;
 let claudeCodeWatcher: ClaudeCodeSessionWatcher | null = null;
 let wslSessionManager: WslSessionManager | null = null;
 let versionChecker: VersionChecker | null = null;
+let pipelineWatcher: PipelineWatcher | null = null;
 let clipboardTempDir: string | null = null;
 const sessionStore = new Store({ name: 'tmax-session' });
 const detachedWindows = new Map<string, BrowserWindow>();
@@ -859,6 +861,9 @@ app.whenReady().then(() => {
     versionChecker = new VersionChecker(mainWindow!);
     versionChecker.start();
     console.log('Version checker started');
+    pipelineWatcher = new PipelineWatcher(() => mainWindow);
+    pipelineWatcher.start();
+    console.log('Pipeline watcher started');
     // Start WSL discovery after window is visible — WSL distro detection
     // uses synchronous subprocess calls that can block for several seconds
     setupWslSessionManager().then(() => {

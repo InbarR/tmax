@@ -3500,3 +3500,131 @@ select.settings-input {
   outline: none;
   box-sizing: border-box;
 }
+
+/* ===== Pipeline Footer ===== */
+.pipeline-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  font-size: 11px;
+  color: var(--text-primary);
+  contain: layout style;
+  z-index: 5;
+}
+
+.pipeline-footer-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pipeline-footer-header:hover {
+  background: rgba(137, 180, 250, 0.08);
+}
+
+.pipeline-footer-status {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.pipeline-footer-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.pipeline-footer-branch {
+  color: var(--text-secondary);
+  font-size: 10px;
+  background: rgba(137, 180, 250, 0.12);
+  padding: 0 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.pipeline-footer-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(88, 91, 112, 0.5);
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 40px;
+}
+
+.pipeline-footer-progress-fill {
+  height: 100%;
+  background: #89b4fa;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+.pipeline-footer-progress-fill.succeeded {
+  background: #a6e3a1;
+}
+
+.pipeline-footer-progress-fill.failed {
+  background: #f38ba8;
+}
+
+.pipeline-footer-eta {
+  color: var(--text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.pipeline-footer-toggle,
+.pipeline-footer-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.pipeline-footer-toggle:hover,
+.pipeline-footer-dismiss:hover {
+  color: var(--text-primary);
+}
+
+.pipeline-footer-stages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 2px 12px;
+  padding: 2px 8px 4px 8px;
+  border-top: 1px solid rgba(69, 71, 90, 0.5);
+}
+
+.pipeline-footer-stage {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 0;
+}
+
+.pipeline-stage-icon {
+  font-size: 10px;
+  flex-shrink: 0;
+  width: 12px;
+  text-align: center;
+}
+
+.pipeline-stage-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.pipeline-stage-time {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

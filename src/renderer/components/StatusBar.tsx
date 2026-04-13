@@ -211,6 +211,16 @@ const StatusBar: React.FC = () => {
           )}
           <button
             className="status-help-btn"
+            onClick={() => {
+              const body = encodeURIComponent(`**Version:** ${appVersion}\n**Platform:** ${navigator.platform}\n\n**Description:**\n\n\n**Steps to reproduce:**\n1. \n\n**Expected behavior:**\n\n**Actual behavior:**\n`);
+              window.open(`https://github.com/InbarR/tmax/issues/new?body=${body}`, '_blank');
+            }}
+            title="Report an issue"
+          >
+            &#128027;
+          </button>
+          <button
+            className="status-help-btn"
             onClick={() => useTerminalStore.getState().toggleCommandPalette()}
             title="Show command palette (Ctrl+Shift+P)"
           >
