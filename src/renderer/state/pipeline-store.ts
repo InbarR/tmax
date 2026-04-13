@@ -30,9 +30,10 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       } else {
         newStatuses[paneId] = status;
       }
-      // If we got a new status, un-dismiss (new pipeline run)
+      // Only un-dismiss if this is a genuinely new build (different buildId)
       const newDismissed = new Set(state.dismissed);
-      if (status !== null) {
+      const prev = state.statuses[paneId];
+      if (status !== null && (!prev || prev.buildId !== status.buildId)) {
         newDismissed.delete(paneId);
       }
       return { statuses: newStatuses, dismissed: newDismissed };
