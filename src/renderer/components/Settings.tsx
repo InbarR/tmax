@@ -297,6 +297,19 @@ const ThemeSettings: React.FC = () => {
 
   return (
     <div className="settings-section">
+      <SettingRow label="Theme Mode" description="Manual: use a specific theme. System: follow OS dark/light appearance.">
+        <select className="settings-input"
+          value={config.themeMode || 'manual'}
+          onChange={(e) => update({ themeMode: e.target.value as any } as any)}>
+          <option value="manual">Manual</option>
+          <option value="system">System (Auto)</option>
+        </select>
+      </SettingRow>
+      {config.themeMode === 'system' && (
+        <div style={{ padding: '4px 12px 8px', opacity: 0.7, fontSize: '12px' }}>
+          Theme follows OS appearance. Pick a theme from the command palette to override.
+        </div>
+      )}
       <div className="theme-grid">
         {colors.map(({ key, label }) => (
           <div key={key} className="theme-color-row">

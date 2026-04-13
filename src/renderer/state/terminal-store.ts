@@ -16,6 +16,19 @@ import type { CopilotSessionSummary } from '../../shared/copilot-types';
 import type { DiffMode } from '../../shared/diff-types';
 import { getAllTerminals, getAllTerminalEntries, setWebglAddon, disposeTerminal } from '../terminal-registry';
 
+// ── Theme presets (Catppuccin Mocha / Latte) ─────────────────────────
+export const DARK_THEME_PRESET: Record<string, string> = {
+  background: '#1e1e2e', foreground: '#cdd6f4', cursor: '#f5e0dc', selectionBackground: '#585b70',
+  black: '#45475a', red: '#f38ba8', green: '#a6e3a1', yellow: '#f9e2af',
+  blue: '#89b4fa', magenta: '#f5c2e7', cyan: '#94e2d5', white: '#bac2de',
+};
+
+export const LIGHT_THEME_PRESET: Record<string, string> = {
+  background: '#eff1f5', foreground: '#4c4f69', cursor: '#dc8a78', selectionBackground: '#acb0be',
+  black: '#5c5f77', red: '#d20f39', green: '#40a02b', yellow: '#df8e1d',
+  blue: '#1e66f5', magenta: '#ea76cb', cyan: '#179299', white: '#bcc0cc',
+};
+
 // Session IDs must be alphanumeric/dash/dot/underscore only (prevent shell injection)
 const SAFE_SESSION_ID = /^[a-zA-Z0-9._-]+$/;
 
@@ -731,6 +744,22 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       document.documentElement.style.setProperty('--terminal-opacity', String((config as any).terminalOpacity));
     }
     set(updates);
+
+    // Subscribe to OS theme changes for system theme mode
+    if (window.terminalAPI.onNativeThemeUpdated) {
+      window.terminalAPI.onNativeThemeUpdated((shouldUseDarkColors: boolean) => {
+        const { config: currentConfig } = get();
+        if (currentConfig?.themeMode !== 'system') return;
+        const preset = shouldUseDarkColors ? DARK_THEME_PRESET : LIGHT_THEME_PRESET;
+        const newTheme = { ...currentConfig.theme, ...preset };
+        const matActive = currentConfig?.backgroundMaterial && currentConfig.backgroundMaterial !== 'none';
+        const op = matActive ? (currentConfig?.backgroundOpacity ?? 0.8) : undefined;
+        applyThemeToChromeVars(newTheme, op);
+        set({ config: { ...currentConfig, theme: newTheme } });
+        // Persist the theme colours (not themeMode — that stays 'system')
+        window.terminalAPI.setConfig('theme', newTheme);
+      });
+    }
   },
 
   createTerminal: async (shellProfileId?: string) => {
@@ -1462,6 +1491,19 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   updateConfig: async (update: Partial<AppConfig>) => {
     const { config } = get();
     if (!config) return;
+
+    // When user explicitly picks a theme (but NOT when setting themeMode), revert to manual
+    if (update.theme && !update.themeMode) {
+      update = { ...update, themeMode: 'manual' };
+    }
+
+    // When switching to system mode, apply matching preset immediately
+    if (update.themeMode === 'system' && !update.theme) {
+      const shouldUseDark = await window.terminalAPI.shouldUseDarkColors?.() ?? true;
+      const preset = shouldUseDark ? DARK_THEME_PRESET : LIGHT_THEME_PRESET;
+      update = { ...update, theme: { ...config.theme, ...preset } };
+    }
+
     const newConfig = { ...config, ...update };
     for (const [key, value] of Object.entries(update)) {
       await window.terminalAPI.setConfig(key, value);

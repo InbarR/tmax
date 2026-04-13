@@ -45,6 +45,9 @@ export interface TerminalAPI {
   // ── Transparency ──────────────────────────────────────────────────
   setBackgroundMaterial(material: string): Promise<void>;
   getPlatformSupportsMaterial(): Promise<boolean>;
+  // ── Theme ──────────────────────────────────────────────────────────
+  onNativeThemeUpdated(cb: (shouldUseDarkColors: boolean) => void): () => void;
+  shouldUseDarkColors(): Promise<boolean>;
   // ── Diff editor ──────────────────────────────────────────────────
   diffResolveGitRoot(cwd: string): Promise<string>;
   diffGetDiff(cwd: string, mode: DiffMode): Promise<DiffResult>;
@@ -315,6 +318,17 @@ const terminalAPI: TerminalAPI = {
 
   getPlatformSupportsMaterial(): Promise<boolean> {
     return ipcRenderer.invoke(IPC.GET_PLATFORM_SUPPORTS_MATERIAL);
+  },
+
+  // ── Theme ──────────────────────────────────────────────────────────
+  onNativeThemeUpdated(cb: (shouldUseDarkColors: boolean) => void) {
+    const listener = (_event: Electron.IpcRendererEvent, shouldUseDarkColors: boolean) => cb(shouldUseDarkColors);
+    ipcRenderer.on(IPC.NATIVE_THEME_UPDATED, listener);
+    return () => { ipcRenderer.removeListener(IPC.NATIVE_THEME_UPDATED, listener); };
+  },
+
+  shouldUseDarkColors() {
+    return ipcRenderer.invoke(IPC.SHOULD_USE_DARK_COLORS);
   },
 
   // ── Diff editor ──────────────────────────────────────────────────

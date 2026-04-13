@@ -113,6 +113,7 @@ const CommandPalette: React.FC = () => {
       { id: 'theme-solarized-light', label: 'Theme: Solarized Light', action: () => store().updateConfig({ theme: { background: '#fdf6e3', foreground: '#657b83', cursor: '#586e75', selectionBackground: '#eee8d5', black: '#073642', red: '#dc322f', green: '#859900', yellow: '#b58900', blue: '#268bd2', magenta: '#d33682', cyan: '#2aa198', white: '#eee8d5' } }) },
       { id: 'theme-github-light', label: 'Theme: GitHub Light', action: () => store().updateConfig({ theme: { background: '#ffffff', foreground: '#24292e', cursor: '#044289', selectionBackground: '#c8c8fa', black: '#24292e', red: '#d73a49', green: '#22863a', yellow: '#b08800', blue: '#0366d6', magenta: '#6f42c1', cyan: '#1b7c83', white: '#6a737d' } }) },
       { id: 'theme-catppuccin-latte', label: 'Theme: Catppuccin Latte', action: () => store().updateConfig({ theme: { background: '#eff1f5', foreground: '#4c4f69', cursor: '#dc8a78', selectionBackground: '#acb0be', black: '#5c5f77', red: '#d20f39', green: '#40a02b', yellow: '#df8e1d', blue: '#1e66f5', magenta: '#ea76cb', cyan: '#179299', white: '#bcc0cc' } }) },
+      { id: 'theme-system', label: 'Theme: System (Auto)', action: () => store().updateConfig({ themeMode: 'system' } as any) },
       // Shell-specific new terminals
       ...(useTerminalStore.getState().config?.shells ?? []).map((shell) => ({
         id: `newTerminal-${shell.id}`,

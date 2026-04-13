@@ -103,6 +103,8 @@ export interface TerminalConfig {
 
 export type BackgroundMaterial = 'none' | 'auto' | 'mica' | 'acrylic' | 'tabbed';
 
+export type ThemeMode = 'manual' | 'system';
+
 export interface AppConfig {
   shells: ShellProfile[];
   defaultShellId: string;
@@ -114,6 +116,7 @@ export interface AppConfig {
   tabBarPosition?: 'top' | 'bottom' | 'left' | 'right';
   backgroundMaterial?: BackgroundMaterial;
   backgroundOpacity?: number; // 0.0–1.0, default 0.8
+  themeMode?: ThemeMode; // 'manual' | 'system', default 'manual'
 }
 
 // ── Drag & drop ──────────────────────────────────────────────────────

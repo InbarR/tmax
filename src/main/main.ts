@@ -5,7 +5,7 @@ import path from 'node:path';
 import Store from 'electron-store';
 import { PtyManager } from './pty-manager';
 import { ConfigStore } from './config-store';
-import type { BackgroundMaterial } from './config-store';
+import type { BackgroundMaterial, ThemeMode } from './config-store';
 import { IPC } from '../shared/ipc-channels';
 import { CopilotSessionMonitor } from './copilot-session-monitor';
 import { CopilotSessionWatcher } from './copilot-session-watcher';
@@ -360,6 +360,10 @@ function registerIpcHandlers(): void {
     return configStore!.getAll();
   });
 
+  ipcMain.handle(IPC.SHOULD_USE_DARK_COLORS, () => {
+    return nativeTheme.shouldUseDarkColors;
+  });
+
   ipcMain.handle(
     IPC.CONFIG_SET,
     (_event, key: string, value: unknown) => {
@@ -373,6 +377,25 @@ function registerIpcHandlers(): void {
             applyMaterialToWindow(win);
           }
         }
+      }
+
+      // Update window chrome when theme mode changes
+      if (key === 'themeMode') {
+        const mode = value as ThemeMode;
+        if (mode === 'system') {
+          nativeTheme.themeSource = 'system';
+        } else {
+          const theme = configStore!.get('theme');
+          const bg = theme?.background || '#1e1e2e';
+          nativeTheme.themeSource = isLightColor(bg) ? 'light' : 'dark';
+        }
+      }
+
+      // Update window chrome when theme colors change in manual mode
+      if (key === 'theme' && configStore!.get('themeMode') !== 'system') {
+        const theme = value as Record<string, string>;
+        const bg = theme?.background || '#1e1e2e';
+        nativeTheme.themeSource = isLightColor(bg) ? 'light' : 'dark';
       }
     }
   );
@@ -758,10 +781,38 @@ process.on('uncaughtException', (error) => {
   console.error('Uncaught exception in main process:', error);
 });
 
+/** Simple luminance check — returns true if the hex color is light */
+function isLightColor(hex: string): boolean {
+  const c = hex.replace('#', '');
+  const r = parseInt(c.substring(0, 2), 16);
+  const g = parseInt(c.substring(2, 4), 16);
+  const b = parseInt(c.substring(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5;
+}
+
 app.whenReady().then(() => {
   try {
-    // Force dark title bar/frame regardless of Windows system theme
-    nativeTheme.themeSource = 'dark';
+    // Set title bar / window chrome theme based on config
+    const themeMode = configStore?.get('themeMode') || 'manual';
+    if (themeMode === 'system') {
+      nativeTheme.themeSource = 'system';
+    } else {
+      // For manual mode, detect from current theme colors
+      const theme = configStore?.get('theme');
+      const bg = theme?.background || '#1e1e2e';
+      const isDark = !isLightColor(bg);
+      nativeTheme.themeSource = isDark ? 'dark' : 'light';
+    }
+
+    // Broadcast OS theme changes to all renderer windows
+    nativeTheme.on('updated', () => {
+      const allWindows = [mainWindow, ...detachedWindows.values()];
+      for (const win of allWindows) {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send(IPC.NATIVE_THEME_UPDATED, nativeTheme.shouldUseDarkColors);
+        }
+      }
+    });
 
     // On macOS, a null menu creates default accelerators (Cmd+C/V/X) that
     // intercept events before the renderer. Use a minimal menu instead.

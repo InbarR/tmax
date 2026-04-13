@@ -46,6 +46,9 @@ export const IPC = {
   // ── Transparency ────────────────────────────────────────────────────
   SET_BACKGROUND_MATERIAL: 'transparency:setMaterial',
   GET_PLATFORM_SUPPORTS_MATERIAL: 'transparency:platformSupports',
+  // ── Theme ─────────────────────────────────────────────────────────
+  NATIVE_THEME_UPDATED: 'theme:nativeUpdated',
+  SHOULD_USE_DARK_COLORS: 'theme:shouldUseDarkColors',
   // ── Diff editor ────────────────────────────────────────────────────
   DIFF_RESOLVE_GIT_ROOT: 'diff:resolveGitRoot',
   DIFF_GET_CODE_CHANGES: 'diff:getCodeChanges',
