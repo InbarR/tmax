@@ -11,28 +11,25 @@ const config: ForgeConfig = {
   outDir: process.env.FORGE_OUT_DIR || 'out',
   hooks: {
     postPackage: async (_config, options) => {
-      // Copy node-pty native module into packaged app
       const path = require('path');
       const fs = require('fs-extra');
-      const outputPath = options.outputPaths[0];
-      // macOS: Contents/Resources/app, Windows/Linux: resources/app
-      const isMac = outputPath.endsWith('.app') || outputPath.includes('.app/');
-      const appDir = isMac
-        ? path.join(outputPath, 'Contents', 'Resources', 'app')
-        : path.join(outputPath, 'resources', 'app');
-      // Fallback: try .vite path structure
-      const appDirVite = isMac
-        ? path.join(outputPath, 'Contents', 'Resources', 'app.vite')
-        : null;
-      const targetDir = fs.existsSync(appDir) ? appDir : (appDirVite && fs.existsSync(appDirVite) ? appDirVite : appDir);
+      const outDir = options.outputPaths[0];
+
+      // On macOS, outputPaths[0] is the directory containing the .app bundle
+      // (e.g. out/tmax-darwin-arm64), not the .app itself.
+      const macApp = fs.readdirSync(outDir).find((f: string) => f.endsWith('.app'));
+      const appDir = macApp
+        ? path.join(outDir, macApp, 'Contents', 'Resources', 'app')
+        : path.join(outDir, 'resources', 'app');
+
       const src = path.join(__dirname, 'node_modules', 'node-pty');
-      const dest = path.join(targetDir, 'node_modules', 'node-pty');
+      const dest = path.join(appDir, 'node_modules', 'node-pty');
       await fs.copy(src, dest);
-      // Also copy node-addon-api (node-pty dependency)
+
       const napiSrc = path.join(__dirname, 'node_modules', 'node-addon-api');
-      const napiDest = path.join(targetDir, 'node_modules', 'node-addon-api');
+      const napiDest = path.join(appDir, 'node_modules', 'node-addon-api');
       if (fs.existsSync(napiSrc)) await fs.copy(napiSrc, napiDest);
-      console.log(`Copied node-pty to packaged app: ${targetDir}`);
+      console.log(`Copied node-pty native module to ${appDir}`);
     },
   },
   packagerConfig: {
