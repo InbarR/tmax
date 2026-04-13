@@ -81,6 +81,12 @@ const CommandPalette: React.FC = () => {
       { id: 'checkForUpdates', label: 'Check for Updates', action: () => {
         window.terminalAPI.checkForUpdates();
       }},
+      { id: 'reportIssue', label: 'Report Issue', action: () => {
+        const version = document.querySelector('.status-dim')?.textContent?.replace('v', '') || 'unknown';
+        const platform = navigator.platform;
+        const body = encodeURIComponent(`**Version:** ${version}\n**Platform:** ${platform}\n\n**Description:**\n\n\n**Steps to reproduce:**\n1. \n\n**Expected behavior:**\n\n**Actual behavior:**\n`);
+        window.open(`https://github.com/InbarR/tmax/issues/new?body=${body}`, '_blank');
+      }},
       { id: 'editConfig', label: 'Open Settings JSON File', action: () => {
         // Open the config JSON in the default editor
         window.terminalAPI.openConfigFile?.();
