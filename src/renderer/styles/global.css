@@ -737,7 +737,7 @@ html.transparency-active .input-dialog {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  contain: strict;
+  contain: layout style paint;
   will-change: contents;
 }
 

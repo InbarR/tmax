@@ -77,10 +77,17 @@ export function getAllTerminalEntries(): Array<[string, TerminalEntry]> {
 }
 
 /** Move the xterm DOM element to the off-screen stash container.
- *  PTY subscriptions and xterm state are preserved. */
+ *  PTY subscriptions and xterm state are preserved.
+ *  WebGL addon is disposed to avoid stale GL context after DOM re-parent. */
 export function stashTerminal(id: string): void {
   const entry = registry.get(id);
   if (!entry || entry.stashed) return;
+  // Dispose WebGL before moving the DOM — moving a canvas with an active
+  // WebGL context can silently corrupt it, leaving the terminal frozen.
+  if (entry.webglAddon) {
+    try { entry.webglAddon.dispose(); } catch { /* ignore */ }
+    entry.webglAddon = null;
+  }
   const el = entry.terminal.element;
   if (el) {
     getStashContainer().appendChild(el);

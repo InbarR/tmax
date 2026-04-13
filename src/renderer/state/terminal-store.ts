@@ -680,13 +680,15 @@ interface TerminalStore {
   setDiffReviewMode: (mode: DiffMode) => void;
 }
 
-// Cached session extras (layouts, etc.) so saveSession doesn't need async load
-let _sessionExtras: Record<string, unknown> = {};
+// Cached session extras (layouts, etc.) so saveSession doesn't need async load.
+// Attached to window to survive Vite HMR module re-evaluation.
+let _sessionExtras: Record<string, unknown> = (window as any).__tmax_sessionExtras ?? {};
 
 // Guard: prevents saveSession() from writing before restoreSession() has loaded
 // persisted state (e.g. sessionLifecycleOverrides). Without this, any early
 // saveSession() call would overwrite the file with empty initial values.
-let _sessionHydrated = false;
+// Attached to window to survive Vite HMR module re-evaluation.
+let _sessionHydrated = (window as any).__tmax_sessionHydrated === true;
 
 // ── Store implementation ─────────────────────────────────────────────
 
@@ -1966,13 +1968,27 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     }
 
     // Merge with cached extras (saved layouts, etc.) — no async load needed
+    // Safety: never let empty zustand state overwrite previously-persisted overrides.
+    // This protects against HMR re-evaluation or other edge cases where the store
+    // resets to initial values but _sessionHydrated is still true from a prior run.
+    const currentNameOverrides = get().sessionNameOverrides;
+    const currentLifecycleOverrides = get().sessionLifecycleOverrides;
+    const cachedNameOverrides = (_sessionExtras.sessionNameOverrides ?? {}) as Record<string, string>;
+    const cachedLifecycleOverrides = (_sessionExtras.sessionLifecycleOverrides ?? {}) as Record<string, string>;
+    const mergedNameOverrides = Object.keys(currentNameOverrides).length > 0
+      ? currentNameOverrides
+      : cachedNameOverrides;
+    const mergedLifecycleOverrides = Object.keys(currentLifecycleOverrides).length > 0
+      ? currentLifecycleOverrides
+      : cachedLifecycleOverrides;
+
     const data = {
       ..._sessionExtras,
       favoriteDirs,
       recentDirs,
       autoColorTabs: get().autoColorTabs,
-      sessionNameOverrides: get().sessionNameOverrides,
-      sessionLifecycleOverrides: get().sessionLifecycleOverrides,
+      sessionNameOverrides: mergedNameOverrides,
+      sessionLifecycleOverrides: mergedLifecycleOverrides,
       tree: layout.tilingRoot ? serializeNode(layout.tilingRoot) : null,
       floating: layout.floatingPanels.map((p) => {
         const t = terminals.get(p.terminalId);
@@ -1980,14 +1996,16 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       }),
     };
     _sessionExtras = data;
+    (window as any).__tmax_sessionExtras = data;
     await window.terminalAPI.saveSession(data);
   },
 
   restoreSession: async () => {
     const session = (await window.terminalAPI.loadSession()) as Record<string, unknown> | null;
-    if (!session) { _sessionHydrated = true; return false; }
+    if (!session) { _sessionHydrated = true; (window as any).__tmax_sessionHydrated = true; return false; }
     // Cache session extras (layouts, etc.) so saveSession doesn't need async load
     _sessionExtras = { ...session };
+    (window as any).__tmax_sessionExtras = _sessionExtras;
 
     if (typeof session.autoColorTabs === 'boolean') {
       set({ autoColorTabs: session.autoColorTabs });
@@ -2002,7 +2020,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     }
 
     const { config } = get();
-    if (!config) { _sessionHydrated = true; return false; }
+    if (!config) { _sessionHydrated = true; (window as any).__tmax_sessionHydrated = true; return false; }
     if (session.tree || session.floating) {
       async function createTerm(info: { title: string; shellProfileId: string; cwd: string; startupCommand?: string; aiSessionId?: string; aiAutoTitle?: boolean; tabColor?: string; customTitle?: boolean; wsl?: boolean; wslDistro?: string }): Promise<{ id: TerminalId; instance: TerminalInstance } | null> {
         const profile = config!.shells.find((s) => s.id === info.shellProfileId) ?? config!.shells[0];
@@ -2088,7 +2106,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         set({ terminals: newTerminals, layout: { ...layout, tilingRoot: newRoot }, focusedTerminalId: id });
       } catch { /* skip */ }
     }
-    _sessionHydrated = true;
+    _sessionHydrated = true; (window as any).__tmax_sessionHydrated = true;
     return true;
   },
 

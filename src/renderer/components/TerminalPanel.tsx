@@ -209,6 +209,22 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
         } catch { /* container may not be sized yet */ }
       });
 
+      // Re-create WebGL renderer (disposed during stash to avoid stale GL context)
+      if (!term.options.allowTransparency) {
+        import('@xterm/addon-webgl').then(({ WebglAddon }) => {
+          if (!terminalRef.current || terminalRef.current !== term) return;
+          try {
+            const webgl = new WebglAddon();
+            webgl.onContextLoss(() => {
+              try { webgl.dispose(); } catch { /* ignore */ }
+              setWebglAddon(terminalId, null);
+            });
+            term.loadAddon(webgl);
+            setWebglAddon(terminalId, webgl);
+          } catch { /* WebGL not available — canvas fallback */ }
+        }).catch(() => { /* import failed */ });
+      }
+
       // Re-subscribe to PTY IPC events (previous listeners were removed on unmount)
       const unsubPtyData = window.terminalAPI.onPtyData((id: string, data: string) => {
         if (id === terminalId) term.write(data);
