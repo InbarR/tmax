@@ -296,16 +296,15 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
           return false;
         }
       }
-      // Ctrl+Enter: send win32-input-mode key event
+      // Ctrl+Enter / Shift+Enter: send win32-input-mode key events so
+      // ConPTY-aware apps (Claude Code) can distinguish Enter vs Shift+Enter
       // Format: CSI Vk;Sc;Uc;Kd;Cs;Rc _ (VK_RETURN=13, ScanCode=28)
-      if (event.key === 'Enter' && event.ctrlKey && !event.altKey) {
-        const cs = 8 | (event.shiftKey ? 16 : 0);
-        window.terminalAPI.writePty(terminalId, `\x1b[13;28;10;1;${cs};1_`);
+      if (event.key === 'Enter' && (event.ctrlKey || event.shiftKey) && !event.altKey) {
+        const cs = (event.ctrlKey ? 8 : 0) | (event.shiftKey ? 16 : 0);
+        const uc = event.ctrlKey ? 10 : 13;
+        window.terminalAPI.writePty(terminalId, `\x1b[13;28;${uc};1;${cs};1_`);
         return false;
       }
-      // Shift+Enter: let xterm handle it naturally (sends \r to the PTY)
-      // Apps like Claude Code that support win32-input-mode will get the
-      // Shift modifier via ConPTY's built-in handling
       return true;
     });
 
