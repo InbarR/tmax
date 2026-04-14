@@ -14,7 +14,7 @@ import type {
 } from './types';
 import type { CopilotSessionSummary } from '../../shared/copilot-types';
 import type { DiffMode } from '../../shared/diff-types';
-import { getAllTerminals } from '../terminal-registry';
+import { getAllTerminals, getTerminalEntry } from '../terminal-registry';
 
 // Session IDs must be alphanumeric/dash/dot/underscore only (prevent shell injection)
 const SAFE_SESSION_ID = /^[a-zA-Z0-9._-]+$/;
@@ -859,10 +859,28 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       focusedTerminalId: newFocus,
       preGridRoot: newPreGridRoot,
     });
+
+    // After React processes the layout change, force-focus the new terminal.
+    // Tree collapse causes the surviving TerminalPanel to unmount/remount,
+    // and browsers can lose focus during DOM reparenting.
+    if (newFocus) {
+      const forceFocus = () => {
+        const entry = getTerminalEntry(newFocus!);
+        if (entry?.terminal && get().focusedTerminalId === newFocus) {
+          entry.terminal.focus();
+          const textarea = entry.terminal.element?.querySelector('textarea');
+          if (textarea && document.activeElement !== textarea) {
+            (textarea as HTMLElement).focus();
+          }
+        }
+      };
+      requestAnimationFrame(() => requestAnimationFrame(forceFocus));
+      setTimeout(forceFocus, 50);
+      setTimeout(forceFocus, 150);
+    }
+
     window.terminalAPI.diagLog('renderer:close-terminal', {
       id,
-      killMs: Math.round(t1 - t0),
-      totalMs: Math.round(performance.now() - t0),
       remaining: newTerminals.size,
     });
   },
