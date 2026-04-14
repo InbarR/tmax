@@ -179,8 +179,11 @@
     .community h2 { font-size: 32px; text-align: center; margin-bottom: 24px; }
     .community-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 800px) {
+      .community-grid { grid-template-columns: repeat(2, 1fr); }
     }
     .community-btn {
       display: inline-block;
@@ -377,7 +380,7 @@
       <div class="icon">&#9993;</div>
       <h3>Contact</h3>
       <p>Questions, feedback, or just want to say hi?</p>
-      <a class="community-btn" href="mailto:inbar.rotem@gmail.com">Send Email</a>
+      <a class="community-btn" href="mailto:inbar.rotem@gmail.com?subject=tmax%20feedback&body=Hi%20Inbar%2C%0A%0A">Send Email</a>
     </div>
   </div>
 </div>
@@ -385,7 +388,7 @@
 <div class="footer">
   <p>Open source &middot; <a href="https://github.com/InbarR/tmax">GitHub</a> &middot; MIT License</p>
   <p style="margin-top:8px;">Built with Electron, React, TypeScript, xterm.js</p>
-  <p style="margin-top:8px;"><a href="mailto:inbar.rotem@gmail.com">&#9993; Contact</a></p>
+  <p style="margin-top:8px;"><a href="mailto:inbar.rotem@gmail.com?subject=tmax%20feedback&body=Hi%20Inbar%2C%0A%0A">&#9993; Contact</a></p>
   <p style="margin-top:12px;">&copy; Inbar Rotem 314</p>
 </div>
 
