@@ -81,6 +81,9 @@ const CommandPalette: React.FC = () => {
       { id: 'checkForUpdates', label: 'Check for Updates', action: () => {
         window.terminalAPI.checkForUpdates();
       }},
+      { id: 'openDiagLog', label: 'Open Diagnostics Log', action: () => {
+        window.terminalAPI.getDiagLogPath().then((p: string) => (window.terminalAPI as any).openPath(p));
+      }},
       { id: 'reportIssue', label: 'Report Issue', action: () => {
         const version = document.querySelector('.status-dim')?.textContent?.replace('v', '') || 'unknown';
         const platform = navigator.platform;

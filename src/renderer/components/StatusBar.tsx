@@ -211,6 +211,13 @@ const StatusBar: React.FC = () => {
           )}
           <button
             className="status-help-btn"
+            onClick={() => window.terminalAPI.getDiagLogPath().then((p: string) => (window.terminalAPI as any).openPath(p))}
+            title="Open diagnostics log"
+          >
+            &#128203;
+          </button>
+          <button
+            className="status-help-btn"
             onClick={() => {
               const issueBody = `**Version:** ${appVersion}\n**Platform:** ${navigator.platform}\n\n**Description:**\n\n\n**Steps to reproduce:**\n1. \n\n**Expected behavior:**\n\n**Actual behavior:**\n`;
               const url = `https://github.com/InbarR/tmax/issues/new?body=${encodeURIComponent(issueBody)}`;
