@@ -825,10 +825,37 @@ app.whenReady().then(() => {
     }
   });
 
+  // Keep ConPTY pipes alive during screen lock by periodically resizing
+  let lockPingInterval: ReturnType<typeof setInterval> | null = null;
+
+  powerMonitor.on('lock-screen', () => {
+    diagLog('system:lock-screen');
+    console.log('Screen locked, starting PTY keep-alive pings');
+    if (lockPingInterval) clearInterval(lockPingInterval);
+    lockPingInterval = setInterval(() => {
+      ptyManager?.resizeAll();
+    }, 30000); // ping every 30 seconds
+  });
+
+  powerMonitor.on('unlock-screen', () => {
+    diagLog('system:unlock-screen');
+    console.log('Screen unlocked, stopping keep-alive pings');
+    if (lockPingInterval) {
+      clearInterval(lockPingInterval);
+      lockPingInterval = null;
+    }
+    // One final resize to wake everything up
+    ptyManager?.resizeAll();
+  });
+
   // Wake up ConPTY processes after system resume from sleep/hibernate
   powerMonitor.on('resume', () => {
     diagLog('system:resume');
     console.log('System resumed from sleep, pinging all PTYs');
+    if (lockPingInterval) {
+      clearInterval(lockPingInterval);
+      lockPingInterval = null;
+    }
     ptyManager?.resizeAll();
   });
 });
