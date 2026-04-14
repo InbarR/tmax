@@ -39,7 +39,17 @@
     .hero h1 { font-size: 48px; font-weight: 700; margin-bottom: 12px; }
     .hero p { font-size: 20px; color: var(--fg2); max-width: 600px; margin: 0 auto 30px; }
     .hero .badges { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 30px; }
-    .hero .badges img { height: 22px; }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 13px;
+      color: var(--fg2);
+    }
+    .badge.link { cursor: pointer; transition: border-color 0.15s; }
+    .badge.link:hover { border-color: var(--blue); color: var(--fg); text-decoration: none; }
 
     .download-section {
       background: var(--bg2);
@@ -160,6 +170,36 @@
       font-size: 12px;
     }
 
+    .changelog {
+      max-width: 700px;
+      margin: 0 auto 60px;
+      padding: 0 20px;
+    }
+    .changelog h2 { font-size: 32px; text-align: center; margin-bottom: 24px; }
+    .changelog-content {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px 28px;
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--fg2);
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .changelog-content h2, .changelog-content h3 {
+      color: var(--fg);
+      font-size: 16px;
+      margin: 16px 0 8px;
+    }
+    .changelog-content h2:first-child, .changelog-content h3:first-child { margin-top: 0; }
+    .changelog-content ul { padding-left: 20px; }
+    .changelog-content li { margin-bottom: 4px; }
+    .changelog-content strong { color: var(--fg); }
+    .changelog-content a { color: var(--blue); }
+    .changelog-content::-webkit-scrollbar { width: 8px; }
+    .changelog-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
     .footer {
       text-align: center;
       padding: 40px 20px;
@@ -194,11 +234,11 @@
   <h1>tmax</h1>
   <p>A powerful multi-terminal app with tiling layouts, AI session management, and a keyboard-driven workflow.</p>
   <div class="badges">
-    <img src="https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white" alt="Windows">
-    <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS">
-    <img src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black" alt="Linux">
-    <img src="https://img.shields.io/github/stars/InbarR/tmax?style=flat&color=89b4fa" alt="Stars">
-    <img src="https://img.shields.io/github/v/release/InbarR/tmax?color=a6e3a1" alt="Version">
+    <span class="badge">Windows</span>
+    <span class="badge">macOS</span>
+    <span class="badge">Linux</span>
+    <a class="badge link" href="https://github.com/InbarR/tmax/stargazers" id="star-badge">&#9733; Stars</a>
+    <a class="badge link" href="https://github.com/InbarR/tmax/releases/latest" id="version-badge">v1.5.1</a>
   </div>
 </div>
 
@@ -289,6 +329,11 @@
     <tr><td><kbd>Ctrl+,</kbd></td><td>Settings</td></tr>
   </table>
   <p style="text-align:center;color:var(--fg2);font-size:13px;margin-top:12px;">On macOS, Ctrl is replaced with Cmd (&#8984;). All shortcuts are customizable.</p>
+</div>
+
+<div class="changelog" id="changelog">
+  <h2>Latest Release</h2>
+  <div class="changelog-content" id="changelog-content">Loading...</div>
 </div>
 
 <div class="footer">
@@ -384,12 +429,45 @@ async function loadRelease() {
     src.innerHTML = '<span class="os-icon">&#128736;</span>Build from source';
     grid.appendChild(src);
 
+    // Render release notes
+    const changelogEl = document.getElementById('changelog-content');
+    if (data.body) {
+      changelogEl.innerHTML = renderMarkdown(data.body);
+    } else {
+      changelogEl.innerHTML = `<p>See <a href="${data.html_url}">release notes on GitHub</a></p>`;
+    }
+
+    // Update version badge
+    document.getElementById('version-badge').textContent = version;
+
+    // Update star count
+    try {
+      const repoRes = await fetch(`https://api.github.com/repos/${REPO}`);
+      const repoData = await repoRes.json();
+      document.getElementById('star-badge').textContent = `\u2733 ${repoData.stargazers_count} stars`;
+    } catch {}
+
   } catch (e) {
     const btn = document.getElementById('primary-download');
     btn.href = `https://github.com/${REPO}/releases/latest`;
     document.getElementById('os-name').textContent = 'your platform';
     document.getElementById('os-detail').textContent = 'View releases on GitHub';
+    document.getElementById('changelog-content').innerHTML = '<p>Could not load release notes.</p>';
   }
+}
+
+// Simple markdown→HTML renderer
+function renderMarkdown(md) {
+  return md
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2">$1</a>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+    .replace(/\n\n/g, '<br><br>')
+    .replace(/\n/g, '\n');
 }
 
 // Replace Ctrl with Cmd on macOS
