@@ -112,6 +112,7 @@ export interface AppConfig {
   copilotCommand?: string;
   claudeCodeCommand?: string;
   tabBarPosition?: 'top' | 'bottom' | 'left' | 'right';
+  showTabCloseButtons?: boolean;
   backgroundMaterial?: BackgroundMaterial;
   backgroundOpacity?: number; // 0.0–1.0, default 0.8
 }

@@ -512,6 +512,7 @@ interface TerminalStore {
   showSettings: boolean;
   tabBarPosition: 'top' | 'bottom' | 'left' | 'right';
   hideTabTitles: boolean;
+  showTabCloseButtons: boolean;
   renamingTerminalId: TerminalId | null;
   viewMode: 'split' | 'focus' | 'grid';
   gridColumns: number; // 0 = auto (sqrt-based), 1..N = fixed column count
@@ -581,6 +582,7 @@ interface TerminalStore {
   updateConfig: (update: Partial<AppConfig>) => Promise<void>;
   toggleTabBarPosition: () => void;
   toggleHideTabTitles: () => void;
+  toggleShowTabCloseButtons: () => void;
   setTerminalOpacity: (opacity: number) => void;
   startRenaming: (id: TerminalId | null) => void;
   toggleViewMode: () => void;
@@ -685,6 +687,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   recentDirs: [],
   tabBarPosition: 'top' as 'top' | 'bottom' | 'left' | 'right',
   hideTabTitles: false,
+  showTabCloseButtons: true,
   renamingTerminalId: null,
   viewMode: 'grid' as 'split' | 'focus' | 'grid',
   gridColumns: 0,
@@ -704,6 +707,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const updates: Record<string, unknown> = { config };
     if (config?.tabBarPosition) updates.tabBarPosition = config.tabBarPosition;
     if (typeof (config as any)?.hideTabTitles === 'boolean') updates.hideTabTitles = (config as any).hideTabTitles;
+    if (typeof (config as any)?.showTabCloseButtons === 'boolean') updates.showTabCloseButtons = (config as any).showTabCloseButtons;
     if ((config as any)?.terminalOpacity != null) {
       updates.terminalOpacity = (config as any).terminalOpacity;
       document.documentElement.style.setProperty('--terminal-opacity', String((config as any).terminalOpacity));
@@ -1469,6 +1473,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const val = !get().hideTabTitles;
     set({ hideTabTitles: val });
     get().updateConfig({ hideTabTitles: val } as any);
+  },
+
+  toggleShowTabCloseButtons: () => {
+    const val = !get().showTabCloseButtons;
+    set({ showTabCloseButtons: val });
+    get().updateConfig({ showTabCloseButtons: val } as any);
   },
 
   setTerminalOpacity: (opacity: number) => {

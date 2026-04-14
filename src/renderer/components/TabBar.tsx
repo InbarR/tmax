@@ -63,6 +63,7 @@ const Tab: React.FC<TabProps> = ({
   const isSelected = useTerminalStore((s) => !!s.selectedTerminalIds[terminalId]);
   const isInGrid = useTerminalStore((s) => !!s.gridTabIds[terminalId]);
   const viewMode = useTerminalStore((s) => s.viewMode);
+  const showCloseBtn = useTerminalStore((s) => s.showTabCloseButtons);
 
   // Check if this tab's AI session needs attention.
   // Selector returns a primitive string so Zustand skips re-render when status is unchanged.
@@ -156,9 +157,11 @@ const Tab: React.FC<TabProps> = ({
           <span className="tab-title">{title}</span>
         </>
       )}
-      <button className="close-btn" onClick={handleCloseClick} title="Close">
-        &#10005;
-      </button>
+      {showCloseBtn && (
+        <button className="close-btn" onClick={handleCloseClick} title="Close">
+          &#10005;
+        </button>
+      )}
     </div>
   );
 };
