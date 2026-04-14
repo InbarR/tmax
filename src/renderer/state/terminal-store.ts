@@ -2105,8 +2105,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         }
       }
 
-      if (newTerminals.size === 0) return false;
+      if (newTerminals.size === 0) { _sessionHydrated = true; (window as any).__tmax_sessionHydrated = true; return false; }
       set({ terminals: newTerminals, layout: { tilingRoot: newRoot, floatingPanels: newFloating }, focusedTerminalId: firstId });
+      _sessionHydrated = true; (window as any).__tmax_sessionHydrated = true;
       return true;
     }
 
@@ -2257,14 +2258,17 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       copilotSessions: s.copilotSessions.map((x) => (x.id === session.id ? session : x)),
     }));
     get().updateTerminalTitleFromSession(session, 'copilot');
-    // Auto-reactivate if session was completed/old and has new activity
+    // Auto-reactivate only if session has a linked terminal in tmax
     const lifecycle = get().sessionLifecycleOverrides[session.id];
     if ((lifecycle === 'completed' || lifecycle === 'old') && oldSession) {
-      const hasNewActivity = session.status !== 'idle' || session.messageCount > oldSession.messageCount;
-      if (hasNewActivity) {
-        get().setSessionLifecycle(session.id, 'active');
-        const name = get().sessionNameOverrides[session.id] || session.summary || session.id.slice(0, 8);
-        get().addToast(`"${name}" moved back to Active`);
+      const hasLinkedTerminal = [...get().terminals.values()].some((t) => t.aiSessionId === session.id);
+      if (hasLinkedTerminal) {
+        const hasNewActivity = session.status !== 'idle' || session.messageCount > oldSession.messageCount;
+        if (hasNewActivity) {
+          get().setSessionLifecycle(session.id, 'active');
+          const name = get().sessionNameOverrides[session.id] || session.summary || session.id.slice(0, 8);
+          get().addToast(`"${name}" moved back to Active`);
+        }
       }
     }
   },
@@ -2309,14 +2313,17 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       claudeCodeSessions: s.claudeCodeSessions.map((x) => (x.id === session.id ? session : x)),
     }));
     get().updateTerminalTitleFromSession(session, 'claude');
-    // Auto-reactivate if session was completed/old and has new activity
+    // Auto-reactivate only if session has a linked terminal in tmax
     const lifecycle = get().sessionLifecycleOverrides[session.id];
     if ((lifecycle === 'completed' || lifecycle === 'old') && oldSession) {
-      const hasNewActivity = session.status !== 'idle' || session.messageCount > oldSession.messageCount;
-      if (hasNewActivity) {
-        get().setSessionLifecycle(session.id, 'active');
-        const name = get().sessionNameOverrides[session.id] || session.summary || session.id.slice(0, 8);
-        get().addToast(`"${name}" moved back to Active`);
+      const hasLinkedTerminal = [...get().terminals.values()].some((t) => t.aiSessionId === session.id);
+      if (hasLinkedTerminal) {
+        const hasNewActivity = session.status !== 'idle' || session.messageCount > oldSession.messageCount;
+        if (hasNewActivity) {
+          get().setSessionLifecycle(session.id, 'active');
+          const name = get().sessionNameOverrides[session.id] || session.summary || session.id.slice(0, 8);
+          get().addToast(`"${name}" moved back to Active`);
+        }
       }
     }
   },
