@@ -267,6 +267,7 @@
     <a class="badge link" href="https://github.com/InbarR/tmax/stargazers" id="star-badge">&#10038; Stars</a>
     <a class="badge link" href="https://github.com/InbarR/tmax/releases/latest" id="version-badge">v1.5.1</a>
   </div>
+  <p style="font-size:14px;"><a href="https://github.com/InbarR/tmax">View on GitHub &rarr;</a></p>
 </div>
 
 <div class="download-section" id="download">
@@ -344,23 +345,6 @@
   </div>
 </div>
 
-<div class="shortcuts">
-  <h2>Key Shortcuts</h2>
-  <table>
-    <tr><th>Shortcut</th><th>Action</th></tr>
-    <tr><td><kbd>Ctrl+Shift+P</kbd></td><td>Command palette</td></tr>
-    <tr><td><kbd>Ctrl+Shift+N</kbd></td><td>New terminal</td></tr>
-    <tr><td><kbd>Ctrl+Alt+Arrow</kbd></td><td>Split in direction</td></tr>
-    <tr><td><kbd>Shift+Arrow</kbd></td><td>Move focus between panes</td></tr>
-    <tr><td><kbd>Ctrl+Shift+F</kbd></td><td>Toggle Focus / Grid mode</td></tr>
-    <tr><td><kbd>Ctrl+Shift+C</kbd></td><td>AI Sessions panel</td></tr>
-    <tr><td><kbd>Ctrl+Shift+X</kbd></td><td>File Explorer</td></tr>
-    <tr><td><kbd>Ctrl+Shift+K</kbd></td><td>Jump to AI prompt</td></tr>
-    <tr><td><kbd>Ctrl+Shift+B</kbd></td><td>Hide / show tab bar</td></tr>
-    <tr><td><kbd>Ctrl+,</kbd></td><td>Settings</td></tr>
-  </table>
-  <p style="text-align:center;color:var(--fg2);font-size:13px;margin-top:12px;">On macOS, Ctrl is replaced with Cmd (&#8984;). All shortcuts are customizable.</p>
-</div>
 
 <div class="community">
   <h2>Community</h2>
@@ -388,6 +372,12 @@
       <h3>Star the Repo</h3>
       <p>If you find tmax useful, give it a star!</p>
       <a class="community-btn" href="https://github.com/InbarR/tmax" target="_blank">Star on GitHub</a>
+    </div>
+    <div class="feature-card">
+      <div class="icon">&#9993;</div>
+      <h3>Contact</h3>
+      <p>Questions, feedback, or just want to say hi?</p>
+      <a class="community-btn" href="mailto:inbar.rotem@gmail.com">Send Email</a>
     </div>
   </div>
 </div>
@@ -437,7 +427,7 @@ const ALL_DOWNLOADS = [
 
 async function loadRelease() {
   const detected = detectPlatform();
-  document.getElementById('detected-os').textContent = `Detected: ${detected.os} (${detected.arch})`;
+  document.getElementById('detected-os').innerHTML = `${detected.icon} Detected: ${detected.os} (${detected.arch})`;
 
   try {
     const res = await fetch(API);
@@ -456,7 +446,8 @@ async function loadRelease() {
     if (primaryAsset) {
       btn.href = primaryAsset.browser_download_url;
       osName.textContent = primary.label;
-      osDetail.textContent = `${version} · ${(primaryAsset.size / 1024 / 1024).toFixed(0)} MB`;
+      const releaseDate = new Date(data.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      osDetail.textContent = `${version} · ${(primaryAsset.size / 1024 / 1024).toFixed(0)} MB · ${releaseDate}`;
     } else {
       btn.href = data.html_url;
       osName.textContent = detected.os;
