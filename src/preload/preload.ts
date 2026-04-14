@@ -30,6 +30,7 @@ export interface TerminalAPI {
   getConfig(): Promise<Record<string, unknown>>;
   setConfig(key: string, value: unknown): Promise<void>;
   clipboardRead(): string;
+  clipboardReadHTML(): string;
   clipboardWrite(text: string): void;
   clipboardHasImage(): boolean;
   clipboardSaveImage(): Promise<string>;
@@ -101,6 +102,10 @@ const terminalAPI: TerminalAPI = {
 
   clipboardRead() {
     return clipboard.readText();
+  },
+
+  clipboardReadHTML() {
+    return clipboard.readHTML();
   },
 
   clipboardWrite(text: string) {
