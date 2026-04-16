@@ -10,6 +10,12 @@ interface TilingNodeProps {
   node: LayoutNode;
 }
 
+/** Helper to get a stable key for a LayoutNode, ensuring React tracks
+ *  each TilingNode instance by its logical identity rather than tree position. */
+function getNodeKey(node: LayoutNode): string {
+  return node.kind === 'leaf' ? node.terminalId : node.id;
+}
+
 const TilingNode: React.FC<TilingNodeProps> = ({ node }) => {
   if (node.kind === 'leaf') {
     return (
@@ -28,6 +34,7 @@ const TilingNode: React.FC<TilingNodeProps> = ({ node }) => {
   return (
     <div className={`split-container ${splitNode.direction}`}>
       <div
+        key={getNodeKey(splitNode.first)}
         style={{
           flexBasis: firstBasis,
           flexGrow: 0,
@@ -45,6 +52,7 @@ const TilingNode: React.FC<TilingNodeProps> = ({ node }) => {
         direction={splitNode.direction}
       />
       <div
+        key={getNodeKey(splitNode.second)}
         style={{
           flexBasis: secondBasis,
           flexGrow: 0,
