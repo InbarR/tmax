@@ -78,6 +78,9 @@ const CopilotPanel: React.FC = () => {
   const terminals = useTerminalStore((s) => s.terminals);
   const summaryOverrides = useTerminalStore((s) => s.sessionNameOverrides);
   const lifecycleOverrides = useTerminalStore((s) => s.sessionLifecycleOverrides);
+  const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
+  const prevFocusedIdRef = useRef<string | null>(null);
+  const pendingHighlightRef = useRef<string | null>(null);
 
   // Track which AI session IDs have open terminals
   const openSessionIds = useMemo(() => {
@@ -207,6 +210,45 @@ const CopilotPanel: React.FC = () => {
       item?.scrollIntoView({ block: 'nearest' });
     }
   }, [selectedIndex]);
+
+  // Auto-highlight the AI session belonging to the focused terminal pane.
+  // Edge-triggered on focusedTerminalId change; does not force-open the panel.
+  // If the session is in a different lifecycle tab, switches tab and uses a
+  // pending ref so the selection resolves after the tab-switch re-render.
+  useEffect(() => {
+    if (!show) return;
+    if (focusedTerminalId === prevFocusedIdRef.current) return;
+    prevFocusedIdRef.current = focusedTerminalId;
+    if (!focusedTerminalId) return;
+
+    const store = useTerminalStore.getState();
+    const terminal = store.terminals.get(focusedTerminalId);
+    const aiSessionId = terminal?.aiSessionId;
+    if (!aiSessionId) return;
+
+    const session = [...store.copilotSessions, ...store.claudeCodeSessions].find((s) => s.id === aiSessionId);
+    if (!session) return;
+
+    const sessionLifecycle = getSessionLifecycle(session);
+    if (sessionLifecycle !== lifecycleTab) {
+      pendingHighlightRef.current = aiSessionId;
+      setLifecycleTab(sessionLifecycle);
+    } else {
+      const idx = filtered.findIndex((s) => s.id === aiSessionId);
+      if (idx >= 0) setSelectedIndex(idx);
+    }
+  }, [focusedTerminalId, show, lifecycleTab, filtered, getSessionLifecycle]);
+
+  // Resolve a pending highlight after a tab switch has re-rendered `filtered`.
+  useEffect(() => {
+    const id = pendingHighlightRef.current;
+    if (!id) return;
+    const idx = filtered.findIndex((s) => s.id === id);
+    if (idx >= 0) {
+      setSelectedIndex(idx);
+      pendingHighlightRef.current = null;
+    }
+  }, [filtered]);
 
   // Close context menu on outside click
   useEffect(() => {
