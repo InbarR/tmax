@@ -132,6 +132,29 @@ let claudeCodeWatcher: ClaudeCodeSessionWatcher | null = null;
 let wslSessionManager: WslSessionManager | null = null;
 let versionChecker: VersionChecker | null = null;
 let clipboardTempDir: string | null = null;
+const CLIPBOARD_DIR_STALE_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+/**
+ * Remove stale `tmax-clipboard-*` directories from os.tmpdir().
+ * Older-than-threshold directories are leftovers from crashed or killed sessions.
+ * Live sessions that regularly write images will have a recent mtime and are preserved.
+ */
+function sweepStaleClipboardDirs(): void {
+  try {
+    const tmp = os.tmpdir();
+    const now = Date.now();
+    for (const name of fs.readdirSync(tmp)) {
+      if (!name.startsWith('tmax-clipboard-') && name !== 'tmax-clipboard') continue;
+      const full = path.join(tmp, name);
+      try {
+        const stat = fs.statSync(full);
+        if (!stat.isDirectory()) continue;
+        if (now - stat.mtimeMs < CLIPBOARD_DIR_STALE_MS) continue;
+        fs.rmSync(full, { recursive: true, force: true });
+      } catch { /* skip locked or inaccessible dirs */ }
+    }
+  } catch { /* tmp listing failed — ignore */ }
+}
 const sessionStore = new Store({ name: 'tmax-session' });
 const detachedWindows = new Map<string, BrowserWindow>();
 
@@ -582,7 +605,8 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle(IPC.CLIPBOARD_SAVE_IMAGE, (_event, base64Png: string) => {
-    if (!clipboardTempDir) {
+    // Re-create if the dir was swept by another instance's startup cleanup
+    if (!clipboardTempDir || !fs.existsSync(clipboardTempDir)) {
       clipboardTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tmax-clipboard-'));
     }
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -760,6 +784,9 @@ process.on('uncaughtException', (error) => {
 
 app.whenReady().then(() => {
   try {
+    // Purge leftover clipboard temp dirs from crashed/killed sessions
+    sweepStaleClipboardDirs();
+
     // Force dark title bar/frame regardless of Windows system theme
     nativeTheme.themeSource = 'dark';
 
