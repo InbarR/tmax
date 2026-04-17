@@ -34,6 +34,18 @@ function hexToTerminalRgba(hex: string, alpha: number): string {
   return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`;
 }
 
+/**
+ * Force xterm's viewport to sync its native scroll area with the buffer.
+ * Without this, the native scrollbar may show no thumb even though there
+ * is scrollback content (wheel scrolling still works because xterm handles
+ * it in JS, but the scrollbar indicator is absent).
+ */
+function syncViewportScrollArea(term: Terminal): void {
+  try {
+    (term as any)._core?.viewport?.syncScrollArea();
+  } catch { /* viewport may not be ready */ }
+}
+
 const WSL_PROMPT_DEBOUNCE_MS = 200;
 const WSL_PROMPT_FALLBACK_MS = 5000;
 
@@ -195,15 +207,19 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     // Without this, Copilot CLI stays in isFocused=false and drops input.
     // Only inject when actually switching between two terminals — not on
     // first focus (prevFocused=null) to avoid stray sequences.
+    // Guard: skip the manual injection when xterm's textarea already has
+    // DOM focus — in that case xterm.js sends the DEC sequence natively
+    // and a second one causes duplicate cursors (#41).
     if (prevFocused && prevFocused !== terminalId) {
       window.terminalAPI.writePty(prevFocused, '\x1b[O');
       window.terminalAPI.diagLog('renderer:focus-inject-out', { terminalId: prevFocused });
-      // Delay focus-in so xterm's native focus event settles first,
-      // avoiding duplicate cursor from double focus-in reports
-      requestAnimationFrame(() => {
-        window.terminalAPI.writePty(terminalId, '\x1b[I');
-        window.terminalAPI.diagLog('renderer:focus-inject-in', { terminalId });
-      });
+      const textarea = containerRef.current?.querySelector('textarea');
+      if (!textarea || document.activeElement !== textarea) {
+        requestAnimationFrame(() => {
+          window.terminalAPI.writePty(terminalId, '\x1b[I');
+          window.terminalAPI.diagLog('renderer:focus-inject-in', { terminalId });
+        });
+      }
     }
   }, [terminalId]);
 
@@ -342,6 +358,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     requestAnimationFrame(() => {
       try {
         fitAddon.fit();
+        syncViewportScrollArea(term);
       } catch {
         // Container may not be sized yet
       }
@@ -567,6 +584,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       resizeTimer = setTimeout(() => {
         try {
           fitAddon.fit();
+          syncViewportScrollArea(term);
           const { cols, rows } = term;
           window.terminalAPI.resizePty(terminalId, cols, rows);
         } catch {
@@ -632,6 +650,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
           terminalRef.current.options.fontFamily = configFontFamily;
         }
         fitAddonRef.current.fit();
+        syncViewportScrollArea(terminalRef.current);
         const { cols, rows } = terminalRef.current;
         window.terminalAPI.resizePty(terminalId, cols, rows);
       }
@@ -669,6 +688,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       try {
         fitAddonRef.current?.fit();
         if (terminalRef.current) {
+          syncViewportScrollArea(terminalRef.current);
           const { cols, rows } = terminalRef.current;
           window.terminalAPI.resizePty(terminalId, cols, rows);
         }
@@ -691,6 +711,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
             try {
               fitAddonRef.current?.fit();
               if (terminalRef.current) {
+                syncViewportScrollArea(terminalRef.current);
                 const { cols, rows } = terminalRef.current;
                 window.terminalAPI.resizePty(terminalId, cols, rows);
               }
@@ -723,6 +744,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       try {
         if (fitAddonRef.current && terminalRef.current) {
           fitAddonRef.current.fit();
+          syncViewportScrollArea(terminalRef.current);
           const { cols, rows } = terminalRef.current;
           window.terminalAPI.resizePty(terminalId, cols, rows);
         }
