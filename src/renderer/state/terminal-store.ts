@@ -724,7 +724,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     if (!profile) return;
 
     const id = uuidv4();
-    const cwd = profile.cwd || (config as any).defaultCwd || (navigator.platform.startsWith('Win') ? 'C:\\Users' : process.env.HOME || '/');
+    const cwd = profile.cwd || (config as any).defaultCwd || ((window as any).platformInfo?.platform === 'win32' ? 'C:\\Users' : (window as any).platformInfo?.homeDir || '/');
     const { pid } = await window.terminalAPI.createPty({
       id,
       shellPath: profile.path,
@@ -1973,7 +1973,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         // Sanitize cwd: skip executable paths that were incorrectly saved as cwd
         let cwd = info.cwd || '';
         if (/\.(exe|cmd|bat|com|ps1|sh|msi|dll)$/i.test(cwd) || !cwd) {
-          cwd = profile.cwd || (navigator.platform.startsWith('Win') ? 'C:\\Users' : process.env.HOME || '/');
+          cwd = profile.cwd || ((window as any).platformInfo?.platform === 'win32' ? 'C:\\Users' : (window as any).platformInfo?.homeDir || '/');
         }
         try {
           const { pid } = await window.terminalAPI.createPty({
@@ -2263,12 +2263,15 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         terminals: updatedTerminals,
       };
     });
+    // Persist immediately — beforeunload often doesn't complete before renderer shutdown
+    get().saveSession();
   },
 
   setSessionLifecycle: (sessionId: string, lifecycle: import('../../shared/copilot-types').SessionLifecycle) => {
     set((s) => ({
       sessionLifecycleOverrides: { ...s.sessionLifecycleOverrides, [sessionId]: lifecycle },
     }));
+    get().saveSession();
   },
 
   checkStaleActiveSessions: () => {
@@ -2290,6 +2293,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       set((st) => ({
         sessionLifecycleOverrides: { ...st.sessionLifecycleOverrides, ...updates },
       }));
+      get().saveSession();
     }
   },
 
