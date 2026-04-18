@@ -68,7 +68,19 @@ jobs:
           git add docs/download-history.json
           if git diff --cached --quiet; then
             echo "Nothing to commit."
-          else
-            git commit -m "chore: hourly download stats snapshot"
-            git push
+            exit 0
           fi
+          git commit -m "chore: download stats snapshot"
+          # Main can move under us while the workflow runs. Retry push a few
+          # times with rebase so the snapshot commit lands even if other
+          # commits have been pushed concurrently.
+          for attempt in 1 2 3 4 5; do
+            if git push; then
+              echo "Push succeeded on attempt $attempt"
+              exit 0
+            fi
+            echo "Push rejected, rebasing and retrying (attempt $attempt)"
+            git pull --rebase origin main
+          done
+          echo "Push still failing after 5 attempts; skipping this snapshot"
+          exit 0
