@@ -279,12 +279,15 @@ function renderTimeline() {
     }
   }
 
-  // If delta mode, convert cumulative to per-snapshot delta (new downloads per interval)
+  // If delta mode, convert cumulative to per-snapshot delta (new downloads per
+  // interval). Skip the first snapshot since there's no "previous" to subtract
+  // from — treating it as 0 would include every historical download in the
+  // first bar.
   if (timelineMode === 'delta') {
     for (const [tag, points] of series) {
       const deltas = [];
-      for (let i = 0; i < points.length; i++) {
-        const prev = i === 0 ? 0 : points[i - 1].count;
+      for (let i = 1; i < points.length; i++) {
+        const prev = points[i - 1].count;
         deltas.push({ t: points[i].t, count: Math.max(0, points[i].count - prev) });
       }
       series.set(tag, deltas);
