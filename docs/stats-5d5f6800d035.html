@@ -264,7 +264,10 @@ function renderTimeline() {
   const W = rect.width, H = rect.height;
   ctx.clearRect(0, 0, W, H);
 
-  // Sum downloads across all assets (excluding RELEASES files) per snapshot per tag
+  // Sum INSTALL downloads per snapshot per tag. Excludes:
+  //  - RELEASES / RELEASES-x64 / RELEASES-arm64 metadata files
+  //  - .nupkg files (Squirrel auto-update fetches, not new installs)
+  // The lower "New installs by version" chart also excludes these the same way.
   const series = new Map(); // tag -> [{t, count}]
   for (const snap of timelineHistory) {
     const t = new Date(snap.t).getTime();
@@ -272,6 +275,7 @@ function renderTimeline() {
       let count = 0;
       for (const [name, n] of Object.entries(assets)) {
         if (EXCLUDED.has(name) || name.startsWith('RELEASES')) continue;
+        if (IS_UPDATE(name)) continue; // skip .nupkg auto-update fetches
         count += n;
       }
       if (!series.has(tag)) series.set(tag, []);
