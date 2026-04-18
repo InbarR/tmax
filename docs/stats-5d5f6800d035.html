@@ -352,12 +352,29 @@ function renderTimeline() {
 
   // X-axis date labels (first, middle, last)
   ctx.fillStyle = '#a6adc8'; ctx.textAlign = 'center';
+  const spanMs = tMax - tMin;
   const fmtDate = (ts) => {
     const d = new Date(ts);
-    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:00`;
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    // For short windows, show date+time down to minute; for longer, just date+hour
+    if (spanMs < 24 * 3600 * 1000) return `${mm}/${dd} ${hh}:${min}`;
+    return `${mm}/${dd} ${hh}:00`;
   };
   const labelPoints = tMin === tMax ? [tMin] : [tMin, (tMin + tMax) / 2, tMax];
   for (const t of labelPoints) ctx.fillText(fmtDate(t), xOf(t), pad.top + ch + 18);
+
+  // Label the latest count next to the last dot of each line
+  ctx.font = '10px system-ui';
+  ranked.forEach(([tag, points], idx) => {
+    if (points.length === 0) return;
+    const last = points[points.length - 1];
+    ctx.fillStyle = palette[idx % palette.length];
+    ctx.textAlign = 'left';
+    ctx.fillText(String(last.count), xOf(last.t) + 6, yOf(last.count) + 3);
+  });
 
   // Legend
   let lx = pad.left;
@@ -373,7 +390,16 @@ function renderTimeline() {
 
   const modeLabel = timelineMode === 'cumulative' ? 'showing cumulative downloads' : 'showing new downloads per interval';
   const hintIfSingle = timelineHistory.length === 1 ? ' - need 2+ snapshots to draw lines; next scheduled run fills this in.' : '';
-  document.getElementById('timelineNote').textContent = `${timelineHistory.length} snapshot(s), ${modeLabel}. Top 5 releases.${hintIfSingle}`;
+  let spanLabel = '';
+  if (timelineHistory.length >= 2) {
+    const first = new Date(timelineHistory[0].t);
+    const last = new Date(timelineHistory[timelineHistory.length - 1].t);
+    const minutes = Math.round((last - first) / 60000);
+    if (minutes < 60) spanLabel = ` Span: ${minutes} min.`;
+    else if (minutes < 60 * 24) spanLabel = ` Span: ${Math.round(minutes / 60 * 10) / 10} hr.`;
+    else spanLabel = ` Span: ${Math.round(minutes / (60 * 24) * 10) / 10} days.`;
+  }
+  document.getElementById('timelineNote').textContent = `${timelineHistory.length} snapshot(s), ${modeLabel}. Top 5 releases.${spanLabel}${hintIfSingle}`;
 }
 
 document.getElementById('timelineMode-cumulative').addEventListener('click', () => {
