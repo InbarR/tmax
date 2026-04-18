@@ -329,10 +329,11 @@ function renderTimeline() {
     ctx.textAlign = 'right'; ctx.fillText(String(v), pad.left - 6, y + 3);
   }
 
-  // Lines
+  // Lines (plus dots for each point, so single-snapshot state is visible)
   const palette = ['#89b4fa', '#a6e3a1', '#f9e2af', '#f38ba8', '#cba6f7'];
   ranked.forEach(([tag, points], idx) => {
-    ctx.strokeStyle = palette[idx % palette.length];
+    const color = palette[idx % palette.length];
+    ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.beginPath();
     points.forEach((p, i) => {
@@ -340,6 +341,13 @@ function renderTimeline() {
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
     ctx.stroke();
+    // Dots
+    ctx.fillStyle = color;
+    points.forEach((p) => {
+      ctx.beginPath();
+      ctx.arc(xOf(p.t), yOf(p.count), 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
   });
 
   // X-axis date labels (first, middle, last)
@@ -363,7 +371,9 @@ function renderTimeline() {
     lx += ctx.measureText(tag).width + 30;
   });
 
-  document.getElementById('timelineNote').textContent = `${timelineHistory.length} snapshot(s), ${timelineMode === 'cumulative' ? 'showing cumulative downloads' : 'showing new downloads per interval'}. Top 5 releases.`;
+  const modeLabel = timelineMode === 'cumulative' ? 'showing cumulative downloads' : 'showing new downloads per interval';
+  const hintIfSingle = timelineHistory.length === 1 ? ' - need 2+ snapshots to draw lines; next hourly cron fills this in.' : '';
+  document.getElementById('timelineNote').textContent = `${timelineHistory.length} snapshot(s), ${modeLabel}. Top 5 releases.${hintIfSingle}`;
 }
 
 document.getElementById('timelineMode-cumulative').addEventListener('click', () => {
