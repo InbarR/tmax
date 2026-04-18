@@ -62,9 +62,14 @@
 
 <div class="chart-section">
   <div class="chart-title">Downloads over time</div>
-  <div style="display:flex;gap:6px;margin-bottom:10px;">
+  <div style="display:flex;gap:6px;margin-bottom:6px;">
     <button class="filter-btn active" id="timelineMode-cumulative">Cumulative</button>
     <button class="filter-btn" id="timelineMode-delta">New per interval</button>
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;">
+    <span style="color:var(--dim);font-size:12px;">Stack by:</span>
+    <button class="filter-btn active" id="timelineStack-release">Release</button>
+    <button class="filter-btn" id="timelineStack-platform">Platform</button>
   </div>
   <div class="chart-container"><canvas id="timelineChart"></canvas></div>
   <div style="color:var(--dim);font-size:12px;margin-top:8px;" id="timelineNote">Loading...</div>
@@ -234,6 +239,7 @@ let allData = [];
 let activeFilter = 'all';
 
 let timelineMode = 'cumulative';
+let timelineStack = 'release'; // 'release' or 'platform'
 let timelineHistory = null;
 
 async function loadTimeline() {
@@ -264,22 +270,26 @@ function renderTimeline() {
   const W = rect.width, H = rect.height;
   ctx.clearRect(0, 0, W, H);
 
-  // Sum INSTALL downloads per snapshot per tag. Excludes:
+  // Sum INSTALL downloads per snapshot per stacking-key. Excludes:
   //  - RELEASES / RELEASES-x64 / RELEASES-arm64 metadata files
   //  - .nupkg files (Squirrel auto-update fetches, not new installs)
-  // The lower "New installs by version" chart also excludes these the same way.
-  const series = new Map(); // tag -> [{t, count}]
+  // The stacking key is either the release tag or the platform, per the user toggle.
+  const series = new Map(); // key (tag or platform) -> [{t, count}]
   for (const snap of timelineHistory) {
     const t = new Date(snap.t).getTime();
+    // Aggregate per key within this snapshot first
+    const perKey = new Map();
     for (const [tag, assets] of Object.entries(snap.releases)) {
-      let count = 0;
       for (const [name, n] of Object.entries(assets)) {
         if (EXCLUDED.has(name) || name.startsWith('RELEASES')) continue;
-        if (IS_UPDATE(name)) continue; // skip .nupkg auto-update fetches
-        count += n;
+        if (IS_UPDATE(name)) continue;
+        const key = timelineStack === 'platform' ? platformOf(name) : tag;
+        perKey.set(key, (perKey.get(key) || 0) + n);
       }
-      if (!series.has(tag)) series.set(tag, []);
-      series.get(tag).push({ t, count });
+    }
+    for (const [key, count] of perKey) {
+      if (!series.has(key)) series.set(key, []);
+      series.get(key).push({ t, count });
     }
   }
 
@@ -298,10 +308,11 @@ function renderTimeline() {
     }
   }
 
-  // Keep only the 5 most-downloaded tags (by latest snapshot) for clarity
+  // When stacking by platform there are only 3-4 buckets so no top-N slicing
+  // is needed. When stacking by release, cap at 5 for legend readability.
   const ranked = Array.from(series.entries())
     .sort(([, a], [, b]) => (b[b.length - 1].count) - (a[a.length - 1].count))
-    .slice(0, 5);
+    .slice(0, timelineStack === 'platform' ? 10 : 5);
 
   const pad = { top: 20, right: 16, bottom: 50, left: 40 };
   const cw = W - pad.left - pad.right;
@@ -342,7 +353,11 @@ function renderTimeline() {
     ctx.textAlign = 'right'; ctx.fillText(String(v), pad.left - 6, y + 3);
   }
 
-  const palette = ['#89b4fa', '#a6e3a1', '#f9e2af', '#f38ba8', '#cba6f7'];
+  // Use platform-aligned colors when stacking by platform; otherwise palette
+  const platformColor = { windows: '#89b4fa', macos: '#a6e3a1', linux: '#f9e2af', other: '#cba6f7' };
+  const palette = timelineStack === 'platform'
+    ? ranked.map(([k]) => platformColor[k] || '#a6adc8')
+    : ['#89b4fa', '#a6e3a1', '#f9e2af', '#f38ba8', '#cba6f7'];
 
   // Draw stacked columns, one per timestamp
   allTs.forEach((t, i) => {
@@ -424,6 +439,18 @@ document.getElementById('timelineMode-delta').addEventListener('click', () => {
   timelineMode = 'delta';
   document.getElementById('timelineMode-delta').classList.add('active');
   document.getElementById('timelineMode-cumulative').classList.remove('active');
+  renderTimeline();
+});
+document.getElementById('timelineStack-release').addEventListener('click', () => {
+  timelineStack = 'release';
+  document.getElementById('timelineStack-release').classList.add('active');
+  document.getElementById('timelineStack-platform').classList.remove('active');
+  renderTimeline();
+});
+document.getElementById('timelineStack-platform').addEventListener('click', () => {
+  timelineStack = 'platform';
+  document.getElementById('timelineStack-platform').classList.add('active');
+  document.getElementById('timelineStack-release').classList.remove('active');
   renderTimeline();
 });
 
