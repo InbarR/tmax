@@ -262,8 +262,11 @@ export class VersionChecker {
 
     this.feedServer = createServer((req: IncomingMessage, res: ServerResponse) => {
       console.log(`[update] Feed server request: ${req.method} ${req.url}`);
-      // Squirrel requests /RELEASES (or just /)
-      if (req.url === '/RELEASES' || req.url === '/') {
+      // Squirrel requests /RELEASES?id=...&localVersion=...&arch=... (with query
+      // string and sometimes lowercase /releases). Match by path only, case
+      // insensitive, to serve the file regardless of the querystring.
+      const pathOnly = (req.url || '').split('?')[0].toLowerCase();
+      if (pathOnly === '/releases' || pathOnly === '/') {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         res.end(releasesContent);
       } else {
