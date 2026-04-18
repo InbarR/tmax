@@ -56,6 +56,11 @@
 </div>
 
 <div class="chart-section">
+  <div class="chart-title">New installs by version (stacked by OS)</div>
+  <div class="chart-container"><canvas id="chart"></canvas></div>
+</div>
+
+<div class="chart-section">
   <div class="chart-title">Downloads over time (hourly snapshots)</div>
   <div style="display:flex;gap:6px;margin-bottom:10px;">
     <button class="filter-btn active" id="timelineMode-cumulative">Cumulative</button>
@@ -63,11 +68,6 @@
   </div>
   <div class="chart-container"><canvas id="timelineChart"></canvas></div>
   <div style="color:var(--dim);font-size:12px;margin-top:8px;" id="timelineNote">Loading...</div>
-</div>
-
-<div class="chart-section">
-  <div class="chart-title">New installs by version (stacked by OS)</div>
-  <div class="chart-container"><canvas id="chart"></canvas></div>
 </div>
 
 <div class="filter-bar">
