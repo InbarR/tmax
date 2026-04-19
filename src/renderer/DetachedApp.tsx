@@ -18,7 +18,7 @@ function extractLinkFromHtml(html: string): string | null {
   while ((m = linkPattern.exec(html)) !== null) {
     matches.push(m[1]);
   }
-  if (matches.length === 1) return matches[0];
+  if (matches.length === 1 && /^https?:\/\//i.test(matches[0])) return matches[0];
   return null;
 }
 

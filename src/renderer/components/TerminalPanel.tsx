@@ -24,7 +24,7 @@ function extractLinkFromHtml(html: string): string | null {
     matches.push(m[1]);
   }
   // Only extract when the HTML contains exactly one link
-  if (matches.length === 1) return matches[0];
+  if (matches.length === 1 && /^https?:\/\//i.test(matches[0])) return matches[0];
   return null;
 }
 
