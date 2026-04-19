@@ -316,7 +316,7 @@ function renderTimeline() {
     .sort(([, a], [, b]) => (b[b.length - 1].count) - (a[a.length - 1].count))
     .slice(0, timelineStack === 'platform' ? 10 : 5);
 
-  const pad = { top: 20, right: 16, bottom: 50, left: 40 };
+  const pad = { top: 20, right: 16, bottom: 80, left: 40 };
   const cw = W - pad.left - pad.right;
   const ch = H - pad.top - pad.bottom;
 
@@ -396,18 +396,33 @@ function renderTimeline() {
     if (spanMs < 24 * 3600 * 1000) return `${mm}/${dd} ${hh}:${min}`;
     return `${mm}/${dd} ${hh}:00`;
   };
-  ctx.fillStyle = '#a6adc8'; ctx.textAlign = 'center'; ctx.font = '10px system-ui';
-  // Show up to ~6 labels along the axis so they don't overlap
-  const labelStride = Math.max(1, Math.ceil(n / 6));
-  allTs.forEach((t, i) => {
-    if (i % labelStride !== 0 && i !== n - 1) return;
-    const x = pad.left + slot * (i + 0.5);
-    ctx.fillText(fmtDate(t), x, pad.top + ch + 14);
-  });
+  ctx.fillStyle = '#a6adc8'; ctx.font = '10px system-ui';
+  // Rotate labels -45deg so every bar gets a timestamp without overlap.
+  // If there are more than 25 bars, fall back to every-Nth to keep the axis readable.
+  const rotateLabels = n <= 25;
+  if (rotateLabels) {
+    allTs.forEach((t, i) => {
+      const x = pad.left + slot * (i + 0.5);
+      ctx.save();
+      ctx.translate(x, pad.top + ch + 6);
+      ctx.rotate(-Math.PI / 4);
+      ctx.textAlign = 'right';
+      ctx.fillText(fmtDate(t), 0, 0);
+      ctx.restore();
+    });
+  } else {
+    const labelStride = Math.max(1, Math.ceil(n / 10));
+    ctx.textAlign = 'center';
+    allTs.forEach((t, i) => {
+      if (i % labelStride !== 0 && i !== n - 1) return;
+      const x = pad.left + slot * (i + 0.5);
+      ctx.fillText(fmtDate(t), x, pad.top + ch + 14);
+    });
+  }
 
-  // Legend
+  // Legend - place below the labels (rotated labels extend ~45px diagonally)
   let lx = pad.left;
-  const ly = pad.top + ch + 34;
+  const ly = pad.top + ch + (rotateLabels ? 70 : 34);
   ranked.forEach(([tag], idx) => {
     ctx.fillStyle = palette[idx % palette.length];
     ctx.fillRect(lx, ly - 8, 10, 10);
