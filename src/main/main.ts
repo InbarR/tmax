@@ -659,6 +659,9 @@ function registerIpcHandlers(): void {
         if (!/^[\w][\w.\-]*$/.test(wslDistro)) return [];
         fsPath = `\\\\wsl.localhost\\${wslDistro}${dirPath.replace(/\//g, '\\')}`;
       }
+      // Confine to user's home directory to prevent arbitrary filesystem enumeration
+      const resolvedDir = path.resolve(fsPath);
+      if (!resolvedDir.startsWith(os.homedir()) && !resolvedDir.startsWith('\\\\wsl.localhost\\')) return [];
       const entries = fs.readdirSync(fsPath, { withFileTypes: true });
       return entries
         .map((e: any) => ({
@@ -684,6 +687,9 @@ function registerIpcHandlers(): void {
         if (!/^[\w][\w.\-]*$/.test(wslDistro)) return null;
         fsPath = `//wsl.localhost/${wslDistro}${filePath}`;
       }
+      // Confine to user's home directory to prevent arbitrary file reads
+      const resolvedFile = path.resolve(fsPath);
+      if (!resolvedFile.startsWith(os.homedir()) && !resolvedFile.startsWith('//wsl.localhost/')) return null;
       const stat = fs.statSync(fsPath);
       // Only read text files under 1MB
       if (stat.size > 1024 * 1024) return null;
