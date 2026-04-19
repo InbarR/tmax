@@ -343,13 +343,25 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
           return false;
         }
       }
-      // Ctrl+Enter / Shift+Enter: send win32-input-mode key events so
-      // ConPTY-aware apps (Claude Code) can distinguish Enter vs Shift+Enter
-      // Format: CSI Vk;Sc;Uc;Kd;Cs;Rc _ (VK_RETURN=13, ScanCode=28)
+      // Ctrl+Enter / Shift+Enter: send win32-input-mode key events on Windows
+      // so ConPTY-aware apps (Claude Code, Copilot CLI) can distinguish them
+      // from plain Enter. On macOS/Linux PTYs this sequence is meaningless, so
+      // send a plain LF for Shift+Enter (multi-line input works natively there
+      // via readline's \n handling).
+      // Format on Windows: CSI Vk;Sc;Uc;Kd;Cs;Rc _ (VK_RETURN=13, ScanCode=28)
       if (event.key === 'Enter' && (event.ctrlKey || event.shiftKey) && !event.altKey) {
-        const cs = (event.ctrlKey ? 8 : 0) | (event.shiftKey ? 16 : 0);
-        const uc = event.shiftKey ? 10 : 13;
-        window.terminalAPI.writePty(terminalId, `\x1b[13;28;${uc};1;${cs};1_`);
+        const isWin = (window as any).platformInfo?.platform === 'win32';
+        if (isWin) {
+          const cs = (event.ctrlKey ? 8 : 0) | (event.shiftKey ? 16 : 0);
+          const uc = event.shiftKey ? 10 : 13;
+          window.terminalAPI.writePty(terminalId, `\x1b[13;28;${uc};1;${cs};1_`);
+        } else if (event.shiftKey) {
+          // macOS/Linux: plain LF newline character
+          window.terminalAPI.writePty(terminalId, '\n');
+        } else {
+          // Ctrl+Enter on non-Windows: send CR (Enter)
+          window.terminalAPI.writePty(terminalId, '\r');
+        }
         return false;
       }
       return true;
