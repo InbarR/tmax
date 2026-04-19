@@ -411,7 +411,15 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle(IPC.OPEN_PATH, (_event, filePath: string) => {
-    shell.openPath(filePath);
+    const resolved = path.resolve(filePath);
+    const homeDir = os.homedir();
+    // Block executable extensions that could lead to code execution
+    const blockedExtensions = ['.exe', '.bat', '.cmd', '.ps1', '.sh', '.msi', '.app', '.com', '.vbs', '.wsf', '.jar'];
+    const ext = path.extname(resolved).toLowerCase();
+    if (blockedExtensions.includes(ext)) return;
+    // Restrict to paths under the user's home directory
+    if (!resolved.startsWith(homeDir)) return;
+    shell.openPath(resolved);
   });
 
   ipcMain.handle(IPC.SESSION_LOAD, () => {
