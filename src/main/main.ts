@@ -387,6 +387,17 @@ function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC.CONFIG_SET,
     (_event, key: string, value: unknown) => {
+      // Validate shell paths exist on disk to prevent injection of arbitrary executables
+      if (key === 'shells' && Array.isArray(value)) {
+        for (const shell of value) {
+          if (shell && typeof shell === 'object' && 'path' in shell) {
+            if (typeof shell.path !== 'string' || !fs.existsSync(shell.path)) {
+              throw new Error(`Invalid shell path: ${shell.path}`);
+            }
+          }
+        }
+      }
+
       configStore!.set(key as keyof ReturnType<ConfigStore['getAll']>, value as never);
 
       // Dynamically apply background material changes
