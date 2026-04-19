@@ -300,14 +300,17 @@ export class GitDiffService {
     if (!raw.trim()) {
       // No diff — file is unmodified or untracked; read as-is
       try {
-        const content = await readFile(path.join(root, filePath), 'utf-8');
+        const resolvedPath = path.resolve(root, filePath);
+        if (!resolvedPath.startsWith(path.resolve(root))) throw new Error('Path traversal detected');
+        const content = await readFile(resolvedPath, 'utf-8');
         const lines: AnnotatedLine[] = content.split('\n').map((line, i) => ({
           lineNumber: i + 1,
           content: line,
           type: 'unchanged' as DiffLineType,
         }));
         return { path: filePath, lines };
-      } catch {
+      } catch (e) {
+        if (e instanceof Error && e.message === 'Path traversal detected') throw e;
         return { path: filePath, lines: [] };
       }
     }
@@ -316,7 +319,9 @@ export class GitDiffService {
     const diffs = this.parseDiff(raw);
     const fileDiff = diffs[0];
     if (!fileDiff || fileDiff.hunks.length === 0) {
-      const content = await readFile(path.join(root, filePath), 'utf-8');
+      const resolvedPath = path.resolve(root, filePath);
+      if (!resolvedPath.startsWith(path.resolve(root))) throw new Error('Path traversal detected');
+      const content = await readFile(resolvedPath, 'utf-8');
       const lines: AnnotatedLine[] = content.split('\n').map((line, i) => ({
         lineNumber: i + 1,
         content: line,
