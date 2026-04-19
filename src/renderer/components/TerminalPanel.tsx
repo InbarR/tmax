@@ -367,19 +367,15 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       // different layouts/IMEs can change event.key).
       const isEnterKey = event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter';
       if (isEnterKey && (event.ctrlKey || event.shiftKey) && !event.altKey) {
-        // Plain LF for Shift+Enter works in Claude Code and Copilot CLI on
-        // every platform because they read raw characters from stdin and
-        // treat LF as "newline in multi-line input". win32-input-mode
-        // sequences get stripped / mangled by ConPTY when the child app
-        // hasn't opted into it, so plain LF is the reliable path.
-        // Ctrl+Enter still sends CR (same as Enter) - no standard meaning.
-        if (event.shiftKey && !event.ctrlKey) {
-          window.terminalAPI.writePty(terminalId, '\n');
-          window.terminalAPI.diagLog('renderer:enter-sent', { terminalId, path: 'plain-lf' });
-        } else {
-          window.terminalAPI.writePty(terminalId, '\r');
-          window.terminalAPI.diagLog('renderer:enter-sent', { terminalId, path: 'plain-cr' });
-        }
+        // CSI-u / kitty keyboard protocol format: `CSI keycode ; modifiers u`
+        // Shift+Enter = \x1b[13;2u, Ctrl+Enter = \x1b[13;5u, Ctrl+Shift+Enter = \x1b[13;6u.
+        // Verified that Claude Code interprets \x1b[13;2u as "insert newline in
+        // input" even on Windows via ConPTY. win32-input-mode sequences and
+        // raw LF don't work reliably there because the child app has to have
+        // opted in to them.
+        const modBits = 1 + (event.shiftKey ? 1 : 0) + (event.altKey ? 2 : 0) + (event.ctrlKey ? 4 : 0);
+        window.terminalAPI.writePty(terminalId, `\x1b[13;${modBits}u`);
+        window.terminalAPI.diagLog('renderer:enter-sent', { terminalId, path: 'csi-u', mod: modBits });
         return false;
       }
       return true;
