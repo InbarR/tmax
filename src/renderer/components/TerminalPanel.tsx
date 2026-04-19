@@ -367,13 +367,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       // different layouts/IMEs can change event.key).
       const isEnterKey = event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter';
       if (isEnterKey && (event.ctrlKey || event.shiftKey) && !event.altKey) {
-        const isWin = (window as any).platformInfo?.platform === 'win32';
-        if (isWin) {
-          const cs = (event.ctrlKey ? 8 : 0) | (event.shiftKey ? 16 : 0);
-          window.terminalAPI.writePty(terminalId, `\x1b[13;28;13;1;${cs};1_`);
-          window.terminalAPI.diagLog('renderer:enter-sent', { terminalId, path: 'win32-input-mode', cs });
-        } else if (event.shiftKey) {
-          // macOS/Linux: plain LF newline character (no win32-input-mode)
+        // Plain LF for Shift+Enter works in Claude Code and Copilot CLI on
+        // every platform because they read raw characters from stdin and
+        // treat LF as "newline in multi-line input". win32-input-mode
+        // sequences get stripped / mangled by ConPTY when the child app
+        // hasn't opted into it, so plain LF is the reliable path.
+        // Ctrl+Enter still sends CR (same as Enter) - no standard meaning.
+        if (event.shiftKey && !event.ctrlKey) {
           window.terminalAPI.writePty(terminalId, '\n');
           window.terminalAPI.diagLog('renderer:enter-sent', { terminalId, path: 'plain-lf' });
         } else {
