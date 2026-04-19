@@ -451,18 +451,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
           return false;
         }
       }
-      // Ctrl+Enter / Shift+Enter: insert newline
-      // On non-Windows: send CR so CLI tools (copilot, claude) get a new line
-      // On Windows: send win32-input-mode key events (VK_RETURN=13, ScanCode=28)
+      // Ctrl+Enter / Shift+Enter: send win32-input-mode key events
+      // Format: CSI Vk;Sc;Uc;Kd;Cs;Rc _ (VK_RETURN=13, ScanCode=28)
+      // ConPTY processes these when an app has enabled win32-input-mode
       if (event.key === 'Enter' && (event.ctrlKey || event.shiftKey) && !event.altKey) {
-        const isWin32 = !isMac && navigator.userAgent.includes('Windows');
-        if (!isWin32) {
-          window.terminalAPI.writePty(terminalId, '\r');
-        } else {
-          const cs = (event.ctrlKey ? 8 : 0) | (event.shiftKey ? 16 : 0);
-          const uc = event.ctrlKey ? 10 : 13;
-          window.terminalAPI.writePty(terminalId, `\x1b[13;28;${uc};1;${cs};1_`);
-        }
+        const cs = (event.ctrlKey ? 8 : 0) | (event.shiftKey ? 16 : 0);
+        const uc = event.ctrlKey ? 10 : 13;
+        window.terminalAPI.writePty(terminalId, `\x1b[13;28;${uc};1;${cs};1_`);
         return false;
       }
       return true;

@@ -96,11 +96,6 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
           if (sel) navigator.clipboard.writeText(sel);
           return false;
         }
-        // Shift+Enter / Ctrl+Enter: insert newline for CLI tools
-        if (event.key === 'Enter' && (event.ctrlKey || event.shiftKey) && !event.altKey) {
-          window.terminalAPI.writePty(terminalId, '\r');
-          return false;
-        }
         return true;
       });
 
