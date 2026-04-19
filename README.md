@@ -105,35 +105,6 @@ Built with Electron, React, TypeScript, xterm.js, and node-pty.
 - Add/remove shell profiles (PowerShell, CMD, WSL, or any executable)
 - Set default start folder globally or per shell
 
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|---|---|
-| `Ctrl+Shift+P` | Command palette |
-| `Ctrl+Shift+N` | New terminal |
-| `Ctrl+Shift+W` | Close terminal |
-| `Ctrl+Shift+R` | Rename terminal |
-| `Ctrl+Shift+G` | Jump to terminal by name |
-| `Ctrl+Shift+J` | Pane hints (press letter to jump) |
-| `Ctrl+Shift+K` | Jump to prompt in AI session |
-| `Ctrl+Shift+X` | File explorer |
-| `Ctrl+Shift+B` | Hide / show tab bar |
-| `Shift+Arrow` | Move focus between panes |
-| `Ctrl+Shift+Arrow` | Move/swap terminal in direction |
-| `Ctrl+Alt+Arrow` | Split in that direction |
-| `Ctrl+Shift+F` | Toggle view mode (Focus / Grid) |
-| `Ctrl+Shift+L` | Cycle grid column layout |
-| `Ctrl+Shift+C` | AI Sessions panel (Copilot / Claude) |
-| `Ctrl+Shift+D` | Directory favorites panel |
-| `Ctrl+Shift+E` | Equalize all pane sizes |
-| `Ctrl+Shift+Alt+Arrow` | Resize pane |
-| `Ctrl+=` / `Ctrl+-` | Zoom in / out |
-| `Ctrl+0` | Reset zoom |
-| `Ctrl+,` | Open settings |
-| `Ctrl+Shift+?` | Show all shortcuts |
-
-All shortcuts are remappable in Settings > Keybindings. On macOS, `Ctrl` is replaced with `Cmd (⌘)`.
-
 ## Tab Context Menu
 
 Right-click any tab for:
@@ -158,7 +129,13 @@ tmax is an independent open-source project and isn't code-signed (certificates c
 
 **Windows: "isn't commonly downloaded" (Edge / Chrome)**
 
-Your browser may silently pause the download and show something like `Unconfirmed 899869.crdownload` with a warning that the file isn't commonly downloaded. This is [Microsoft SmartScreen's reputation filter](https://learn.microsoft.com/en-us/windows/security/operating-system-security/virus-and-threat-protection/microsoft-defender-smartscreen/) - new / niche installers trigger it regardless of content.
+![Edge SmartScreen warning](docs/screenshots/download-warn-edge.png)
+
+Your browser may silently pause the download and show the message above, or quietly stash it as `Unconfirmed *.crdownload` in your Downloads folder:
+
+![Unconfirmed crdownload](docs/screenshots/download-warn-crdownload.png)
+
+This is [Microsoft SmartScreen's reputation filter](https://learn.microsoft.com/en-us/windows/security/operating-system-security/virus-and-threat-protection/microsoft-defender-smartscreen/) - new / niche installers trigger it regardless of content.
 
 To allow the download:
 1. In your browser's downloads list, click the **⋯** menu next to the paused file.
@@ -170,6 +147,8 @@ To allow the download:
 After installing, the first time you run tmax you'll see a blue "Windows protected your PC" dialog from SmartScreen. Click **More info** at the top, then **Run anyway** at the bottom.
 
 **macOS: "tmax is damaged and can't be opened"**
+
+![macOS damaged warning](docs/screenshots/download-warn-macos.png)
 
 Despite what the dialog says, the app is fine. macOS requires apps to be signed with an Apple Developer certificate ($99/year). Since I'm not planning to pay that evil company 😏, you have to bypass the quarantine flag yourself. Click **Cancel** (not Move to Trash!) and run this in Terminal:
 
