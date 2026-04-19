@@ -343,16 +343,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
           return false;
         }
       }
-      // Shift+Enter: universally send a plain LF character. Claude Code,
-      // Copilot CLI, and most readline-based REPLs treat LF in the input
-      // stream as "newline in multi-line input" regardless of platform.
-      // Sending win32-input-mode sequences here was fragile because only some
-      // apps decode them; plain LF is what they all agree on.
-      //
-      // Ctrl+Enter: send CR (same as Enter) - most apps don't distinguish,
-      // and some that do (like Claude Code) expect submit behavior.
+      // Ctrl+Enter / Shift+Enter: match what Windows Terminal sends - full
+      // win32-input-mode sequence where Uc is the character the key *would*
+      // produce (always CR=13 for Enter, regardless of modifiers), and Cs
+      // carries the modifier bits. Apps like Claude Code and Copilot CLI use
+      // the Cs field to distinguish Shift+Enter (insert newline) from Enter
+      // (submit). The earlier `Uc=10` variant for Shift+Enter confused apps.
+      // Format: CSI Vk;Sc;Uc;Kd;Cs;Rc _ (VK_RETURN=13, ScanCode=28, Kd=down)
       if (event.key === 'Enter' && (event.ctrlKey || event.shiftKey) && !event.altKey) {
-        if (event.shiftKey && !event.ctrlKey) {
+        const isWin = (window as any).platformInfo?.platform === 'win32';
+        if (isWin) {
+          const cs = (event.ctrlKey ? 8 : 0) | (event.shiftKey ? 16 : 0);
+          window.terminalAPI.writePty(terminalId, `\x1b[13;28;13;1;${cs};1_`);
+        } else if (event.shiftKey) {
+          // macOS/Linux: plain LF newline character (no win32-input-mode)
           window.terminalAPI.writePty(terminalId, '\n');
         } else {
           window.terminalAPI.writePty(terminalId, '\r');
