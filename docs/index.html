@@ -556,15 +556,16 @@ function detectPlatform() {
   return { os: 'Windows', arch: 'x64', icon: '&#128187;' };
 }
 
+// Every pattern here is arch-specific. Generic extensions like `.deb` or
+// `Setup.exe` are too loose - they'd hand the wrong-arch build to users once
+// ARM Linux or portable ARM Windows builds start shipping.
 const ALL_DOWNLOADS = [
-  // Windows x64 needs to match x64-Setup.exe explicitly - a loose /Setup\.exe$/
-  // would also match tmax-1.5.3-arm64-Setup.exe and hand an ARM build to x64 users.
   { os: 'Windows', arch: 'x64', label: 'Windows (x64)', icon: '&#128187;', pattern: /x64-Setup\.exe$|win32-x64.*\.zip$/ },
   { os: 'Windows', arch: 'arm64', label: 'Windows (ARM)', icon: '&#128170;', pattern: /arm64-Setup\.exe$|win32-arm64.*\.zip$/ },
-  { os: 'macOS', arch: 'arm64', label: 'macOS (Apple Silicon)', icon: '🍎', pattern: /arm64\.dmg$/ },
-  { os: 'macOS', arch: 'x64', label: 'macOS (Intel)', icon: '🍏', pattern: /(?<!arm64)\.dmg$|darwin-x64.*\.zip$/ },
-  { os: 'Linux', arch: 'x64', label: 'Linux (.deb)', icon: '🐧', pattern: /\.deb$/ },
-  { os: 'Linux', arch: 'x64-rpm', label: 'Linux (.rpm)', icon: '📦', pattern: /\.rpm$/ },
+  { os: 'macOS', arch: 'arm64', label: 'macOS (Apple Silicon)', icon: '🍎', pattern: /arm64\.dmg$|darwin-arm64.*\.zip$/ },
+  { os: 'macOS', arch: 'x64', label: 'macOS (Intel)', icon: '🍏', pattern: /x64\.dmg$|darwin-x64.*\.zip$/ },
+  { os: 'Linux', arch: 'x64', label: 'Linux (.deb)', icon: '🐧', pattern: /amd64\.deb$|x64.*\.deb$/ },
+  { os: 'Linux', arch: 'x64-rpm', label: 'Linux (.rpm)', icon: '📦', pattern: /x86_64\.rpm$|x64.*\.rpm$/ },
 ];
 
 async function loadRelease() {
