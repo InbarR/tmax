@@ -57,9 +57,6 @@ export const IPC = {
   // ── File explorer ──────────────────────────────────────────────────
   FILE_LIST: 'file:list',
   FILE_READ: 'file:read',
-  // ── Pipeline tracker ────────────────────────────────────────────
-  PIPELINE_STATUS_UPDATE: 'pipeline:statusUpdate',
-  PIPELINE_DISMISS: 'pipeline:dismiss',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

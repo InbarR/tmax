@@ -118,7 +118,7 @@ export class PtyManager {
 
     const baseEnv = sanitizeEnv(opts.env ?? (process.env as Record<string, string>));
     const shellName = opts.shellPath.toLowerCase();
-    const shellEnv: Record<string, string> = { TERM_PROGRAM: 'tmax', COLORTERM: 'truecolor', TMAX_PANE_ID: opts.id };
+    const shellEnv: Record<string, string> = { TERM_PROGRAM: 'tmax', COLORTERM: 'truecolor' };
 
     // Set PROMPT_COMMAND via env var for native bash/zsh (not WSL — shell init takes longer)
     if (!shellName.includes('wsl') && (shellName.includes('bash') || shellName.includes('zsh'))) {

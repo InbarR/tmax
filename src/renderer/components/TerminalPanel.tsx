@@ -4,11 +4,9 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon } from '@xterm/addon-search';
 import { useTerminalStore } from '../state/terminal-store';
-import { usePipelineStore } from '../state/pipeline-store';
 import { registerTerminal, unregisterTerminal, getTerminalEntry, addTerminalCleanup, stashTerminal, unstashTerminal, disposeTerminal, setWebglAddon, setTextareaHandlers, removeTextareaHandlers } from '../terminal-registry';
 import { isMac } from '../utils/platform';
 import type { AppConfig } from '../state/types';
-import { PipelineFooter } from './PipelineFooter';
 import '@xterm/xterm/css/xterm.css';
 
 function hexToTerminalRgba(hex: string, alpha: number): string {
@@ -1044,7 +1042,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       )}
       {showDiag && <DiagnosticsOverlay terminalId={terminalId} diagRef={diagRef} mainDiag={mainDiagRef.current} logPath={logPathRef.current} onClose={() => setShowDiag(false)} />}
       <div ref={containerRef} className="xterm-container" />
-      <PipelineFooter paneId={terminalId} />
       {bgTint && <div className="terminal-color-overlay" style={{ background: bgTint + '18' }} />}
     </div>
   );
