@@ -103,8 +103,9 @@ export class PtyManager {
     const shellName = opts.shellPath.toLowerCase();
     const shellEnv: Record<string, string> = { TERM_PROGRAM: 'tmax', COLORTERM: 'truecolor' };
 
-    // Set PROMPT_COMMAND via env var for native bash/zsh (not WSL — shell init takes longer)
-    if (!shellName.includes('wsl') && (shellName.includes('bash') || shellName.includes('zsh'))) {
+    // Set PROMPT_COMMAND via env var for native bash (not WSL — shell init takes longer)
+    // zsh doesn't support PROMPT_COMMAND; it uses precmd hooks injected below via PTY write
+    if (!shellName.includes('wsl') && shellName.includes('bash') && !shellName.includes('zsh')) {
       shellEnv.PROMPT_COMMAND = 'printf "\\e]7;file:///%s\\a" "$(pwd)"';
     }
 
@@ -140,6 +141,14 @@ export class PtyManager {
       setTimeout(() => ptyProcess.write('cls\r'), 400);
     }
     // CMD: relies on prompt regex fallback (no hook mechanism)
+
+    // Inject shell integration for zsh (precmd hook for OSC 7)
+    // zsh doesn't support PROMPT_COMMAND; use precmd_functions array instead
+    if (!shellName.includes('wsl') && shellName.includes('zsh') && !shellName.includes('pwsh')) {
+      const zshSnippet = `__tmax_precmd() { printf '\\e]7;file:///%s\\a' "$PWD" }; precmd_functions+=(__tmax_precmd)`;
+      setTimeout(() => ptyProcess.write(zshSnippet + '\r'), 200);
+      setTimeout(() => ptyProcess.write('clear\r'), 400);
+    }
 
     ptyProcess.onData((data) => {
       const s = this.stats.get(opts.id);
