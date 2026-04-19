@@ -152,17 +152,34 @@ Right-click any tab for:
 
 Download the latest version from the [Releases page](https://github.com/InbarR/tmax/releases). Available for Windows (.exe installer + portable .zip), macOS (.dmg for Apple Silicon and Intel), and Linux (.deb, .rpm).
 
-### Running on macOS
+### Troubleshooting Downloads
 
-macOS requires apps to be signed with an Apple Developer certificate (which costs $99/year). Since I'm not planning to pay that evil company, you may see _"tmax is damaged and can't be opened"_ on first launch.
+tmax is an independent open-source project and isn't code-signed (certificates cost $300-600/year on Windows and $99/year on macOS). Your browser and operating system may warn you about the download. All of these warnings are cosmetic - nothing is wrong with the file itself. Here's how to get past each one.
 
-To bypass it, run:
+**Windows: "isn't commonly downloaded" (Edge / Chrome)**
+
+Your browser may silently pause the download and show something like `Unconfirmed 899869.crdownload` with a warning that the file isn't commonly downloaded. This is [Microsoft SmartScreen's reputation filter](https://learn.microsoft.com/en-us/windows/security/operating-system-security/virus-and-threat-protection/microsoft-defender-smartscreen/) - new / niche installers trigger it regardless of content.
+
+To allow the download:
+1. In your browser's downloads list, click the **⋯** menu next to the paused file.
+2. Click **Keep** (Edge) or **Keep dangerous file** (Chrome).
+3. If the option is hidden, click **See more** to expand.
+
+**Windows: "Windows protected your PC" on first launch**
+
+After installing, the first time you run tmax you'll see a blue "Windows protected your PC" dialog from SmartScreen. Click **More info** at the top, then **Run anyway** at the bottom.
+
+**macOS: "tmax is damaged and can't be opened"**
+
+Despite what the dialog says, the app is fine. macOS requires apps to be signed with an Apple Developer certificate ($99/year). Since I'm not planning to pay that evil company 😏, you have to bypass the quarantine flag yourself. Click **Cancel** (not Move to Trash!) and run this in Terminal:
 
 ```bash
 xattr -cr /Applications/tmax.app
 ```
 
-This removes the "downloaded from the internet" flag, so macOS skips the security check that would otherwise block the app because it isn't signed.
+This clears the quarantine extended attribute so macOS skips the signature check. Open tmax normally afterwards.
+
+If you installed to a different location, adjust the path (e.g. `~/Applications/tmax.app`).
 
 ## Building from Source
 
