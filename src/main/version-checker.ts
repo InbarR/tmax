@@ -9,12 +9,13 @@ import https from 'node:https';
 
 const GITHUB_REPO = 'InbarR/tmax';
 const UPDATE_SERVER = 'https://update.electronjs.org';
-// Allow overriding for local testing: set TMAX_UPDATE_TEST_URL=http://localhost:9999
-const GITHUB_RELEASES_URL = process.env.TMAX_UPDATE_TEST_URL
-  ? `${process.env.TMAX_UPDATE_TEST_URL}/releases/latest`
+// Allow overriding for local testing (dev builds only): set TMAX_UPDATE_TEST_URL=http://localhost:9999
+const testUrl = !app.isPackaged ? process.env.TMAX_UPDATE_TEST_URL : undefined;
+const GITHUB_RELEASES_URL = testUrl
+  ? `${testUrl}/releases/latest`
   : `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
-const INITIAL_DELAY_MS = process.env.TMAX_UPDATE_TEST_URL ? 3_000 : 10_000;
+const INITIAL_DELAY_MS = testUrl ? 3_000 : 10_000;
 
 export type UpdateStatus = 'idle' | 'checking' | 'downloading' | 'downloaded' | 'available' | 'error';
 
@@ -62,8 +63,8 @@ export class VersionChecker {
   }
 
   start(): void {
-    if (process.env.TMAX_UPDATE_TEST_URL) {
-      console.log(`[update] TEST MODE: using ${process.env.TMAX_UPDATE_TEST_URL} instead of GitHub API`);
+    if (testUrl) {
+      console.log(`[update] TEST MODE: using ${testUrl} instead of GitHub API`);
     }
     if (this.supportsAutoUpdate) {
       this.setupAutoUpdater();
