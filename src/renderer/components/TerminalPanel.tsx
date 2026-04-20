@@ -530,12 +530,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       // different layouts/IMEs can change event.key).
       const isEnterKey = event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter';
       if (isEnterKey && (event.ctrlKey || event.shiftKey) && !event.altKey) {
-        // CSI-u / kitty keyboard protocol format: `CSI keycode ; modifiers u`
-        // Shift+Enter = \x1b[13;2u, Ctrl+Enter = \x1b[13;5u, Ctrl+Shift+Enter = \x1b[13;6u.
-        // Verified that Claude Code interprets \x1b[13;2u as "insert newline in
-        // input" even on Windows via ConPTY. win32-input-mode sequences and
-        // raw LF don't work reliably there because the child app has to have
-        // opted in to them.
+        // AI sessions (Copilot CLI, Claude Code): send a raw newline so the
+        // tool's line-editor inserts a line break instead of submitting.
+        // Non-AI terminals: use CSI-u / kitty keyboard protocol so apps that
+        // opt in can distinguish Shift+Enter from Enter.
+        const termInstance = useTerminalStore.getState().terminals.get(terminalId);
+        if (termInstance?.aiSessionId) {
+          window.terminalAPI.writePty(terminalId, '\n');
+          window.terminalAPI.diagLog('renderer:enter-sent', { terminalId, path: 'ai-newline' });
+          return false;
+        }
         const modBits = 1 + (event.shiftKey ? 1 : 0) + (event.altKey ? 2 : 0) + (event.ctrlKey ? 4 : 0);
         window.terminalAPI.writePty(terminalId, `\x1b[13;${modBits}u`);
         window.terminalAPI.diagLog('renderer:enter-sent', { terminalId, path: 'csi-u', mod: modBits });
