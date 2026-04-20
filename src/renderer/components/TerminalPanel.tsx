@@ -530,13 +530,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       // different layouts/IMEs can change event.key).
       const isEnterKey = event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter';
       if (isEnterKey && (event.ctrlKey || event.shiftKey) && !event.altKey) {
-        // AI sessions (Copilot CLI, Claude Code): send a raw newline so the
-        // tool's line-editor inserts a line break instead of submitting.
-        // Non-AI terminals: use CSI-u / kitty keyboard protocol so apps that
-        // opt in can distinguish Shift+Enter from Enter.
+        // AI sessions (Copilot CLI, Claude Code): send ESC+CR (\x1b\r), the
+        // same sequence Option+Enter produces natively. CLI line-editors
+        // (e.g. readline, rustyline) interpret this as "insert newline".
         const termInstance = useTerminalStore.getState().terminals.get(terminalId);
         if (termInstance?.aiSessionId) {
-          window.terminalAPI.writePty(terminalId, '\n');
+          window.terminalAPI.writePty(terminalId, '\x1b\r');
           window.terminalAPI.diagLog('renderer:enter-sent', { terminalId, path: 'ai-newline' });
           return false;
         }
