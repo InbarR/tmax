@@ -14,6 +14,7 @@ import type {
 } from './types';
 import type { CopilotSessionSummary } from '../../shared/copilot-types';
 import type { DiffMode } from '../../shared/diff-types';
+import type { RepoWorktrees } from '../../shared/worktree-types';
 import { getAllTerminals, getAllTerminalEntries, setWebglAddon, disposeTerminal, getTerminalEntry } from '../terminal-registry';
 
 // Session IDs must be alphanumeric/dash/dot/underscore only (prevent shell injection)
@@ -688,6 +689,9 @@ let _sessionExtras: Record<string, unknown> = (window as any).__tmax_sessionExtr
 // saveSession() call would overwrite the file with empty initial values.
 // Attached to window to survive Vite HMR module re-evaluation.
 let _sessionHydrated = (window as any).__tmax_sessionHydrated === true;
+
+// Monotonically increasing counter to detect stale loadWorktrees() calls
+let _loadWorktreesSeq = 0;
 
 // ── Store implementation ─────────────────────────────────────────────
 

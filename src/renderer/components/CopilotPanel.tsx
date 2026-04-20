@@ -85,7 +85,6 @@ const CopilotPanel: React.FC = () => {
   const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
   const summaryOverrides = useTerminalStore((s) => s.sessionNameOverrides);
   const lifecycleOverrides = useTerminalStore((s) => s.sessionLifecycleOverrides);
-  const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
   const prevFocusedIdRef = useRef<string | null>(null);
   const pendingHighlightRef = useRef<string | null>(null);
 
