@@ -548,6 +548,18 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
         window.terminalAPI.diagLog('renderer:enter-sent', { terminalId, path: 'csi-u', mod: modBits });
         return false;
       }
+      // ESC in AI sessions: bypass xterm's key processing and send \x1b
+      // directly to the PTY. xterm.js normally sends ESC correctly, but
+      // during heavy output (Copilot "thinking") the byte can be lost in
+      // the event-loop pipeline. Direct writePty ensures reliable delivery.
+      if (event.key === 'Escape' && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey) {
+        const termInstance = useTerminalStore.getState().terminals.get(terminalId);
+        if (termInstance?.aiSessionId) {
+          event.preventDefault();
+          window.terminalAPI.writePty(terminalId, '\x1b');
+          return false;
+        }
+      }
       return true;
     });
 
