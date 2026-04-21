@@ -167,7 +167,7 @@ export class PtyManager {
     if (pty) {
       const s = this.stats.get(id);
       if (s) { s.writeCount++; s.lastWriteTime = Date.now(); }
-      diagLog('pty:write', { id, bytes: data.length, preview: sanitize(data) });
+      diagLog('pty:write', { id, bytes: data.length });
       pty.write(data);
     } else {
       diagLog('pty:write:no-pty', { id, bytes: data.length });
