@@ -1274,15 +1274,37 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const newTerminals = new Map(terminals);
     newTerminals.set(id, updatedInstance);
 
+    // Keep preGridRoot in sync so a later grid→focus toggle restores a tree
+    // that includes the woken terminal (fixes #70 blank focus mode when a
+    // terminal was woken in grid mode between the two toggles).
+    const { viewMode, preGridRoot, gridColumns } = get();
+    let newPreGridRoot = preGridRoot;
+    if (preGridRoot) {
+      const preOrder = getLeafOrder(preGridRoot);
+      if (preOrder.length > 0) {
+        newPreGridRoot = insertLeaf(preGridRoot, preOrder[preOrder.length - 1], id, 'right');
+      } else {
+        newPreGridRoot = { kind: 'leaf', terminalId: id };
+      }
+    }
+
+    // In grid mode, rebuild the grid so the woken terminal slots in cleanly.
+    let finalRoot = newRoot;
+    if (viewMode === 'grid' && finalRoot) {
+      const allIds = getLeafOrder(finalRoot);
+      finalRoot = buildGridTree(allIds, gridColumns || undefined) || finalRoot;
+    }
+
     set({
       terminals: newTerminals,
-      layout: { ...layout, tilingRoot: newRoot },
+      layout: { ...layout, tilingRoot: finalRoot },
       focusedTerminalId: id,
+      preGridRoot: newPreGridRoot,
     });
     window.terminalAPI.diagLog('renderer:wake-from-dormant', {
       id,
       ms: Math.round(performance.now() - t0),
-      tiled: newRoot ? getLeafOrder(newRoot).length : 0,
+      tiled: finalRoot ? getLeafOrder(finalRoot).length : 0,
     });
   },
 
@@ -1542,10 +1564,19 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   toggleViewMode: () => {
-    const { viewMode, layout, preGridRoot, gridColumns } = get();
+    const { viewMode, layout, preGridRoot, gridColumns, focusedTerminalId } = get();
     if (viewMode === 'grid') {
-      // Grid → Focus: restore original layout if from "Split Selected"
-      const restored = preGridRoot || layout.tilingRoot;
+      // Grid → Focus: restore the pre-grid layout when available. Defensive
+      // guard (#70): if preGridRoot is stale and doesn't contain the currently
+      // focused terminal, fall back to the current tilingRoot so focus mode
+      // never ends up blank.
+      let restored = preGridRoot || layout.tilingRoot;
+      if (preGridRoot && focusedTerminalId) {
+        const preIds = getLeafOrder(preGridRoot);
+        if (!preIds.includes(focusedTerminalId)) {
+          restored = layout.tilingRoot;
+        }
+      }
       set({
         viewMode: 'focus',
         layout: { ...layout, tilingRoot: restored },

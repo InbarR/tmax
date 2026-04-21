@@ -2,8 +2,13 @@ node_modules/
 .vite/
 out/
 out-next/
+out-e2e/
 dist/
 *.node
+
+# Playwright test artifacts
+/test-results/
+/playwright-report/
 
 # Claude Code local settings
 .claude/
