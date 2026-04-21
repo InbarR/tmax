@@ -3071,13 +3071,49 @@ select.settings-input {
   letter-spacing: 0.5px;
   background: rgba(137, 180, 250, 0.04);
   border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+
+.ai-session-group-header:hover {
+  background: rgba(137, 180, 250, 0.1);
+}
+
+.ai-session-group-header:first-child {
+  border-top: none;
+}
+
+.ai-session-group-chevron {
+  display: inline-block;
+  width: 10px;
+  font-size: 9px;
+  color: var(--dim-text, #a6adc8);
+}
+
+.ai-session-group-name {
+  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.ai-session-group-header:first-child {
-  border-top: none;
+.ai-session-group-count {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--dim-text, #a6adc8);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 6px;
+  border-radius: 8px;
+  min-width: 16px;
+  text-align: center;
+}
+
+.ai-session-group-header.collapsed {
+  opacity: 0.7;
 }
 
 .ai-session-item:hover,

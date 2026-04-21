@@ -123,6 +123,16 @@ const CopilotPanel: React.FC = () => {
   const [renaming, setRenaming] = useState<{ id: string; provider: SessionProvider; value: string } | null>(null);
   const [promptsDialog, setPromptsDialog] = useState<{ title: string; prompts: string[]; terminalId: string | null } | null>(null);
   const [showRunningOnly, setShowRunningOnly] = useState(false);
+  // #69: collapsed groups - Set of repo keys the user has collapsed in-session.
+  // Not persisted intentionally: collapse state is ephemeral navigation, not a preference.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleGroupCollapsed = (key: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const ctxRef = useRef<HTMLDivElement>(null);
@@ -223,6 +233,17 @@ const CopilotPanel: React.FC = () => {
     });
     return sortedGroups.flatMap(([, group]) => group);
   }, [filtered, groupByRepo]);
+
+  // #69: counts per group key so the collapsible header can show `tmax · 3`.
+  const groupSizes = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!groupByRepo) return m;
+    for (const s of displayList) {
+      const key = repoKey(s);
+      m.set(key, (m.get(key) || 0) + 1);
+    }
+    return m;
+  }, [displayList, groupByRepo]);
 
   // Lifecycle counts (for tab badges) — computed from all sessions regardless of provider/running filter
   const lifecycleCounts = useMemo(() => {
@@ -622,14 +643,22 @@ const CopilotPanel: React.FC = () => {
           const currentRepo = repoKey(session);
           const prevRepo = index > 0 ? repoKey(displayList[index - 1]) : null;
           const showGroupHeader = groupByRepo && currentRepo !== prevRepo;
+          const isCollapsed = groupByRepo && collapsedGroups.has(currentRepo);
 
           return (
             <React.Fragment key={`${session.provider}-${session.id}`}>
               {showGroupHeader && (
-                <div className="ai-session-group-header" title={currentRepo}>
-                  {currentRepo}
+                <div
+                  className={`ai-session-group-header${isCollapsed ? ' collapsed' : ''}`}
+                  title={currentRepo}
+                  onClick={() => toggleGroupCollapsed(currentRepo)}
+                >
+                  <span className="ai-session-group-chevron">{isCollapsed ? '▸' : '▾'}</span>
+                  <span className="ai-session-group-name">{currentRepo}</span>
+                  <span className="ai-session-group-count">{groupSizes.get(currentRepo) || 0}</span>
                 </div>
               )}
+              {!isCollapsed && <>
             <div
               style={itemStyle}
               className={`ai-session-item${index === selectedIndex ? ' selected' : ''}${selectedSessionIds.has(session.id) ? ' multi-selected' : ''}${active ? ' active' : ''}`}
@@ -738,6 +767,7 @@ const CopilotPanel: React.FC = () => {
                 </button>
               )}
             </div>
+            </>}
             </React.Fragment>
           );
         })}
