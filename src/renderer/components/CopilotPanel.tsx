@@ -565,7 +565,7 @@ const CopilotPanel: React.FC = () => {
                 data-tooltip={allCollapsed ? 'Expand all groups' : 'Collapse all groups'}
                 style={{ fontSize: '10px', padding: '1px 6px' }}
               >
-                {allCollapsed ? '▸▸' : '▾▾'}
+                {allCollapsed ? '▸ Expand' : '▾ Collapse'}
               </button>
             );
           })()}
