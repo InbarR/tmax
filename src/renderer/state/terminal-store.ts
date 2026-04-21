@@ -1590,10 +1590,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         set({ viewMode: 'grid' });
         return;
       }
-      const ids = getLeafOrder(root).filter((id) => {
-        const t = get().terminals.get(id);
-        return t && t.mode !== 'dormant';
-      });
+      // Build grid from all tiled terminals in TAB order so the grid panes
+      // line up left-to-right, top-to-bottom with the tab bar. Tab order =
+      // insertion order of the terminals Map, which TabBar.tsx uses too.
+      const ids = Array.from(get().terminals.entries())
+        .filter(([, t]) => t.mode === 'tiled')
+        .map(([id]) => id);
       if (ids.length === 0) {
         set({ viewMode: 'grid' });
         return;
@@ -1668,10 +1670,17 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   cycleGridColumns: () => {
     const { layout, gridColumns, viewMode, preGridRoot } = get();
-    // Use the original tree (preGridRoot) to get terminal IDs if in grid mode
-    const sourceRoot = preGridRoot || layout.tilingRoot;
-    if (!sourceRoot) return;
-    const ids = getLeafOrder(sourceRoot);
+    // When already in grid, preserve the grid's current order (which is tab
+    // order after the order-matches-tabs fix). When entering grid from focus,
+    // fall back to the source tree's leaf order.
+    let ids: TerminalId[];
+    if (viewMode === 'grid' && layout.tilingRoot) {
+      ids = getLeafOrder(layout.tilingRoot);
+    } else {
+      const sourceRoot = preGridRoot || layout.tilingRoot;
+      if (!sourceRoot) return;
+      ids = getLeafOrder(sourceRoot);
+    }
     const n = ids.length;
     if (n <= 1) return;
 
