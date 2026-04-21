@@ -277,8 +277,12 @@ export class GitDiffService {
 
   async readFileContent(cwd: string, filePath: string): Promise<string> {
     const root = await this.getGitRoot(cwd);
-    const fullPath = path.join(root, filePath);
-    return readFile(fullPath, 'utf-8');
+    const rootResolved = path.resolve(root);
+    const resolvedPath = path.resolve(rootResolved, filePath);
+    if (resolvedPath !== rootResolved && !resolvedPath.startsWith(rootResolved + path.sep)) {
+      throw new Error('Path traversal detected');
+    }
+    return readFile(resolvedPath, 'utf-8');
   }
 
   async getAnnotatedFile(cwd: string, filePath: string, mode: DiffMode): Promise<AnnotatedFile> {
@@ -300,8 +304,14 @@ export class GitDiffService {
     if (!raw.trim()) {
       // No diff — file is unmodified or untracked; read as-is
       try {
-        const resolvedPath = path.resolve(root, filePath);
-        if (!resolvedPath.startsWith(path.resolve(root))) throw new Error('Path traversal detected');
+        const rootResolved = path.resolve(root);
+        const resolvedPath = path.resolve(rootResolved, filePath);
+        // Require the resolved path to be the root itself or a descendant. Plain
+        // startsWith would admit sibling directories like `/home/user-evil` when
+        // root is `/home/user`; appending path.sep closes that hole.
+        if (resolvedPath !== rootResolved && !resolvedPath.startsWith(rootResolved + path.sep)) {
+          throw new Error('Path traversal detected');
+        }
         const content = await readFile(resolvedPath, 'utf-8');
         const lines: AnnotatedLine[] = content.split('\n').map((line, i) => ({
           lineNumber: i + 1,
@@ -319,8 +329,11 @@ export class GitDiffService {
     const diffs = this.parseDiff(raw);
     const fileDiff = diffs[0];
     if (!fileDiff || fileDiff.hunks.length === 0) {
-      const resolvedPath = path.resolve(root, filePath);
-      if (!resolvedPath.startsWith(path.resolve(root))) throw new Error('Path traversal detected');
+      const rootResolved = path.resolve(root);
+      const resolvedPath = path.resolve(rootResolved, filePath);
+      if (resolvedPath !== rootResolved && !resolvedPath.startsWith(rootResolved + path.sep)) {
+        throw new Error('Path traversal detected');
+      }
       const content = await readFile(resolvedPath, 'utf-8');
       const lines: AnnotatedLine[] = content.split('\n').map((line, i) => ({
         lineNumber: i + 1,
