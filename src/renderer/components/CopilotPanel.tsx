@@ -693,7 +693,7 @@ const CopilotPanel: React.FC = () => {
                   {time && <span className="ai-session-time">{time}</span>}
                 </div>
                 {session.cwd && (
-                  <div className="ai-session-cwd" title={session.cwd}>{session.cwd}</div>
+                  <div className="ai-session-cwd" title={session.cwd}>{shortPath(session.cwd)}</div>
                 )}
                 {active && (
                   <div className="ai-session-status" style={{ color: STATUS_COLORS[session.status] }}>
