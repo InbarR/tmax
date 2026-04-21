@@ -73,6 +73,7 @@
   </div>
   <div class="chart-container"><canvas id="timelineChart"></canvas></div>
   <div style="color:var(--dim);font-size:12px;margin-top:8px;" id="timelineNote">Loading...</div>
+  <div id="timelineDiff" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(249,226,175,0.08);border:1px solid rgba(249,226,175,0.3);border-radius:6px;font-size:13px;"></div>
 </div>
 
 <div class="filter-bar">
@@ -243,6 +244,10 @@ let activeFilter = 'all';
 let timelineMode = 'cumulative';
 let timelineStack = 'release'; // 'release' or 'platform'
 let timelineHistory = null;
+// Click-to-select up to 2 bars to see the diff in total downloads.
+let selectedBarIndices = [];
+// Populated each render so the click handler can hit-test.
+let lastBarGeometry = []; // [{ index, x, w, total, t }]
 
 async function loadTimeline() {
   try {
@@ -361,7 +366,15 @@ function renderTimeline() {
     ? ranked.map(([k]) => platformColor[k] || '#a6adc8')
     : ['#89b4fa', '#a6e3a1', '#f9e2af', '#f38ba8', '#cba6f7'];
 
-  // Draw stacked columns, one per timestamp
+  // Draw stacked columns, one per timestamp. Record geometry for hit-testing.
+  lastBarGeometry = [];
+  // Only draw per-bar totals when each bar has enough horizontal room to fit
+  // the number without overlapping its neighbor (#stats-crowding). Otherwise
+  // thin out to every-Nth bar + always show the last one.
+  const MIN_LABEL_SLOT = 28; // px — rough width of a 4-digit number + breathing room
+  const allLabels = slot >= MIN_LABEL_SLOT;
+  const labelStride = allLabels ? 1 : Math.max(1, Math.ceil(MIN_LABEL_SLOT / Math.max(slot, 1)));
+
   allTs.forEach((t, i) => {
     const x = pad.left + slot * (i + 0.5) - barW / 2;
     let yOffset = 0; // cumulative pixels from bottom
@@ -376,11 +389,27 @@ function renderTimeline() {
       yOffset += h;
       total += p.count;
     });
-    // Total label above the column
-    if (total > 0) {
-      ctx.fillStyle = '#cdd6f4';
+    lastBarGeometry.push({ index: i, x, w: barW, total, t });
+
+    // Highlight outline for selected bars
+    if (selectedBarIndices.includes(i)) {
+      ctx.strokeStyle = '#f9e2af';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x - 1, pad.top + ch - yOffset - 2, barW + 2, yOffset + 2);
+      ctx.lineWidth = 1;
+    }
+
+    // Total label above the column - strided when bars are crowded
+    const showLabel = total > 0 && (
+      selectedBarIndices.includes(i) ||
+      i === n - 1 ||
+      i === 0 ||
+      (i % labelStride === 0)
+    );
+    if (showLabel) {
+      ctx.fillStyle = selectedBarIndices.includes(i) ? '#f9e2af' : '#cdd6f4';
       ctx.textAlign = 'center';
-      ctx.font = '10px system-ui';
+      ctx.font = selectedBarIndices.includes(i) ? 'bold 10px system-ui' : '10px system-ui';
       ctx.fillText(String(total), x + barW / 2, pad.top + ch - yOffset - 4);
     }
   });
@@ -446,29 +475,88 @@ function renderTimeline() {
   document.getElementById('timelineNote').textContent = `${timelineHistory.length} snapshot(s), ${modeLabel}. Top 5 releases.${spanLabel}${hintIfSingle}`;
 }
 
+function renderDiff() {
+  const diffEl = document.getElementById('timelineDiff');
+  if (selectedBarIndices.length < 2 || !lastBarGeometry.length) {
+    if (selectedBarIndices.length === 1) {
+      const g = lastBarGeometry.find((b) => b.index === selectedBarIndices[0]);
+      if (g) {
+        diffEl.style.display = 'block';
+        diffEl.innerHTML = `<strong>Selected:</strong> ${new Date(g.t).toLocaleString()} — ${g.total} downloads. <span style="color:var(--dim)">Click another bar to see the diff.</span>`;
+        return;
+      }
+    }
+    diffEl.style.display = 'none';
+    return;
+  }
+  const [iA, iB] = [...selectedBarIndices].sort((a, b) => a - b);
+  const a = lastBarGeometry.find((g) => g.index === iA);
+  const b = lastBarGeometry.find((g) => g.index === iB);
+  if (!a || !b) { diffEl.style.display = 'none'; return; }
+  const delta = b.total - a.total;
+  const pct = a.total > 0 ? ((delta / a.total) * 100).toFixed(1) : '∞';
+  const arrow = delta > 0 ? '▲' : delta < 0 ? '▼' : '=';
+  const color = delta > 0 ? '#a6e3a1' : delta < 0 ? '#f38ba8' : 'var(--dim)';
+  diffEl.style.display = 'block';
+  diffEl.innerHTML = `
+    <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;">
+      <span><strong>A:</strong> ${new Date(a.t).toLocaleString()} — ${a.total}</span>
+      <span><strong>B:</strong> ${new Date(b.t).toLocaleString()} — ${b.total}</span>
+      <span style="color:${color};font-weight:600;">${arrow} ${delta >= 0 ? '+' : ''}${delta}${typeof pct === 'string' && pct !== '∞' ? ` (${delta >= 0 ? '+' : ''}${pct}%)` : ''}</span>
+      <a href="#" style="color:var(--accent);text-decoration:none;font-size:12px;" onclick="selectedBarIndices=[];renderTimeline();renderDiff();return false;">clear</a>
+    </div>
+  `;
+}
+
+(function initTimelineClicks() {
+  const canvas = document.getElementById('timelineChart');
+  canvas.style.cursor = 'crosshair';
+  canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    // Find the bar whose horizontal span contains the click.
+    const hit = lastBarGeometry.find((g) => cx >= g.x - 4 && cx <= g.x + g.w + 4);
+    if (!hit || cy < 10) return;
+    const i = hit.index;
+    if (selectedBarIndices.includes(i)) {
+      selectedBarIndices = selectedBarIndices.filter((x) => x !== i);
+    } else {
+      selectedBarIndices.push(i);
+      if (selectedBarIndices.length > 2) selectedBarIndices.shift();
+    }
+    renderTimeline();
+    renderDiff();
+  });
+})();
+
 document.getElementById('timelineMode-cumulative').addEventListener('click', () => {
   timelineMode = 'cumulative';
   document.getElementById('timelineMode-cumulative').classList.add('active');
   document.getElementById('timelineMode-delta').classList.remove('active');
   renderTimeline();
+  renderDiff();
 });
 document.getElementById('timelineMode-delta').addEventListener('click', () => {
   timelineMode = 'delta';
   document.getElementById('timelineMode-delta').classList.add('active');
   document.getElementById('timelineMode-cumulative').classList.remove('active');
   renderTimeline();
+  renderDiff();
 });
 document.getElementById('timelineStack-release').addEventListener('click', () => {
   timelineStack = 'release';
   document.getElementById('timelineStack-release').classList.add('active');
   document.getElementById('timelineStack-platform').classList.remove('active');
   renderTimeline();
+  renderDiff();
 });
 document.getElementById('timelineStack-platform').addEventListener('click', () => {
   timelineStack = 'platform';
   document.getElementById('timelineStack-platform').classList.add('active');
   document.getElementById('timelineStack-release').classList.remove('active');
   renderTimeline();
+  renderDiff();
 });
 
 loadTimeline();
