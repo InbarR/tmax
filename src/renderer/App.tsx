@@ -5,6 +5,7 @@ import {
   pointerWithin,
 } from '@dnd-kit/core';
 import { useTerminalStore } from './state/terminal-store';
+import { getTerminalEntry } from './terminal-registry';
 import type { CopilotSessionSummary } from '../shared/copilot-types';
 import { useKeybindings } from './hooks/useKeybindings';
 import { useDragTerminal } from './hooks/useDragTerminal';
@@ -76,6 +77,7 @@ const App: React.FC = () => {
     init();
 
     (window as any).__terminalStore = useTerminalStore;
+    (window as any).__getTerminalEntry = getTerminalEntry;
 
     // Prevent Chromium CSS zoom on Ctrl+wheel (Cmd+wheel on Mac) anywhere outside terminals
     const handleGlobalWheel = (e: WheelEvent) => {

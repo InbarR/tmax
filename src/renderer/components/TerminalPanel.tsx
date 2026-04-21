@@ -322,6 +322,18 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
         term.clearSelection();
         return false;
       }
+      // Plain Enter with an active selection: copy and clear selection instead
+      // of submitting (Windows Terminal "Quick Edit" / cmd.exe convention, #71).
+      // Only plain Enter - Ctrl/Shift/Alt+Enter still pass through so apps that
+      // use modified Enter (Claude Code's Shift+Enter newline, etc.) aren't affected.
+      const isPlainEnterKey = (event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter')
+        && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey;
+      if (isPlainEnterKey && term.hasSelection()) {
+        event.preventDefault(); // Stop xterm's textarea from seeing the newline and echoing CR
+        window.terminalAPI.clipboardWrite(term.getSelection());
+        term.clearSelection();
+        return false;
+      }
       // Ctrl+Shift+C (Cmd+Shift+C on Mac): always copy selection
       if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && (event.key === 'c' || event.key === 'C')) {
         const sel = term.getSelection();
