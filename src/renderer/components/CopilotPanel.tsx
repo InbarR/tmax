@@ -692,9 +692,6 @@ const CopilotPanel: React.FC = () => {
                   )}
                   {time && <span className="ai-session-time">{time}</span>}
                 </div>
-                {subtitle && (
-                  <div className="ai-session-subtitle">{subtitle}</div>
-                )}
                 {session.cwd && (
                   <div className="ai-session-cwd" title={session.cwd}>{session.cwd}</div>
                 )}
