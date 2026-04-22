@@ -464,8 +464,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
           const osc7Match = data.match(/\x1b\]7;file:\/\/[^/]*\/([^\x07\x1b]+)(?:\x07|\x1b\\)/);
           if (osc7Match) {
             const decoded = decodeURIComponent(osc7Match[1]);
-            // For WSL terminals, keep Linux-style forward slashes; prefix with / for absolute path
-            detectedDir = isWsl ? '/' + decoded : decoded.replace(/\//g, '\\');
+            if (isWsl) {
+              // WSL: keep Linux-style forward slashes; prefix with / for absolute path
+              detectedDir = '/' + decoded;
+            } else if (/^[A-Za-z]:/.test(decoded)) {
+              // Windows path (C:/Users/...) — convert to backslashes
+              detectedDir = decoded.replace(/\//g, '\\');
+            } else {
+              // macOS/Linux path — keep forward slashes, ensure leading /
+              detectedDir = decoded.startsWith('/') ? decoded : '/' + decoded;
+            }
           }
 
           // Try OSC 9;9 (Windows Terminal / ConPTY)
