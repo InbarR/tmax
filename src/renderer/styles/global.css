@@ -3199,6 +3199,14 @@ select.settings-input {
   min-width: 0;
 }
 
+.ai-session-iddup {
+  color: var(--dim-text, #a6adc8);
+  font-weight: 400;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
 .ai-open-badge {
   font-size: 9px;
   padding: 0 4px;

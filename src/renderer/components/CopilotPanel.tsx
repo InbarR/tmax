@@ -258,6 +258,21 @@ const CopilotPanel: React.FC = () => {
     return m;
   }, [displayList, groupByRepo]);
 
+  // Sessions that share the exact same title - automation scripts often spawn
+  // many `claude` runs with the same initial prompt, making them visually
+  // indistinguishable. Flag duplicates so the render can append a short
+  // session-ID suffix to disambiguate.
+  const dupTitles = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of displayList) {
+      const t = getTitle(s);
+      counts.set(t, (counts.get(t) || 0) + 1);
+    }
+    const dups = new Set<string>();
+    for (const [t, n] of counts) if (n > 1) dups.add(t);
+    return dups;
+  }, [displayList]);
+
   // Lifecycle counts (for tab badges) — computed from all sessions regardless of provider/running filter
   const lifecycleCounts = useMemo(() => {
     const allSessions = [
@@ -684,6 +699,9 @@ const CopilotPanel: React.FC = () => {
                   ) : (
                     <span className="ai-session-name" title={title}>
                       {title}
+                      {dupTitles.has(title) && (
+                        <span className="ai-session-iddup" title={session.id}> · {session.id.slice(0, 6)}</span>
+                      )}
                     </span>
                   )}
                   {isOpen && <span className="ai-open-badge">OPEN</span>}
