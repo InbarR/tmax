@@ -117,18 +117,9 @@ const StatusBar: React.FC = () => {
   const viewMode = useTerminalStore((s) => s.viewMode);
   const broadcastMode = useTerminalStore((s) => s.broadcastMode);
   const gridColumns = useTerminalStore((s) => s.gridColumns);
-  const copilotSessions = useTerminalStore((s) => s.copilotSessions);
-  const claudeCodeSessions = useTerminalStore((s) => s.claudeCodeSessions);
   const hasAnyColor = useTerminalStore((s) => s.autoColorTabs);
   const hideTabBar = useTerminalStore((s) => s.hideTabTitles);
   const focused = focusedId ? terminals.get(focusedId) : null;
-  // Show the F5 hint only when the focused AI session is paused waiting
-  // on the user - that's the only time typing "continue" does anything.
-  const focusedAiSession = focused?.aiSessionId
-    ? [...copilotSessions, ...claudeCodeSessions].find((s) => s.id === focused.aiSessionId)
-    : null;
-  const showF5Hint = focusedAiSession
-    && (focusedAiSession.status === 'awaitingApproval' || focusedAiSession.status === 'waitingForUser');
   const totalCount = terminals.size;
   const tiledCount = layout.tilingRoot ? getLeafOrder(layout.tilingRoot).length : 0;
   const floatingCount = layout.floatingPanels.length;
@@ -232,11 +223,6 @@ const StatusBar: React.FC = () => {
           >
             {Math.round((fontSize / (config?.terminal?.fontSize ?? 14)) * 100)}%
           </button>
-          {showF5Hint && (
-            <span className="status-dim" title="Press F5 to type 'continue' into this AI session">
-              F5 continue
-            </span>
-          )}
           {updateInfo && updateInfo.status === 'downloading' ? (
             <span
               className="status-update-downloading"
