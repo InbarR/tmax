@@ -86,9 +86,15 @@ const App: React.FC = () => {
     (window as any).__terminalStore = useTerminalStore;
     (window as any).__getTerminalEntry = getTerminalEntry;
 
-    // Prevent Chromium CSS zoom on Ctrl+wheel (Cmd+wheel on Mac) anywhere outside terminals
+    // Ctrl+wheel (Cmd+wheel on Mac): zoom the terminal font instead of letting
+    // Chromium do its CSS page-zoom. preventDefault MUST happen before the
+    // store call or Chromium will scale everything alongside us.
     const handleGlobalWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) e.preventDefault();
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const store = useTerminalStore.getState();
+      if (e.deltaY < 0) store.zoomIn();
+      else if (e.deltaY > 0) store.zoomOut();
     };
     document.addEventListener('wheel', handleGlobalWheel, { passive: false });
 

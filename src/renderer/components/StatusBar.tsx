@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 import { getLeafOrder } from '../state/terminal-store';
 import { formatKeyForPlatform } from '../utils/platform';
+import InputDialog from './InputDialog';
 
 interface UpdateInfoState {
   status: string;
@@ -78,6 +79,7 @@ const StatusBar: React.FC = () => {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [shownVersion, setShownVersion] = useState<string>('');
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showZoomDialog, setShowZoomDialog] = useState(false);
 
   const submitReport = () => {
     const issueBody = `**Version:** ${appVersion}\n**Platform:** ${navigator.platform}\n\n**Description:**\n\n\n**Steps to reproduce:**\n1. \n\n**Expected behavior:**\n\n**Actual behavior:**\n`;
@@ -214,7 +216,18 @@ const StatusBar: React.FC = () => {
             {totalCount} terminal{totalCount !== 1 ? 's' : ''}
             {floatingCount > 0 ? ` (${tiledCount} tiled, ${floatingCount} floating)` : ''}
           </span>
-          <span className="status-dim">{Math.round((fontSize / (config?.terminal?.fontSize ?? 14)) * 100)}%</span>
+          <button
+            className="status-mode-btn"
+            onClick={() => setShowZoomDialog(true)}
+            title={formatKeyForPlatform("Set zoom % (Ctrl++ / Ctrl+- to adjust, Ctrl+0 to reset)")}
+          >
+            {Math.round((fontSize / (config?.terminal?.fontSize ?? 14)) * 100)}%
+          </button>
+          {focused?.aiSessionId && (
+            <span className="status-dim" title="Press F5 to type 'continue' into this AI session">
+              F5 continue
+            </span>
+          )}
           {updateInfo && updateInfo.status === 'downloading' ? (
             <span
               className="status-update-downloading"
@@ -258,6 +271,23 @@ const StatusBar: React.FC = () => {
       </div>
       {showUpdateModal && updateInfo && (
         <UpdateModal info={updateInfo} appVersion={appVersion} onClose={() => setShowUpdateModal(false)} />
+      )}
+      {showZoomDialog && (
+        <InputDialog
+          title="Set Zoom (%)"
+          placeholder={`Current: ${Math.round((fontSize / (config?.terminal?.fontSize ?? 14)) * 100)}% — enter 50-300`}
+          onSubmit={(value) => {
+            const pct = parseFloat(value);
+            if (Number.isFinite(pct) && pct >= 50 && pct <= 300) {
+              const baseline = config?.terminal?.fontSize ?? 14;
+              const targetSize = Math.round((baseline * pct) / 100);
+              const clamped = Math.max(8, Math.min(32, targetSize));
+              useTerminalStore.setState({ fontSize: clamped });
+            }
+            setShowZoomDialog(false);
+          }}
+          onClose={() => setShowZoomDialog(false)}
+        />
       )}
       {showReportModal && (
         <div className="update-modal-overlay" onClick={() => setShowReportModal(false)}>
