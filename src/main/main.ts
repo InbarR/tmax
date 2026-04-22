@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeTheme, powerMonitor, session, shell } from 'electron';
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeTheme, powerMonitor, session, shell } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -856,6 +856,25 @@ app.whenReady().then(() => {
     console.log('Claude Code monitor ready');
     createWindow();
     console.log('Window created');
+
+    // Global "show tmax" hotkey (works even when the window is minimized or
+    // another app is focused). Default: Ctrl+Shift+Space; override via config
+    // key `showWindowHotkey`. Unregistering is handled by `will-quit`.
+    const cfg = configStore?.getAll() as any;
+    const showHotkey: string = cfg?.showWindowHotkey || 'CommandOrControl+Shift+Space';
+    try {
+      const ok = globalShortcut.register(showHotkey, () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        if (!mainWindow.isVisible()) mainWindow.show();
+        mainWindow.focus();
+      });
+      if (!ok) console.warn(`[hotkey] failed to register ${showHotkey} (already taken?)`);
+      else console.log(`[hotkey] show-tmax registered: ${showHotkey}`);
+    } catch (err) {
+      console.warn('[hotkey] register threw:', err);
+    }
+
     registerIpcHandlers();
     console.log('IPC handlers registered');
     versionChecker = new VersionChecker(mainWindow!);
@@ -911,6 +930,10 @@ app.whenReady().then(() => {
     }
     ptyManager?.resizeAll();
   });
+});
+
+app.on('will-quit', () => {
+  try { globalShortcut.unregisterAll(); } catch { /* ignore */ }
 });
 
 app.on('window-all-closed', async () => {
