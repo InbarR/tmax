@@ -16,9 +16,13 @@ on:
           - minor
           - major
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   prepare-release:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -102,14 +106,13 @@ jobs:
             echo "CHANGELOG_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Commit and tag
+      - name: Commit release bump
         id: push
         run: |
           git add package.json package-lock.json CHANGELOG.md
           git commit -m "chore(release): v${{ steps.version.outputs.version }} [skip ci]"
           git pull --rebase origin main
-          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
-          git push origin main --follow-tags
+          git push origin main
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   build:
@@ -228,7 +231,7 @@ jobs:
   release:
     needs: [prepare-release, build]
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && needs.build.result == 'success'
 
     permissions:
       contents: write
@@ -246,7 +249,9 @@ jobs:
         run: |
           for dir in artifacts/tmax-darwin-*/; do
             arch="${dir##*-}" && arch="${arch%/}"
-            find "$dir" -name '*.dmg' -exec mv {} "$(dirname {})/../tmax-darwin-${arch}.dmg" \; 2>/dev/null || true
+            find "$dir" -name '*.dmg' | while read -r dmg; do
+              mv "$dmg" "$(dirname "$dmg")/../tmax-darwin-${arch}.dmg"
+            done
           done
 
       - name: Create Release
@@ -255,6 +260,7 @@ jobs:
           tag_name: ${{ needs.prepare-release.outputs.tag }}
           name: ${{ needs.prepare-release.outputs.tag }}
           body: ${{ needs.prepare-release.outputs.changelog_section }}
+          target_commitish: ${{ needs.prepare-release.outputs.sha }}
           files: |
             artifacts/**/*.exe
             artifacts/**/*.zip
@@ -268,3 +274,27 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  rollback-on-failure:
+    needs: [prepare-release, build]
+    runs-on: ubuntu-latest
+    if: always() && github.event_name == 'workflow_dispatch' && needs.prepare-release.result == 'success' && needs.build.result != 'success'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Revert release bump commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git revert --no-edit ${{ needs.prepare-release.outputs.sha }}; then
+            echo "::error::Could not auto-revert release commit ${{ needs.prepare-release.outputs.sha }}. Please revert manually."
+            exit 1
+          fi
+          git push origin main
