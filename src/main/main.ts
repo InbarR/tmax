@@ -861,18 +861,26 @@ app.whenReady().then(() => {
     // another app is focused). Default: Ctrl+Shift+Space; override via config
     // key `showWindowHotkey`. Unregistering is handled by `will-quit`.
     const cfg = configStore?.getAll() as any;
-    const showHotkey: string = cfg?.showWindowHotkey || 'CommandOrControl+Shift+Space';
-    try {
-      const ok = globalShortcut.register(showHotkey, () => {
-        if (!mainWindow || mainWindow.isDestroyed()) return;
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        if (!mainWindow.isVisible()) mainWindow.show();
-        mainWindow.focus();
-      });
-      if (!ok) console.warn(`[hotkey] failed to register ${showHotkey} (already taken?)`);
-      else console.log(`[hotkey] show-tmax registered: ${showHotkey}`);
-    } catch (err) {
-      console.warn('[hotkey] register threw:', err);
+    // Users can set showWindowHotkey to an empty string in Settings to
+    // disable the global shortcut entirely (useful if it clashes with
+    // another tool). `undefined` / unset falls back to the default.
+    const rawHotkey = cfg?.showWindowHotkey;
+    const showHotkey: string = rawHotkey === '' ? '' : (rawHotkey || 'CommandOrControl+Shift+Space');
+    if (showHotkey) {
+      try {
+        const ok = globalShortcut.register(showHotkey, () => {
+          if (!mainWindow || mainWindow.isDestroyed()) return;
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          if (!mainWindow.isVisible()) mainWindow.show();
+          mainWindow.focus();
+        });
+        if (!ok) console.warn(`[hotkey] failed to register ${showHotkey} (already taken?)`);
+        else console.log(`[hotkey] show-tmax registered: ${showHotkey}`);
+      } catch (err) {
+        console.warn('[hotkey] register threw:', err);
+      }
+    } else {
+      console.log('[hotkey] show-tmax disabled (empty showWindowHotkey)');
     }
 
     registerIpcHandlers();
