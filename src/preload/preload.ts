@@ -293,6 +293,10 @@ const terminalAPI: TerminalAPI = {
     ipcRenderer.send(IPC.VERSION_RESTART_AND_UPDATE);
   },
 
+  getChangelog(): Promise<string> {
+    return ipcRenderer.invoke(IPC.VERSION_GET_CHANGELOG);
+  },
+
   getPtyDiag(id: string) {
     return ipcRenderer.invoke(IPC.PTY_GET_DIAG, id);
   },

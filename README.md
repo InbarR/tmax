@@ -203,6 +203,24 @@ Output per platform:
 - **Linux**: `out/make/deb/x64/*.deb` and `out/make/rpm/x64/*.rpm`
 - **All**: portable `.zip`
 
+### Releasing
+
+Releases are created via **GitHub Actions workflow dispatch**:
+
+1. Go to **Actions → Build and Release → Run workflow**
+2. Select **bump type** (`patch`, `minor`, or `major`)
+3. Click **Run workflow**
+
+The CI will automatically:
+- Bump the version in `package.json`
+- Generate a changelog section from commit messages (with author attribution)
+- Prepend it to `CHANGELOG.md`
+- Commit, tag, and push
+- Build for all platforms (Windows x64/arm64, macOS x64/arm64, Linux x64)
+- Create a GitHub Release with the changelog and all artifacts
+
+> **Note:** Author usernames in the changelog link correctly when the committer's email is [added to their GitHub account](https://github.com/settings/emails). Otherwise, the plain name from the git commit is used.
+
 ## Architecture
 
 ```

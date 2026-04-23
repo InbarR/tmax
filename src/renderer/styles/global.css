@@ -1603,6 +1603,60 @@ html.transparency-active .input-dialog {
   background: #5dd866;
 }
 
+/* ── Changelog Modal ────────────────────────────────────── */
+.changelog-modal {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  max-width: 600px;
+  width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.changelog-modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 24px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.changelog-modal-content h3 {
+  margin: 20px 0 8px;
+  font-size: 15px;
+  color: var(--focus-border);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+
+.changelog-modal-content h4 {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.changelog-modal-content ul {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.changelog-modal-content li {
+  margin: 2px 0;
+}
+
+.changelog-modal-content a {
+  color: var(--focus-border);
+  text-decoration: none;
+}
+
+.changelog-modal-content a:hover {
+  text-decoration: underline;
+}
+
 .status-cwd {
   color: var(--text-secondary);
   cursor: pointer;
