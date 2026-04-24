@@ -59,6 +59,8 @@ function matchesCombo(event: KeyboardEvent, combo: KeyCombo): boolean {
 }
 
 const DEFAULT_BINDINGS: Record<string, string> = {
+  'Ctrl+T': 'createTerminal',
+  'Ctrl+W': 'closeTerminal',
   'Ctrl+Shift+N': 'createTerminal',
   'Ctrl+Shift+W': 'closeTerminal',
   'Shift+ArrowUp': 'focusUp',
