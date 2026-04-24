@@ -951,6 +951,18 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   const defaultTabColor = useTerminalStore((s) => (s.config as any)?.defaultTabColor);
   const bgTint = groupColor || tabColor || defaultTabColor;
 
+  // Latest prompt from the AI session (if any) linked to this pane. Surfaces
+  // the most recent user message so you don't have to scroll up through a
+  // long agent run to remember what was asked.
+  const aiSessionId = useTerminalStore((s) => s.terminals.get(terminalId)?.aiSessionId);
+  const latestPrompt = useTerminalStore((s) => {
+    if (!aiSessionId) return undefined;
+    const cc = s.claudeCodeSessions.find((x) => x.id === aiSessionId);
+    if (cc?.latestPrompt) return cc.latestPrompt;
+    const cp = s.copilotSessions.find((x) => x.id === aiSessionId);
+    return cp?.latestPrompt;
+  });
+
   const handleSearch = useCallback((query: string, backward?: boolean) => {
     if (!searchAddonRef.current || !query) return;
     const opts = { decorations: { matchOverviewRuler: '#888', activeMatchColorOverviewRuler: '#fff', matchBackground: '#585b70', activeMatchBackground: '#89b4fa' } };
@@ -1088,6 +1100,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
               useTerminalStore.getState().moveToDormant(terminalId);
             }}
           >&#128065;</button>
+        </div>
+      )}
+      {latestPrompt && (
+        <div className="terminal-pane-latest-prompt" title={latestPrompt}>
+          <span className="terminal-pane-latest-prompt-label">›</span>
+          <span className="terminal-pane-latest-prompt-text">{latestPrompt}</span>
         </div>
       )}
       {showDiag && <DiagnosticsOverlay terminalId={terminalId} diagRef={diagRef} mainDiag={mainDiagRef.current} logPath={logPathRef.current} onClose={() => setShowDiag(false)} />}

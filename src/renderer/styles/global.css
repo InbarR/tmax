@@ -611,6 +611,44 @@ html.transparency-active .input-dialog {
   border-bottom-color: rgba(255, 255, 255, 0.15);
 }
 
+/* Sticky banner under the pane title showing the most recent user prompt
+   sent to the AI session attached to this pane. Lets you see "what is this
+   agent working on right now?" without scrolling the terminal back up. */
+.terminal-pane-latest-prompt {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  padding: 3px 10px;
+  border-bottom: 1px solid var(--border-color);
+  opacity: 0.8;
+  z-index: 4;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.terminal-panel.focused .terminal-pane-latest-prompt {
+  opacity: 1;
+}
+
+.terminal-pane-latest-prompt-label {
+  color: var(--accent, #7aa2f7);
+  font-style: normal;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.terminal-pane-latest-prompt-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
 .terminal-diff-btn {
   flex-shrink: 0;
   background: transparent;
@@ -3253,24 +3291,6 @@ select.settings-input {
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: 'Cascadia Code', 'Consolas', monospace;
-}
-
-.ai-session-latest-prompt {
-  font-size: 11px;
-  color: var(--text-primary);
-  opacity: 0.85;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 2px;
-  font-style: italic;
-}
-
-.ai-session-latest-prompt-label {
-  color: var(--accent, #7aa2f7);
-  font-style: normal;
-  font-weight: 600;
-  margin-right: 2px;
 }
 
 .ai-session-status {
