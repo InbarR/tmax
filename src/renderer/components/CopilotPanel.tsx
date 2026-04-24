@@ -62,9 +62,13 @@ function getSubtitle(s: CopilotSessionSummary): string | null {
 function sortSessions(
   sessions: CopilotSessionSummary[],
   openSessionIds: Set<string>,
+  pinned: Record<string, true>,
 ): CopilotSessionSummary[] {
   return [...sessions].sort((a, b) => {
-    // Open-in-tmax sessions first, then by last activity time (newest first)
+    // Pinned sessions float to the top, then open-in-tmax, then by activity.
+    const aPin = pinned[a.id] ? 1 : 0;
+    const bPin = pinned[b.id] ? 1 : 0;
+    if (aPin !== bPin) return bPin - aPin;
     const aOpen = openSessionIds.has(a.id) ? 1 : 0;
     const bOpen = openSessionIds.has(b.id) ? 1 : 0;
     if (aOpen !== bOpen) return bOpen - aOpen;
@@ -84,6 +88,7 @@ const CopilotPanel: React.FC = () => {
   const terminals = useTerminalStore((s) => s.terminals);
   const summaryOverrides = useTerminalStore((s) => s.sessionNameOverrides);
   const lifecycleOverrides = useTerminalStore((s) => s.sessionLifecycleOverrides);
+  const pinnedSessions = useTerminalStore((s) => s.sessionPinned);
   const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
   const prevFocusedIdRef = useRef<string | null>(null);
   const pendingHighlightRef = useRef<string | null>(null);
@@ -223,8 +228,8 @@ const CopilotPanel: React.FC = () => {
     const deduped = Array.from(byId.values());
     const lifecycleFiltered = deduped.filter((s) => getSessionLifecycle(s) === lifecycleTab);
 
-    return sortSessions(lifecycleFiltered, openSessionIds);
-  }, [copilotSessions, claudeCodeSessions, filterTab, showRunningOnly, summaryOverrides, lifecycleTab, getSessionLifecycle, openSessionIds]);
+    return sortSessions(lifecycleFiltered, openSessionIds, pinnedSessions);
+  }, [copilotSessions, claudeCodeSessions, query, filterTab, showRunningOnly, summaryOverrides, lifecycleTab, getSessionLifecycle, openSessionIds, pinnedSessions]);
 
   // #69: when groupByRepo is on, reorder filtered so sessions sharing a cwd
   // folder are contiguous, and groups are sorted by the most-recent activity
@@ -707,6 +712,16 @@ const CopilotPanel: React.FC = () => {
                     />
                   ) : (
                     <span className="ai-session-name" title={title}>
+                      {pinnedSessions[session.id] && (
+                        <span
+                          className="ai-session-pin"
+                          title="Pinned (right-click to unpin)"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            useTerminalStore.getState().togglePinSession(session.id);
+                          }}
+                        >📌</span>
+                      )}
                       {title}
                       {dupTitles.has(title) && (
                         <span className="ai-session-iddup" title={session.id}> · {session.id.slice(0, 6)}</span>
@@ -812,6 +827,9 @@ const CopilotPanel: React.FC = () => {
           </button>
           <button className="context-menu-item" onClick={() => handleStartRename(ctxMenu.session)}>
             ✏️ Rename
+          </button>
+          <button className="context-menu-item" onClick={() => { useTerminalStore.getState().togglePinSession(ctxMenu.session.id); setCtxMenu(null); }}>
+            {pinnedSessions[ctxMenu.session.id] ? '📌 Unpin' : '📌 Pin to top'}
           </button>
           {ctxMenu.session.cwd && (
             <>

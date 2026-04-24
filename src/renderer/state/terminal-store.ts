@@ -539,6 +539,8 @@ interface TerminalStore {
   claudeCodeSessions: CopilotSessionSummary[];
   sessionNameOverrides: Record<string, string>;
   sessionLifecycleOverrides: Record<string, import('../../shared/copilot-types').SessionLifecycle>;
+  /** Session IDs the user has pinned to the top of the AI sessions list */
+  sessionPinned: Record<string, true>;
   toastNotifications: Array<{ id: string; message: string; timestamp: number }>;
   copilotSearchQuery: string;
   selectedCopilotSessionId: string | null;
@@ -640,6 +642,7 @@ interface TerminalStore {
   removeClaudeCodeSession: (sessionId: string) => void;
   setSessionNameOverride: (sessionId: string, name: string) => void;
   setSessionLifecycle: (sessionId: string, lifecycle: import('../../shared/copilot-types').SessionLifecycle) => void;
+  togglePinSession: (sessionId: string) => void;
   checkStaleActiveSessions: () => void;
   addToast: (message: string) => void;
   dismissToast: (id: string) => void;
@@ -702,6 +705,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   claudeCodeSessions: [],
   sessionNameOverrides: {},
   sessionLifecycleOverrides: {},
+  sessionPinned: {},
   toastNotifications: [],
   copilotSearchQuery: '',
   selectedCopilotSessionId: null,
@@ -2117,6 +2121,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       autoColorTabs: get().autoColorTabs,
       sessionNameOverrides: get().sessionNameOverrides,
       sessionLifecycleOverrides: get().sessionLifecycleOverrides,
+      sessionPinned: get().sessionPinned,
       tree: layout.tilingRoot ? serializeNode(layout.tilingRoot) : null,
       floating: layout.floatingPanels.map((p) => {
         const t = terminals.get(p.terminalId);
@@ -2146,6 +2151,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
     if (session.sessionLifecycleOverrides && typeof session.sessionLifecycleOverrides === 'object') {
       set({ sessionLifecycleOverrides: session.sessionLifecycleOverrides as Record<string, import('../../shared/copilot-types').SessionLifecycle> });
+    }
+
+    if (session.sessionPinned && typeof session.sessionPinned === 'object') {
+      set({ sessionPinned: session.sessionPinned as Record<string, true> });
     }
 
     const { config } = get();
@@ -2458,6 +2467,16 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set((s) => ({
       sessionLifecycleOverrides: { ...s.sessionLifecycleOverrides, [sessionId]: lifecycle },
     }));
+    get().saveSession();
+  },
+
+  togglePinSession: (sessionId: string) => {
+    set((s) => {
+      const next = { ...s.sessionPinned };
+      if (next[sessionId]) delete next[sessionId];
+      else next[sessionId] = true;
+      return { sessionPinned: next };
+    });
     get().saveSession();
   },
 

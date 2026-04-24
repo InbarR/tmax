@@ -3315,6 +3315,16 @@ select.settings-input {
   opacity: 0.8;
 }
 
+.ai-session-pin {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0.9;
+  transition: transform 0.1s;
+}
+.ai-session-pin:hover { transform: scale(1.15); opacity: 1; }
+
 .ai-session-cwd {
   font-size: 10px;
   color: var(--text-secondary);
