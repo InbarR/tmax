@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { execFileSync } from 'child_process';
 import { launchTmax } from './fixtures/launch';
 
 // Verifies that oh-my-posh renders correctly in tmax: no "CONFIG NOT FOUND",
@@ -8,8 +9,22 @@ import { launchTmax } from './fixtures/launch';
 // Requires: oh-my-posh installed on the machine, a valid $PROFILE that
 // initializes it, and a Nerd Font installed system-wide.
 
+function ohMyPoshInstalled(): boolean {
+  if (process.platform !== 'win32') return false;
+  try {
+    execFileSync('where.exe', ['oh-my-posh.exe'], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+      windowsHide: true,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 test.describe('oh-my-posh renders in tmax', () => {
   test.skip(process.platform !== 'win32', 'Windows-only (oh-my-posh path assumes pwsh profile)');
+  test.skip(!ohMyPoshInstalled(), 'oh-my-posh not installed on this machine');
 
   test('prompt renders without CONFIG NOT FOUND and contains expected segments', async () => {
     const { window, close } = await launchTmax();
@@ -47,7 +62,8 @@ test.describe('oh-my-posh renders in tmax', () => {
       expect(result.visible).not.toMatch(/unable to (open|load|find).*config/i);
 
       // Username should appear in the prompt (identity segment of jandedobbeleer theme)
-      expect(result.visible.toLowerCase()).toContain('inrotem');
+      const user = (process.env.USERNAME || process.env.USER || '').toLowerCase();
+      if (user) expect(result.visible.toLowerCase()).toContain(user);
 
       // xterm is configured with a Nerd Font in its fallback chain
       expect(result.fontFamily.toLowerCase()).toMatch(/caskaydiacove|nerd/);
