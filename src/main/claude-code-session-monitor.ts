@@ -242,6 +242,7 @@ export class ClaudeCodeSessionMonitor {
       repository: '',
       summary: parsed.firstPrompt || parsed.slug || cwdFolder || '',
       latestPrompt: parsed.latestPrompt || undefined,
+      latestPromptTime: parsed.latestPromptTime || undefined,
       messageCount: parsed.messageCount,
       toolCallCount: parsed.toolCallCount,
       lastActivityTime: parsed.lastActivityTime,

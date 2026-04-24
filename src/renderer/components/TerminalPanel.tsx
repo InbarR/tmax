@@ -8,6 +8,15 @@ import { isMac } from '../utils/platform';
 import type { AppConfig } from '../state/types';
 import '@xterm/xterm/css/xterm.css';
 
+function relativeTime(ts: number): string {
+  const diff = Math.floor((Date.now() - ts) / 1000);
+  if (diff < 5) return 'just now';
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
 /**
  * Microsoft Outlook wraps every outgoing link in
  * https://<region>.safelinks.protection.outlook.com/?url=<encoded-real-url>&...
@@ -962,6 +971,21 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     const cp = s.copilotSessions.find((x) => x.id === aiSessionId);
     return cp?.latestPrompt;
   });
+  const latestPromptTime = useTerminalStore((s) => {
+    if (!aiSessionId) return undefined;
+    const cc = s.claudeCodeSessions.find((x) => x.id === aiSessionId);
+    if (cc?.latestPromptTime) return cc.latestPromptTime;
+    const cp = s.copilotSessions.find((x) => x.id === aiSessionId);
+    return cp?.latestPromptTime;
+  });
+  // Force a re-render every 30s so the relative time stays fresh even when
+  // nothing else in the session changes.
+  const [, tickForClock] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (!latestPromptTime) return;
+    const id = setInterval(() => tickForClock(), 30_000);
+    return () => clearInterval(id);
+  }, [latestPromptTime]);
 
   const handleSearch = useCallback((query: string, backward?: boolean) => {
     if (!searchAddonRef.current || !query) return;
@@ -1107,8 +1131,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       {bgTint && <div className="terminal-color-overlay" style={{ background: bgTint + '18' }} />}
       {latestPrompt && (
         <div className="terminal-pane-latest-prompt" title={latestPrompt}>
-          <span className="terminal-pane-latest-prompt-label">›</span>
+          <span className="terminal-pane-latest-prompt-label">last prompt:</span>
           <span className="terminal-pane-latest-prompt-text">{latestPrompt}</span>
+          {latestPromptTime && (
+            <span className="terminal-pane-latest-prompt-time">{relativeTime(latestPromptTime)}</span>
+          )}
         </div>
       )}
     </div>

@@ -650,6 +650,15 @@ html.transparency-active .input-dialog {
   flex: 1;
 }
 
+.terminal-pane-latest-prompt-time {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-style: normal;
+  font-size: 10px;
+  opacity: 0.8;
+  margin-left: 8px;
+}
+
 .terminal-diff-btn {
   flex-shrink: 0;
   background: transparent;

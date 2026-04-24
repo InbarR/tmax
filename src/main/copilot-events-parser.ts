@@ -13,6 +13,7 @@ export interface ParsedSessionEvents {
   pendingToolCalls: number;
   totalTokens: number;
   latestPrompt: string;
+  latestPromptTime: number;
 }
 
 interface ParserCache {
@@ -124,6 +125,7 @@ function deriveState(events: EventRecord[]): ParsedSessionEvents {
   let pendingToolCalls = 0;
   let totalTokens = 0;
   let latestPrompt = '';
+  let latestPromptTime = 0;
 
   for (const event of events) {
     if (event.timestamp > lastActivityTime) {
@@ -150,7 +152,10 @@ function deriveState(events: EventRecord[]): ParsedSessionEvents {
         messageCount++;
         status = 'thinking';
         const text = String(event.data?.content || event.data?.transformedContent || '').trim();
-        if (text) latestPrompt = text.slice(0, 120).replace(/\n/g, ' ');
+        if (text) {
+          latestPrompt = text.slice(0, 120).replace(/\n/g, ' ');
+          latestPromptTime = event.timestamp;
+        }
         break;
       }
       case 'assistant.message':
@@ -208,5 +213,6 @@ function deriveState(events: EventRecord[]): ParsedSessionEvents {
     pendingToolCalls,
     totalTokens,
     latestPrompt,
+    latestPromptTime,
   };
 }

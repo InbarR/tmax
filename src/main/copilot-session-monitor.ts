@@ -218,6 +218,7 @@ export class CopilotSessionMonitor {
       pendingToolCalls: parsed?.pendingToolCalls ?? 0,
       totalTokens: parsed?.totalTokens ?? 0,
       latestPrompt: parsed?.latestPrompt || undefined,
+      latestPromptTime: parsed?.latestPromptTime || undefined,
     };
   }
 
@@ -287,6 +288,7 @@ export class CopilotSessionMonitor {
       repository: session.workspace.repository,
       summary: session.workspace.summary,
       latestPrompt: session.latestPrompt || undefined,
+      latestPromptTime: session.latestPromptTime || undefined,
       messageCount: session.messageCount,
       toolCallCount: session.toolCallCount,
       lastActivityTime: session.lastActivityTime,

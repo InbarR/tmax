@@ -30,12 +30,20 @@ function formatFirstPromptSummary(raw: string): string {
     out = rest ? `/${name} — ${rest}` : `/${name}`;
   } else {
     // No command-name, but the message might still be a local-command-caveat
-    // wrapper (injected when resuming a session). Strip it so the title shows
-    // the real content instead of raw XML.
+    // wrapper, local-command-stdout (logged after a /model or /clear), etc.
+    // Strip those. If nothing is left after stripping, the message was
+    // entirely meta - return empty so callers treat it as "no real prompt"
+    // instead of dumping the raw XML into the UI.
     const stripped = stripCommandXml(out).trim();
-    if (stripped) out = stripped;
+    if (!stripped) return '';
+    out = stripped;
   }
-  return out.slice(0, 120).replace(/\n/g, ' ');
+  // Drop ANSI escape sequences that Claude Code sometimes embeds in its
+  // command-stdout payloads (e.g. "[1mOpus 4.7[22m"). The actual ESC byte
+  // won't render, leaving visible bracket codes that look like garbage.
+  // eslint-disable-next-line no-control-regex
+  out = out.replace(/\x1b?\[[0-9;]*[A-Za-z]/g, '');
+  return out.slice(0, 120).replace(/\n/g, ' ').trim();
 }
 
 /**
@@ -62,6 +70,8 @@ export interface ClaudeCodeParsedSession {
   firstPrompt: string;
   /** Most recent user prompt text (same cleanup as firstPrompt, skipping interruptions) */
   latestPrompt: string;
+  /** Timestamp (ms since epoch) of the most recent user prompt */
+  latestPromptTime: number;
 }
 
 interface CacheEntry {
@@ -77,6 +87,7 @@ interface CacheEntry {
   lastActivityTime: number;
   firstPrompt: string;
   latestPrompt: string;
+  latestPromptTime: number;
   lastLineType: string;
   lastLineHasEndTurn: boolean;
   awaitingInput: boolean; // true after end_turn, cleared on next user message
@@ -128,6 +139,7 @@ export function parseClaudeCodeSession(filePath: string): ClaudeCodeParsedSessio
           lastActivityTime: 0,
           firstPrompt: '',
           latestPrompt: '',
+          latestPromptTime: 0,
           lastLineType: '',
           lastLineHasEndTurn: false,
           awaitingInput: false,
@@ -172,11 +184,13 @@ function processLine(line: string, state: CacheEntry): void {
   if (type === 'user') state.awaitingInput = false;
 
   // Extract timestamp
+  let lineTs = 0;
   const tsMatch = line.match(/"timestamp"\s*:\s*"([^"]+)"/);
   if (tsMatch) {
     const ts = new Date(tsMatch[1]).getTime();
-    if (!isNaN(ts) && ts > state.lastActivityTime) {
-      state.lastActivityTime = ts;
+    if (!isNaN(ts)) {
+      lineTs = ts;
+      if (ts > state.lastActivityTime) state.lastActivityTime = ts;
     }
   }
 
@@ -228,6 +242,7 @@ function processLine(line: string, state: CacheEntry): void {
         if (summary) {
           if (!state.firstPrompt) state.firstPrompt = summary;
           state.latestPrompt = summary;
+          if (lineTs > 0) state.latestPromptTime = lineTs;
         }
       }
       break;
@@ -300,6 +315,7 @@ function deriveResult(
     lastActivityTime: state.lastActivityTime,
     firstPrompt: state.firstPrompt,
     latestPrompt: state.latestPrompt,
+    latestPromptTime: state.latestPromptTime,
   };
 }
 
