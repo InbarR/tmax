@@ -217,6 +217,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   const aiResumeCommandRef = useRef<string>('');
   const aiSessionStartedRef = useRef(false);
   const wslPromptCleanupRef = useRef<(() => void) | null>(null);
+  // Tracks signals that mean "an app is drawing its own cursor"; either one
+  // being on is enough to keep xterm's cursor hidden. See syncCursorVisibility.
+  const cursorHideSignalsRef = useRef({ bracketedPaste: false, altScreen: false });
   const isFocused = focusedTerminalId === terminalId;
 
   const handleFocus = useCallback(() => {
@@ -512,29 +515,49 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     // renderer event loop during output bursts (e.g. after system resume).
     let pendingData = '';
     let rafScheduled = false;
+    let cursorSyncDirty = false;
     const flushPendingData = () => {
       rafScheduled = false;
       if (pendingData) {
         term.write(pendingData);
         pendingData = '';
       }
+      // Apply our cursor override AFTER the PTY data is written. In xterm,
+      // DECTCEM (cursor visibility) is per-buffer, so if the data switched
+      // to alt-screen, writing ?25l before it had no effect on the alt
+      // buffer's cursor state. Writing it here hits whichever buffer is
+      // active post-data.
+      if (cursorSyncDirty) {
+        cursorSyncDirty = false;
+        const shouldHide = cursorHideSignalsRef.current.bracketedPaste || cursorHideSignalsRef.current.altScreen;
+        term.write(shouldHide ? '\x1b[?25l' : '\x1b[?25h');
+      }
     };
 
     // #67: Ink-based CLIs (Claude Code, Copilot CLI) enable bracketed paste
     // but don't send DECTCEM (\x1b[?25l) to hide the terminal's hardware
     // cursor before painting their own cursor indicator. Result: two cursors
-    // render side-by-side. Treat bracketed-paste-mode changes in the PTY
-    // output as a proxy for "app is drawing its own cursor" and sync xterm's
-    // cursor visibility.
+    // render side-by-side.
+    //
+    // We track two signals - bracketed paste (?2004) and alt-screen (?1049) -
+    // and keep xterm's cursor hidden whenever EITHER is on. Using only
+    // bracketed paste wasn't enough: some TUIs toggle ?2004l mid-session
+    // while still drawing their own cursor in alt-screen, and that flipped
+    // xterm's cursor back on. The per-terminal state refs persist across
+    // data chunks; the actual cursor write happens in flushPendingData so
+    // it runs AFTER any alt-screen switch in the same data chunk.
     const syncCursorVisibility = (chunk: string) => {
-      let last: 'hide' | 'show' | null = null;
       for (let i = 0; i < chunk.length; i++) {
         if (chunk.charCodeAt(i) !== 0x1b) continue;
-        if (chunk.startsWith('\x1b[?2004h', i)) last = 'hide';
-        else if (chunk.startsWith('\x1b[?2004l', i)) last = 'show';
+        if (chunk.startsWith('\x1b[?2004h', i)) { cursorHideSignalsRef.current.bracketedPaste = true; cursorSyncDirty = true; }
+        else if (chunk.startsWith('\x1b[?2004l', i)) { cursorHideSignalsRef.current.bracketedPaste = false; cursorSyncDirty = true; }
+        else if (chunk.startsWith('\x1b[?1049h', i) || chunk.startsWith('\x1b[?1047h', i)) {
+          cursorHideSignalsRef.current.altScreen = true; cursorSyncDirty = true;
+        }
+        else if (chunk.startsWith('\x1b[?1049l', i) || chunk.startsWith('\x1b[?1047l', i)) {
+          cursorHideSignalsRef.current.altScreen = false; cursorSyncDirty = true;
+        }
       }
-      if (last === 'hide') term.write('\x1b[?25l');
-      else if (last === 'show') term.write('\x1b[?25h');
     };
 
     const unsubscribePtyData = window.terminalAPI.onPtyData(
