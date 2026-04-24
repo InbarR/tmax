@@ -10,6 +10,17 @@ import '@xterm/xterm/css/xterm.css';
  * a single hyperlink (e.g. ADO "Copy to clipboard" for PR titles).
  * Returns the href if found, null otherwise.
  */
+function unwrapSafelinks(url: string): string {
+  try {
+    const u = new URL(url);
+    if (/(^|\.)safelinks\.protection\.outlook\.com$/i.test(u.hostname)) {
+      const real = u.searchParams.get('url');
+      if (real && /^https?:\/\//i.test(real)) return real;
+    }
+  } catch { /* not a valid URL */ }
+  return url;
+}
+
 function extractLinkFromHtml(html: string): string | null {
   if (!html) return null;
   const linkPattern = /<a\s[^>]*href=["']([^"']+)["'][^>]*>/gi;
@@ -18,7 +29,7 @@ function extractLinkFromHtml(html: string): string | null {
   while ((m = linkPattern.exec(html)) !== null) {
     matches.push(m[1]);
   }
-  if (matches.length === 1 && /^https?:\/\//i.test(matches[0])) return matches[0];
+  if (matches.length === 1 && /^https?:\/\//i.test(matches[0])) return unwrapSafelinks(matches[0]);
   return null;
 }
 

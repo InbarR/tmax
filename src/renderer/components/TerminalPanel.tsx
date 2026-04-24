@@ -10,8 +10,26 @@ import type { AppConfig } from '../state/types';
 import '@xterm/xterm/css/xterm.css';
 
 /**
+ * Microsoft Outlook wraps every outgoing link in
+ * https://<region>.safelinks.protection.outlook.com/?url=<encoded-real-url>&...
+ * so a "copy link" out of an email pastes this ugly wrapper instead of the
+ * real target. If we detect the wrapper, decode and return the real URL.
+ */
+function unwrapSafelinks(url: string): string {
+  try {
+    const u = new URL(url);
+    if (/(^|\.)safelinks\.protection\.outlook\.com$/i.test(u.hostname)) {
+      const real = u.searchParams.get('url');
+      if (real && /^https?:\/\//i.test(real)) return real;
+    }
+  } catch { /* not a valid URL */ }
+  return url;
+}
+
+/**
  * Extract a URL from HTML clipboard content when the content is essentially
- * a single hyperlink (e.g. ADO "Copy to clipboard" for PR titles).
+ * a single hyperlink (e.g. ADO "Copy to clipboard" for PR titles, Outlook
+ * safelinks-wrapped URLs).
  * Returns the href if found, null otherwise.
  */
 function extractLinkFromHtml(html: string): string | null {
@@ -24,7 +42,9 @@ function extractLinkFromHtml(html: string): string | null {
     matches.push(m[1]);
   }
   // Only extract when the HTML contains exactly one link
-  if (matches.length === 1 && /^https?:\/\//i.test(matches[0])) return matches[0];
+  if (matches.length === 1 && /^https?:\/\//i.test(matches[0])) {
+    return unwrapSafelinks(matches[0]);
+  }
   return null;
 }
 
@@ -311,7 +331,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
         } else {
           const html = window.terminalAPI.clipboardReadHTML();
           const linkUrl = extractLinkFromHtml(html);
-          const text = linkUrl || window.terminalAPI.clipboardRead();
+          let text = linkUrl || window.terminalAPI.clipboardRead();
+          // If the user copied a plain safelinks URL (no HTML), unwrap it too.
+          if (text && !linkUrl && /^https?:\/\/[^\s]+$/.test(text.trim())) {
+            text = unwrapSafelinks(text.trim());
+          }
           if (text) window.terminalAPI.writePty(terminalId, text);
         }
         return false;
@@ -669,7 +693,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
         } else {
           const html = window.terminalAPI.clipboardReadHTML();
           const linkUrl = extractLinkFromHtml(html);
-          const text = linkUrl || window.terminalAPI.clipboardRead();
+          let text = linkUrl || window.terminalAPI.clipboardRead();
+          if (text && !linkUrl && /^https?:\/\/[^\s]+$/.test(text.trim())) {
+            text = unwrapSafelinks(text.trim());
+          }
           if (text) window.terminalAPI.writePty(terminalId, text);
         }
       }
