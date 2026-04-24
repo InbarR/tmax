@@ -38,6 +38,7 @@ export const IPC = {
   VERSION_CHECK_NOW: 'version:checkNow',
   VERSION_GET_APP_VERSION: 'version:getAppVersion',
   VERSION_RESTART_AND_UPDATE: 'version:restartAndUpdate',
+  VERSION_GET_CHANGELOG: 'version:getChangelog',
   CLIPBOARD_SAVE_IMAGE: 'clipboard:saveImage',
   PTY_GET_DIAG: 'pty:getDiag',
   DIAG_LOG: 'diag:log',

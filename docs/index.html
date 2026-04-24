@@ -433,7 +433,8 @@
 </div>
 
 <div class="changelog" id="changelog">
-  <div class="changelog-content" id="changelog-content">Loading release notes...</div>
+  <h2>Changelog</h2>
+  <div class="changelog-content" id="changelog-content">Loading changelog...</div>
 </div>
 
 <div class="features">
@@ -675,12 +676,22 @@ async function loadRelease() {
     src.innerHTML = '<span class="os-icon">&#128736;</span>Build from source';
     grid.appendChild(src);
 
-    // Render release notes
+    // Render full changelog from CHANGELOG.md (falls back to release body)
     const changelogEl = document.getElementById('changelog-content');
-    if (data.body) {
-      changelogEl.innerHTML = renderMarkdown(data.body);
-    } else {
-      changelogEl.innerHTML = `<p>See <a href="${data.html_url}">release notes on GitHub</a></p>`;
+    try {
+      const clRes = await fetch(`https://raw.githubusercontent.com/${REPO}/main/CHANGELOG.md`);
+      if (clRes.ok) {
+        const clText = await clRes.text();
+        changelogEl.innerHTML = renderMarkdown(clText.replace(/^# Changelog\s*\n/, ''));
+      } else {
+        throw new Error('not found');
+      }
+    } catch {
+      if (data.body) {
+        changelogEl.innerHTML = renderMarkdown(data.body);
+      } else {
+        changelogEl.innerHTML = `<p>See <a href="${data.html_url}">release notes on GitHub</a></p>`;
+      }
     }
 
     // Update version badge
@@ -699,7 +710,7 @@ async function loadRelease() {
     btn.href = `https://github.com/${REPO}/releases/latest`;
     document.getElementById('os-name').textContent = 'your platform';
     document.getElementById('os-detail').textContent = 'View releases on GitHub';
-    document.getElementById('changelog-content').innerHTML = '<p>Could not load release notes.</p>';
+    document.getElementById('changelog-content').innerHTML = '<p>Could not load changelog.</p>';
   }
 }
 
@@ -713,7 +724,7 @@ function renderMarkdown(md) {
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
     // Bare URLs (not already inside an href)
     .replace(/(^|[^"'>])(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/^[*-] (.+)$/gm, '<li>$1</li>')
     .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
     // Skip `\n\n -> <br><br>` — block elements (h2, h3, ul) already have
     // their own spacing. Inserting extra <br><br> between them creates a

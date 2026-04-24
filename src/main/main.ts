@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeTheme, powerMonitor, session, shell } from 'electron';
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeTheme, net, powerMonitor, session, shell } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -592,6 +592,15 @@ function registerIpcHandlers(): void {
 
   ipcMain.on(IPC.VERSION_RESTART_AND_UPDATE, () => {
     versionChecker?.restartAndUpdate();
+  });
+
+  ipcMain.handle(IPC.VERSION_GET_CHANGELOG, async () => {
+    try {
+      const res = await net.fetch('https://raw.githubusercontent.com/InbarR/tmax/main/CHANGELOG.md');
+      return res.ok ? await res.text() : '';
+    } catch {
+      return '';
+    }
   });
 
   // ── Transparency IPC handlers ──────────────────────────────────────

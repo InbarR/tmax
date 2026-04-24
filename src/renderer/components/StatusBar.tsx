@@ -32,10 +32,14 @@ function renderMarkdown(md: string): string {
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
     // Bare URLs
     .replace(/(^|[^"'])(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>')
-    // Bullet lists
-    .replace(/^\* (.+)$/gm, '<li>$1</li>')
+    // Bullet lists (both * and -)
+    .replace(/^[*-] (.+)$/gm, '<li>$1</li>')
     .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-    // Line breaks
+    // Collapse multiple blank lines
+    .replace(/\n{3,}/g, '\n\n')
+    // Strip newlines adjacent to block elements (prevent extra <br/>)
+    .replace(/\n*(<\/?(?:h[1-6]|ul|li|p)>)\n*/g, '$1')
+    // Remaining line breaks
     .replace(/\n/g, '<br/>');
 }
 
@@ -73,6 +77,33 @@ const UpdateModal: React.FC<{ info: UpdateInfoState; appVersion: string; onClose
   );
 };
 
+const ChangelogModal: React.FC<{ content: string; loading: boolean; onClose: () => void }> = ({ content, loading, onClose }) => {
+  return (
+    <div className="update-modal-overlay" onClick={onClose}>
+      <div className="changelog-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="update-modal-header">
+          <h2>Changelog</h2>
+          <button className="update-modal-close" onClick={onClose}>&times;</button>
+        </div>
+        <div className="changelog-modal-content">
+          {loading ? (
+            <p style={{ textAlign: 'center', padding: '2rem' }}>Loading changelog...</p>
+          ) : content ? (
+            <div dangerouslySetInnerHTML={{ __html: renderMarkdown(
+              content.replace(/^# Changelog\s*\n/, '')
+            ) }} />
+          ) : (
+            <p>Could not load changelog.</p>
+          )}
+        </div>
+        <div className="update-modal-actions">
+          <button className="update-modal-btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const StatusBar: React.FC = () => {
   const [appVersion, setAppVersion] = useState<string>('');
   const [updateInfo, setUpdateInfo] = useState<UpdateInfoState | null>(null);
@@ -80,6 +111,9 @@ const StatusBar: React.FC = () => {
   const [shownVersion, setShownVersion] = useState<string>('');
   const [showReportModal, setShowReportModal] = useState(false);
   const [showZoomDialog, setShowZoomDialog] = useState(false);
+  const [showChangelog, setShowChangelog] = useState(false);
+  const [changelogContent, setChangelogContent] = useState('');
+  const [changelogLoading, setChangelogLoading] = useState(false);
 
   const submitReport = () => {
     const issueBody = `**Version:** ${appVersion}\n**Platform:** ${navigator.platform}\n\n**Description:**\n\n\n**Steps to reproduce:**\n1. \n\n**Expected behavior:**\n\n**Actual behavior:**\n`;
@@ -87,6 +121,18 @@ const StatusBar: React.FC = () => {
     window.terminalAPI.clipboardWrite(issueBody);
     window.open(url, '_blank');
     setShowReportModal(false);
+  };
+
+  const openChangelog = async () => {
+    setShowChangelog(true);
+    setChangelogLoading(true);
+    try {
+      const text = await window.terminalAPI.getChangelog();
+      setChangelogContent(text);
+    } catch {
+      setChangelogContent('');
+    }
+    setChangelogLoading(false);
   };
 
   useEffect(() => {
@@ -239,7 +285,7 @@ const StatusBar: React.FC = () => {
               v{appVersion} &rarr; v{updateInfo.latest}
             </span>
           ) : (
-            <span className="status-dim">v{appVersion}</span>
+            <span className="status-dim" style={{ cursor: 'pointer' }} onClick={openChangelog} data-tooltip="View changelog">v{appVersion}</span>
           )}
           <button
             className="status-mode-btn"
@@ -266,6 +312,9 @@ const StatusBar: React.FC = () => {
       </div>
       {showUpdateModal && updateInfo && (
         <UpdateModal info={updateInfo} appVersion={appVersion} onClose={() => setShowUpdateModal(false)} />
+      )}
+      {showChangelog && (
+        <ChangelogModal content={changelogContent} loading={changelogLoading} onClose={() => setShowChangelog(false)} />
       )}
       {showZoomDialog && (
         <InputDialog

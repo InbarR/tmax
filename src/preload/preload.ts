@@ -39,6 +39,7 @@ export interface TerminalAPI {
   getVersionUpdate(): Promise<{ status: string; current: string; latest?: string; url?: string; error?: string; releaseNotes?: string } | null>;
   checkForUpdates(): void;
   restartAndUpdate(): void;
+  getChangelog(): Promise<string>;
   onUpdateStatusChanged(cb: (info: { status: string; current: string; latest?: string; url?: string; error?: string; releaseNotes?: string }) => void): () => void;
   getPtyDiag(id: string): Promise<PtyDiag | null>;
   diagLog(event: string, data?: Record<string, unknown>): void;
@@ -291,6 +292,10 @@ const terminalAPI: TerminalAPI = {
 
   restartAndUpdate() {
     ipcRenderer.send(IPC.VERSION_RESTART_AND_UPDATE);
+  },
+
+  getChangelog(): Promise<string> {
+    return ipcRenderer.invoke(IPC.VERSION_GET_CHANGELOG);
   },
 
   getPtyDiag(id: string) {
