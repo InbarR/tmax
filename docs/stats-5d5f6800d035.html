@@ -55,6 +55,12 @@
   <div class="stat-card"><div class="label">Releases</div><div class="value" id="releases">-</div></div>
 </div>
 
+<div class="summary">
+  <div class="stat-card"><div class="label">Landing Visits</div><div class="value" id="gcVisits">-</div><div class="label" style="margin-top:4px;text-transform:none;letter-spacing:0;" id="gcVisitsSub">GoatCounter</div></div>
+  <div class="stat-card"><div class="label">Download Clicks</div><div class="value" id="gcClicks">-</div><div class="label" style="margin-top:4px;text-transform:none;letter-spacing:0;" id="gcClicksSub">All platforms, any variant</div></div>
+  <div class="stat-card"><div class="label">Click-through Rate</div><div class="value" id="gcCtr">-</div><div class="label" style="margin-top:4px;text-transform:none;letter-spacing:0;">Clicks / Visits</div></div>
+</div>
+
 <div class="chart-section">
   <div class="chart-title">New installs by version (stacked by OS)</div>
   <div class="chart-container"><canvas id="chart"></canvas></div>
@@ -621,6 +627,50 @@ document.getElementById('timelineStack-platform').addEventListener('click', () =
 });
 
 loadTimeline();
+
+// GoatCounter public counter endpoint. Requires "public /counter endpoint"
+// to be enabled in Settings - Site on goatcounter.com, otherwise the fetch
+// returns 403 and we surface "n/a" in the tiles. Shape: {count, count_unique}.
+const GOATCOUNTER_SITE = 'tmax.goatcounter.com';
+async function fetchGcCounter(path) {
+  try {
+    const url = `https://${GOATCOUNTER_SITE}/counter/${encodeURIComponent(path)}.json`;
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return typeof j.count === 'number' ? j.count : null;
+  } catch {
+    return null;
+  }
+}
+
+(async function loadGoatCounter() {
+  const visitsEl = document.getElementById('gcVisits');
+  const clicksEl = document.getElementById('gcClicks');
+  const ctrEl = document.getElementById('gcCtr');
+  const [visits, clicks] = await Promise.all([
+    fetchGcCounter('TOTAL'),
+    fetchGcCounter('!dl'),
+  ]);
+  if (visits == null) {
+    visitsEl.textContent = 'n/a';
+    document.getElementById('gcVisitsSub').textContent = 'Enable public /counter in GoatCounter settings';
+  } else {
+    visitsEl.textContent = visits.toLocaleString();
+  }
+  if (clicks == null) {
+    clicksEl.textContent = 'n/a';
+  } else {
+    clicksEl.textContent = clicks.toLocaleString();
+  }
+  if (visits && visits > 0 && clicks != null) {
+    const pct = (clicks / visits) * 100;
+    ctrEl.textContent = pct.toFixed(1) + '%';
+    ctrEl.classList.toggle('green', pct >= 10);
+  } else {
+    ctrEl.textContent = 'n/a';
+  }
+})();
 
 async function load() {
   const resp = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=30`);
