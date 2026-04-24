@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useCallback, useState, useReducer } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon } from '@xterm/addon-search';
 import { useTerminalStore } from '../state/terminal-store';
 import { registerTerminal, unregisterTerminal } from '../terminal-registry';
@@ -284,17 +283,89 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     });
 
     const fitAddon = new FitAddon();
-    // Custom URL regex: xterm.js default excludes | (pipe) from URLs, but many
-    // dev tools emit URLs containing pipes (e.g. query params with | delimiters).
-    const urlRegex = /(https?|HTTPS?):[/]{2}[^\s"'!*(){}\\\^<>`]*[^\s"':,.!?{}\\\^~\[\]`()<>]/;
-    const webLinksAddon = new WebLinksAddon((_event, uri) => {
-      window.open(uri, '_blank');
-    }, { urlRegex });
     const searchAddon = new SearchAddon();
 
     term.loadAddon(fitAddon);
-    term.loadAddon(webLinksAddon);
     term.loadAddon(searchAddon);
+
+    // Custom multi-line URL link provider (#62): xterm's built-in WebLinksAddon
+    // stops detecting wrapped URLs past a certain row count, so very long links
+    // (e.g. Outlook safelinks) only highlight their first row. We walk the
+    // buffer manually using the `isWrapped` flag to reconstruct the full logical
+    // line, run the URL regex on it, and emit a link range that spans every row
+    // the URL visually occupies.
+    //
+    // Regex excludes whitespace/quotes/parens/angle-brackets at the ends, allows
+    // `|` and `%` inside (dev tools / URL-encoded chars). Mirrors the old
+    // WebLinksAddon regex.
+    const urlRegex = /(https?|HTTPS?):\/\/[^\s"'!*(){}\\\^<>`]*[^\s"':,.!?{}\\\^~\[\]`()<>]/g;
+    term.registerLinkProvider({
+      provideLinks(bufferLineNumber, callback) {
+        const buf = term.buffer.active;
+        // buffer line indexing in provideLinks is 1-based.
+        const lineIdx0 = bufferLineNumber - 1;
+        if (lineIdx0 < 0 || lineIdx0 >= buf.length) { callback(undefined); return; }
+
+        // Walk back to the logical start (first line whose successor has isWrapped).
+        let startIdx = lineIdx0;
+        while (startIdx > 0) {
+          const cur = buf.getLine(startIdx);
+          if (!cur?.isWrapped) break;
+          startIdx--;
+        }
+        // Walk forward while the next line is a wrap continuation.
+        let endIdx = startIdx;
+        while (endIdx + 1 < buf.length) {
+          const next = buf.getLine(endIdx + 1);
+          if (!next?.isWrapped) break;
+          endIdx++;
+        }
+
+        // Concatenate the logical line text. Use trimRight=false so columns line up
+        // 1:1 with the buffer grid - we need that for accurate reverse mapping.
+        let logical = '';
+        for (let i = startIdx; i <= endIdx; i++) {
+          const line = buf.getLine(i);
+          if (line) logical += line.translateToString(false);
+        }
+
+        const cols = term.cols;
+        const links: Array<{
+          range: { start: { x: number; y: number }; end: { x: number; y: number } };
+          text: string;
+          activate: (e: MouseEvent, text: string) => void;
+          decorations?: { underline?: boolean; pointerCursor?: boolean };
+        }> = [];
+
+        let m: RegExpExecArray | null;
+        urlRegex.lastIndex = 0;
+        while ((m = urlRegex.exec(logical)) !== null) {
+          const matchStart = m.index;
+          const matchEnd = m.index + m[0].length - 1;
+          // Map offsets in the concatenated string back to (row, col) on screen.
+          // Each wrapped row holds exactly `cols` cells.
+          const startRow = startIdx + Math.floor(matchStart / cols);
+          const startCol = matchStart % cols;
+          const endRow = startIdx + Math.floor(matchEnd / cols);
+          const endCol = matchEnd % cols;
+
+          // Only emit if this link visually touches the row the linkifier asked about.
+          if (lineIdx0 < startRow || lineIdx0 > endRow) continue;
+
+          links.push({
+            range: {
+              start: { x: startCol + 1, y: startRow + 1 },
+              end: { x: endCol + 1, y: endRow + 1 },
+            },
+            text: m[0],
+            activate(_e, uri) { window.open(uri, '_blank'); },
+            decorations: { underline: true, pointerCursor: true },
+          });
+        }
+
+        callback(links.length ? links : undefined);
+      },
+    });
 
     searchAddonRef.current = searchAddon;
     registerTerminal(terminalId, term, searchAddon);
