@@ -143,7 +143,8 @@ export class ClaudeCodeSessionMonitor {
       (old.status !== summary.status ||
         old.messageCount !== summary.messageCount ||
         old.toolCallCount !== summary.toolCallCount ||
-        old.summary !== summary.summary)
+        old.summary !== summary.summary ||
+        old.latestPrompt !== summary.latestPrompt)
     ) {
       this.callbacks.onSessionUpdated?.(summary);
     }
@@ -240,6 +241,7 @@ export class ClaudeCodeSessionMonitor {
       branch: parsed.gitBranch,
       repository: '',
       summary: parsed.firstPrompt || parsed.slug || cwdFolder || '',
+      latestPrompt: parsed.latestPrompt || undefined,
       messageCount: parsed.messageCount,
       toolCallCount: parsed.toolCallCount,
       lastActivityTime: parsed.lastActivityTime,

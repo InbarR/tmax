@@ -128,7 +128,8 @@ export class CopilotSessionMonitor {
 
     if (oldSession && (oldSession.status !== session.status ||
         oldSession.messageCount !== session.messageCount ||
-        oldSession.toolCallCount !== session.toolCallCount)) {
+        oldSession.toolCallCount !== session.toolCallCount ||
+        oldSession.latestPrompt !== session.latestPrompt)) {
       this.callbacks.onSessionUpdated?.(summary);
     }
 
@@ -216,6 +217,7 @@ export class CopilotSessionMonitor {
       timeline: parsed?.timeline ?? [],
       pendingToolCalls: parsed?.pendingToolCalls ?? 0,
       totalTokens: parsed?.totalTokens ?? 0,
+      latestPrompt: parsed?.latestPrompt || undefined,
     };
   }
 
@@ -284,6 +286,7 @@ export class CopilotSessionMonitor {
       branch: session.workspace.branch,
       repository: session.workspace.repository,
       summary: session.workspace.summary,
+      latestPrompt: session.latestPrompt || undefined,
       messageCount: session.messageCount,
       toolCallCount: session.toolCallCount,
       lastActivityTime: session.lastActivityTime,

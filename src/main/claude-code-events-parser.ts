@@ -60,6 +60,8 @@ export interface ClaudeCodeParsedSession {
   toolCallCount: number;
   lastActivityTime: number;
   firstPrompt: string;
+  /** Most recent user prompt text (same cleanup as firstPrompt, skipping interruptions) */
+  latestPrompt: string;
 }
 
 interface CacheEntry {
@@ -74,6 +76,7 @@ interface CacheEntry {
   toolCallCount: number;
   lastActivityTime: number;
   firstPrompt: string;
+  latestPrompt: string;
   lastLineType: string;
   lastLineHasEndTurn: boolean;
   awaitingInput: boolean; // true after end_turn, cleared on next user message
@@ -124,6 +127,7 @@ export function parseClaudeCodeSession(filePath: string): ClaudeCodeParsedSessio
           toolCallCount: 0,
           lastActivityTime: 0,
           firstPrompt: '',
+          latestPrompt: '',
           lastLineType: '',
           lastLineHasEndTurn: false,
           awaitingInput: false,
@@ -180,32 +184,34 @@ function processLine(line: string, state: CacheEntry): void {
     case 'user': {
       state.messageCount++;
 
-      if (!state.metaExtracted) {
-        // Full JSON parse for the first user message to extract metadata
-        try {
-          const parsed = JSON.parse(line);
+      // Pull the user-message text once and let both firstPrompt (set only if
+      // empty) and latestPrompt (always updated on new input) consume it.
+      // tool_result user messages don't have a readable text content, so
+      // extractText returns null and we skip - otherwise every tool response
+      // would clobber latestPrompt with an empty string.
+      let userText: string | null = null;
+      try {
+        const parsed = JSON.parse(line);
+        if (!state.metaExtracted) {
           state.cwd = parsed.cwd || '';
           state.gitBranch = parsed.gitBranch || '';
           state.slug = parsed.slug || '';
           state.sessionId = parsed.sessionId || '';
-
-          // Extract first prompt text
-          if (parsed.message?.content) {
-            const text = extractText(parsed.message.content);
-            if (text && !text.startsWith('[Request interrupted')) {
-              state.firstPrompt = formatFirstPromptSummary(text);
-            }
-          }
           state.metaExtracted = true;
-        } catch {
-          // Fallback: regex-based extraction
+        } else if (parsed.gitBranch) {
+          // Branch may change during session
+          state.gitBranch = parsed.gitBranch;
+        }
+        if (parsed.message?.content) {
+          userText = extractText(parsed.message.content);
+        }
+      } catch {
+        // Fallback: regex-based extraction (no user text available here)
+        if (!state.metaExtracted) {
           const cwdMatch = line.match(/"cwd"\s*:\s*"((?:[^"\\]|\\.)*)"/);
           if (cwdMatch) {
-            try {
-              state.cwd = JSON.parse(`"${cwdMatch[1]}"`);
-            } catch {
-              state.cwd = cwdMatch[1];
-            }
+            try { state.cwd = JSON.parse(`"${cwdMatch[1]}"`); }
+            catch { state.cwd = cwdMatch[1]; }
           }
           const slugMatch = line.match(/"slug"\s*:\s*"([^"]+)"/);
           if (slugMatch) state.slug = slugMatch[1];
@@ -215,22 +221,13 @@ function processLine(line: string, state: CacheEntry): void {
           if (sessionMatch) state.sessionId = sessionMatch[1];
           state.metaExtracted = true;
         }
-      } else {
-        // Update branch (may change during session)
-        const branchMatch = line.match(/"gitBranch"\s*:\s*"([^"]+)"/);
-        if (branchMatch) state.gitBranch = branchMatch[1];
+      }
 
-        // If first prompt was an interruption, try later user messages
-        if (!state.firstPrompt) {
-          try {
-            const parsed = JSON.parse(line);
-            if (parsed.message?.content) {
-              const text = extractText(parsed.message.content);
-              if (text && !text.startsWith('[Request interrupted')) {
-                state.firstPrompt = formatFirstPromptSummary(text);
-              }
-            }
-          } catch { /* skip */ }
+      if (userText && !userText.startsWith('[Request interrupted')) {
+        const summary = formatFirstPromptSummary(userText);
+        if (summary) {
+          if (!state.firstPrompt) state.firstPrompt = summary;
+          state.latestPrompt = summary;
         }
       }
       break;
@@ -302,6 +299,7 @@ function deriveResult(
     toolCallCount: state.toolCallCount,
     lastActivityTime: state.lastActivityTime,
     firstPrompt: state.firstPrompt,
+    latestPrompt: state.latestPrompt,
   };
 }
 

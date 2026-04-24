@@ -12,6 +12,7 @@ export interface ParsedSessionEvents {
   timeline: CopilotActivityEntry[];
   pendingToolCalls: number;
   totalTokens: number;
+  latestPrompt: string;
 }
 
 interface ParserCache {
@@ -122,6 +123,7 @@ function deriveState(events: EventRecord[]): ParsedSessionEvents {
   let lastActivityTime = 0;
   let pendingToolCalls = 0;
   let totalTokens = 0;
+  let latestPrompt = '';
 
   for (const event of events) {
     if (event.timestamp > lastActivityTime) {
@@ -144,10 +146,13 @@ function deriveState(events: EventRecord[]): ParsedSessionEvents {
         break;
 
       // Messages
-      case 'user.message':
+      case 'user.message': {
         messageCount++;
         status = 'thinking';
+        const text = String(event.data?.content || event.data?.transformedContent || '').trim();
+        if (text) latestPrompt = text.slice(0, 120).replace(/\n/g, ' ');
         break;
+      }
       case 'assistant.message':
         break;
 
@@ -202,5 +207,6 @@ function deriveState(events: EventRecord[]): ParsedSessionEvents {
     timeline,
     pendingToolCalls,
     totalTokens,
+    latestPrompt,
   };
 }

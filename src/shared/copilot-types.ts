@@ -16,6 +16,8 @@ export interface CopilotSessionSummary {
   branch: string;
   repository: string;
   summary: string;
+  /** Most recent user prompt - useful when the terminal has scrolled past it */
+  latestPrompt?: string;
   messageCount: number;
   toolCallCount: number;
   lastActivityTime: number;
@@ -48,4 +50,5 @@ export interface CopilotSession {
   timeline: CopilotActivityEntry[];
   pendingToolCalls: number;
   totalTokens: number;
+  latestPrompt?: string;
 }

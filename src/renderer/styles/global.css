@@ -3255,6 +3255,24 @@ select.settings-input {
   font-family: 'Cascadia Code', 'Consolas', monospace;
 }
 
+.ai-session-latest-prompt {
+  font-size: 11px;
+  color: var(--text-primary);
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+  font-style: italic;
+}
+
+.ai-session-latest-prompt-label {
+  color: var(--accent, #7aa2f7);
+  font-style: normal;
+  font-weight: 600;
+  margin-right: 2px;
+}
+
 .ai-session-status {
   font-size: 10px;
   font-weight: 500;

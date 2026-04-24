@@ -715,6 +715,11 @@ const CopilotPanel: React.FC = () => {
                 {session.cwd && (
                   <div className="ai-session-cwd" title={session.cwd}>{shortPath(session.cwd)}</div>
                 )}
+                {session.latestPrompt && session.latestPrompt !== title && (
+                  <div className="ai-session-latest-prompt" title={session.latestPrompt}>
+                    <span className="ai-session-latest-prompt-label">›</span> {session.latestPrompt}
+                  </div>
+                )}
                 {active && (
                   <div className="ai-session-status" style={{ color: STATUS_COLORS[session.status] }}>
                     {STATUS_LABELS[session.status]}
