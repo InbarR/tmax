@@ -348,8 +348,7 @@
       font-family: monospace;
     }
 
-    /* Hero Star CTA - sits next to "View on GitHub" in the middle of the
-       hero so drive-by visitors see it without scrolling. */
+    /* GitHub's embed button is an iframe; give the row sensible spacing. */
     .hero-actions {
       display: inline-flex;
       align-items: center;
@@ -357,36 +356,6 @@
       gap: 14px;
       margin-top: 4px;
       flex-wrap: wrap;
-    }
-    .hero-star {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 7px 14px;
-      background: linear-gradient(180deg, #2a2a2a 0%, #1c1c1c 100%);
-      color: var(--fg);
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 600;
-      text-decoration: none;
-      transition: transform 0.12s, border-color 0.12s, background 0.12s;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.4);
-    }
-    .hero-star:hover {
-      border-color: var(--yellow);
-      background: linear-gradient(180deg, #3a3a25 0%, #2a2a18 100%);
-      transform: translateY(-1px);
-    }
-    .hero-star .star-icon { color: var(--yellow); font-size: 14px; }
-    .hero-star-count {
-      padding-left: 8px;
-      margin-left: 8px;
-      border-left: 1px solid rgba(255,255,255,0.15);
-      color: var(--fg2);
-      font-weight: 500;
-      min-width: 18px;
-      text-align: center;
     }
   </style>
 </head>
@@ -408,13 +377,18 @@
   </div>
   <div class="hero-actions">
     <a href="https://github.com/InbarR/tmax" style="font-size:14px;">View on GitHub &rarr;</a>
-    <a class="hero-star" href="https://github.com/InbarR/tmax/stargazers" target="_blank" rel="noopener" aria-label="Star tmax on GitHub">
-      <span class="star-icon">&#9733;</span>
-      <span>Star on GitHub</span>
-      <span class="hero-star-count" id="hero-star-count">&middot;</span>
-    </a>
+    <!-- GitHub's official embed widget - clicking actually stars the repo
+         via a popup, instead of just navigating to a page. -->
+    <a class="github-button"
+       href="https://github.com/InbarR/tmax"
+       data-color-scheme="no-preference: dark; light: dark; dark: dark;"
+       data-icon="octicon-star"
+       data-size="large"
+       data-show-count="true"
+       aria-label="Star InbarR/tmax on GitHub">Star</a>
   </div>
 </div>
+<script async defer src="https://buttons.github.io/buttons.js"></script>
 
 <div class="screenshot">
   <img src="screenshots/tmax-hero.png" alt="tmax screenshot">
@@ -718,8 +692,6 @@ async function loadRelease() {
       const repoData = await repoRes.json();
       const stars = repoData.stargazers_count;
       document.getElementById('star-badge').textContent = `\u2733 ${stars} stars`;
-      const heroCount = document.getElementById('hero-star-count');
-      if (heroCount) heroCount.textContent = String(stars);
     } catch {}
 
   } catch (e) {
