@@ -130,7 +130,21 @@ export class PtyManager {
       shellEnv.PROMPT_COMMAND = 'printf "\\e]7;file:///%s\\a" "$(pwd)"';
     }
 
-    const ptyProcess = spawn(opts.shellPath, opts.args, {
+    // PowerShell shell integration via launch args (VS Code pattern).
+    // -NoExit + -Command run our init script silently during pwsh startup, after the
+    // profile loads. Nothing is typed, so nothing echoes into the terminal buffer.
+    // Skip if user has -Command/-File in their custom args to avoid clobbering.
+    let finalArgs = opts.args;
+    const isPowerShell = shellName.includes('pwsh') || shellName.includes('powershell');
+    const userHasCustomCommand = opts.args.some(
+      (a) => /^-(Command|c|File|f|EncodedCommand)$/i.test(a),
+    );
+    if (isPowerShell && psIntegrationAvailable && !userHasCustomCommand) {
+      const escapedPath = PS_INTEGRATION_PATH.replace(/'/g, "''");
+      finalArgs = [...opts.args, '-NoExit', '-Command', `. '${escapedPath}'`];
+    }
+
+    const ptyProcess = spawn(opts.shellPath, finalArgs, {
       name: 'xterm-256color',
       cols: opts.cols,
       rows: opts.rows,
@@ -142,13 +156,6 @@ export class PtyManager {
     this.ptys.set(opts.id, ptyProcess);
     this.stats.set(opts.id, { pid: ptyProcess.pid, writeCount: 0, lastWriteTime: 0, dataCount: 0, lastDataTime: 0, dataBytes: 0 });
     diagLog('pty:created', { id: opts.id, pid: ptyProcess.pid, shell: opts.shellPath, cwd });
-
-    // Inject shell integration for PowerShell (needs to write to terminal)
-    if ((shellName.includes('pwsh') || shellName.includes('powershell')) && psIntegrationAvailable) {
-      // Dot-source a pre-written script so only a short line is echoed, then clear it.
-      const escapedPath = PS_INTEGRATION_PATH.replace(/'/g, "''");
-      setTimeout(() => ptyProcess.write(`. '${escapedPath}'; cls\r`), 200);
-    }
     // CMD: relies on prompt regex fallback (no hook mechanism)
 
     // Inject shell integration for zsh (precmd hook for OSC 7)
