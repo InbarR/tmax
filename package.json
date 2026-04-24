@@ -9,6 +9,7 @@
     "start": "electron-forge start",
     "build": "electron-forge make",
     "package": "electron-forge package",
+    "test:e2e": "playwright test",
     "upgrade": "node scripts/build-upgrade.js",
     "postinstall": "node scripts/fix-node-pty.js"
   },
