@@ -870,6 +870,7 @@ const PromptsDialog: React.FC<{
 }> = ({ title, prompts, terminalId, onClose }) => {
   const [search, setSearch] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [jumpWarning, setJumpWarning] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -897,14 +898,17 @@ const PromptsDialog: React.FC<{
   }, [selectedIndex]);
 
   const jumpToPrompt = useCallback((promptText: string) => {
-    if (!terminalId) return;
+    if (!terminalId) {
+      setJumpWarning('No terminal is linked to this session.');
+      return;
+    }
     const entry = getTerminalEntry(terminalId);
-    if (!entry) return;
+    if (!entry) {
+      setJumpWarning('Terminal is no longer open.');
+      return;
+    }
     const { searchAddon, terminal } = entry;
-    // Clear any previous search decorations
     searchAddon.clearDecorations();
-    // Search for the prompt text (first ~80 chars to avoid overly long searches)
-    const query = promptText.slice(0, 80);
     const opts = {
       decorations: {
         matchOverviewRuler: '#888',
@@ -913,8 +917,33 @@ const PromptsDialog: React.FC<{
         activeMatchBackground: '#89b4fa',
       },
     };
-    searchAddon.findPrevious(query, opts);
-    // Close dialog and focus the terminal
+    // Strip trailing whitespace/newlines that xterm wouldn't render the same
+    // way, and cap the length so regex-unfriendly prompts don't hurt.
+    const trimmed = promptText.trim();
+    const tryQuery = (q: string): boolean => {
+      if (!q) return false;
+      return searchAddon.findPrevious(q, opts);
+    };
+    // Try in order: full trimmed prompt, first 80 chars, first 40 chars.
+    // A shorter prefix usually still matches a unique point in the buffer
+    // even if the full prompt was wrapped or re-rendered.
+    const found =
+      tryQuery(trimmed.slice(0, 120)) ||
+      tryQuery(trimmed.slice(0, 60)) ||
+      tryQuery(trimmed.slice(0, 30));
+    try {
+      (window as any).terminalAPI?.diagLog?.('renderer:jump-to-prompt', {
+        terminalId,
+        queryLen: trimmed.length,
+        found,
+      });
+    } catch { /* ignore */ }
+    if (!found) {
+      setJumpWarning(
+        'Not found in terminal buffer. TUIs like Claude Code keep their own history - try scrolling inside the app, or the buffer may have been cleared.',
+      );
+      return;
+    }
     onClose();
     requestAnimationFrame(() => terminal.focus());
   }, [terminalId, onClose]);
@@ -957,6 +986,9 @@ const PromptsDialog: React.FC<{
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={handleKeyDown}
         />
+        {jumpWarning && (
+          <div className="ai-prompts-warning">{jumpWarning}</div>
+        )}
         <div className="ai-prompts-list" ref={listRef}>
           {filtered.map((p, i) => (
             <div
