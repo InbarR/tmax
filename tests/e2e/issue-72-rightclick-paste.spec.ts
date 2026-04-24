@@ -12,15 +12,14 @@ function readDiagLog(userDataDir: string): string {
   return existsSync(path) ? readFileSync(path, 'utf8') : '';
 }
 
-function countPtyWritesContaining(log: string, sinceMarker: string, substring: string): number {
+function countPtyWritesWithBytes(log: string, sinceMarker: string, expectedBytes: number): number {
   const idx = log.lastIndexOf(sinceMarker);
   const tail = idx >= 0 ? log.slice(idx) : log;
   const lines = tail.split(/\r?\n/).filter((l) => l.includes(' pty:write '));
   let count = 0;
   for (const line of lines) {
-    const m = line.match(/preview":"([^"]*)"/);
-    const preview = m ? m[1] : '';
-    if (preview.includes(substring)) count++;
+    const m = line.match(/"bytes":(\d+)/);
+    if (m && parseInt(m[1], 10) === expectedBytes) count++;
   }
   return count;
 }
@@ -52,9 +51,9 @@ test('right-click on terminal with no selection pastes clipboard once', async ()
     await window.waitForTimeout(600);
 
     const log = readDiagLog(userDataDir);
-    const count = countPtyWritesContaining(log, marker, payload);
+    const count = countPtyWritesWithBytes(log, marker, payload.length);
 
-    console.log('right-click pty:write count containing payload:', count);
+    console.log('right-click pty:write count with payload length:', count);
     const sinceMarker = log.slice(log.lastIndexOf(marker));
     const writeLines = sinceMarker.split('\n').filter((l) => l.includes('pty:write'));
     for (const line of writeLines.slice(0, 10)) console.log('  ', line);

@@ -39,20 +39,15 @@ test('Shift+Enter sends a multi-line-newline sequence (not plain CR) so apps can
     console.log('pty:write lines after Shift+Enter:');
     for (const l of writes) console.log('  ', l);
 
-    // Concatenate all preview bytes
-    const previews = writes.map((l) => {
-      const m = l.match(/preview":"([^"]*)"/);
-      return m ? m[1] : '';
-    });
-    const combined = previews.join('');
-    console.log('combined preview:', JSON.stringify(combined));
-
-    // The fix: Shift+Enter sends ESC+CR which Claude Code & Copilot CLI's
-    // Ink-based input parsers interpret as Meta+Enter → insert newline.
-    // Their parsers set `meta=true` when the raw byte sequence begins with \x1B.
-    // A plain \x0d (CR) by itself would be treated as "submit" and is the bug.
-    expect(combined).toContain('\\\\x1b\\\\x0d');
-    expect(combined).not.toBe('\\\\x0d');
+    // Sum the bytes of all pty:write entries since the marker. Shift+Enter
+    // should emit exactly 2 bytes: ESC + CR (\x1b\r). A broken handler would
+    // emit 1 byte (just \r).
+    const totalBytes = writes.reduce((acc, l) => {
+      const m = l.match(/"bytes":(\d+)/);
+      return acc + (m ? parseInt(m[1], 10) : 0);
+    }, 0);
+    expect(writes.length).toBeGreaterThan(0);
+    expect(totalBytes).toBe(2);
   } finally {
     await close();
   }

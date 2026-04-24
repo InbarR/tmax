@@ -88,8 +88,10 @@ test('plain Enter with a selection copies to clipboard and does NOT send CR to P
     for (const l of writes) console.log('  ', l);
 
     expect(clip).toContain('SELECT_ME_71');
-    const sentCR = writes.some((l) => /preview":"\\\\x0d"|preview":"\\r"/.test(l));
-    expect(sentCR).toBe(false);
+    // With a selection, Enter should NOT send anything to the PTY.
+    // Any 1-byte write would indicate a CR leaked through.
+    const oneByteWrite = writes.some((l) => /"bytes":1\b/.test(l));
+    expect(oneByteWrite).toBe(false);
 
     // And the selection should be cleared after the copy
     const stillSelected = await window.evaluate(() => {
@@ -121,10 +123,13 @@ test('plain Enter without a selection still sends CR to PTY (#71 regression guar
 
     const log = readDiagLog(userDataDir);
     const writes = findPtyWritesSince(log, marker);
-    const sentCR = writes.some((l) => /preview":"\\\\x0d"/.test(l));
     console.log('writes after plain Enter (no selection):', writes.length);
     for (const l of writes) console.log('  ', l);
 
+    // Without a selection, plain Enter should send exactly 1 byte (CR)
+    // to the PTY. Previews are gone from diag logs after PR #55, so match
+    // by bytes count.
+    const sentCR = writes.some((l) => /"bytes":1\b/.test(l));
     expect(sentCR).toBe(true);
   } finally {
     await close();
