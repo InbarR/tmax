@@ -23,12 +23,30 @@ function formatFirstPromptSummary(raw: string): string {
   let out = raw;
   const nameMatch = out.match(/<command-name>([^<]+)<\/command-name>/);
   if (nameMatch) {
-    const name = nameMatch[1];
-    // Strip all <command-*> tags (with their contents), then take what's left.
-    const rest = out.replace(/<command-[^>]+>[\s\S]*?<\/command-[^>]+>/g, '').trim();
+    // Claude Code's tag content may or may not already include a leading slash
+    // (e.g. "/video-dub" vs "video-dub"); normalize it.
+    const name = nameMatch[1].replace(/^\/+/, '');
+    const rest = stripCommandXml(out).replace(/^\/+/, '').trim();
     out = rest ? `/${name} — ${rest}` : `/${name}`;
+  } else {
+    // No command-name, but the message might still be a local-command-caveat
+    // wrapper (injected when resuming a session). Strip it so the title shows
+    // the real content instead of raw XML.
+    const stripped = stripCommandXml(out).trim();
+    if (stripped) out = stripped;
   }
   return out.slice(0, 120).replace(/\n/g, ' ');
+}
+
+/**
+ * Strip Claude-Code internal XML wrappers (<command-*>, <local-command-*>,
+ * etc.) together with their contents. Used to keep first-prompt summaries
+ * readable.
+ */
+function stripCommandXml(s: string): string {
+  // Matches any tag whose name contains "command", e.g. command-message,
+  // command-name, command-args, local-command-caveat, local-command-stdout.
+  return s.replace(/<([a-zA-Z-]*command[a-zA-Z-]*)\b[^>]*>[\s\S]*?<\/\1>/g, '');
 }
 
 export interface ClaudeCodeParsedSession {
