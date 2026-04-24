@@ -210,22 +210,6 @@ const CopilotPanel: React.FC = () => {
       all = all.filter((s) => s.status !== 'idle');
     }
 
-    // Client-side text filter - everything we match against is already in
-    // the session summary we hold in memory, so there's no need to round
-    // trip through IPC or re-read .jsonl files on every keystroke.
-    const q = query.trim().toLowerCase();
-    if (q) {
-      all = all.filter((s) => {
-        if (s.summary && s.summary.toLowerCase().includes(q)) return true;
-        if (s.latestPrompt && s.latestPrompt.toLowerCase().includes(q)) return true;
-        if (s.cwd && s.cwd.toLowerCase().includes(q)) return true;
-        if (s.branch && s.branch.toLowerCase().includes(q)) return true;
-        if (s.repository && s.repository.toLowerCase().includes(q)) return true;
-        if (s.id && s.id.toLowerCase().includes(q)) return true;
-        return false;
-      });
-    }
-
     // Deduplicate by session ID
     const byId = new Map<string, CopilotSessionSummary>();
     for (const s of all) {
@@ -240,7 +224,7 @@ const CopilotPanel: React.FC = () => {
     const lifecycleFiltered = deduped.filter((s) => getSessionLifecycle(s) === lifecycleTab);
 
     return sortSessions(lifecycleFiltered, openSessionIds);
-  }, [copilotSessions, claudeCodeSessions, query, filterTab, showRunningOnly, summaryOverrides, lifecycleTab, getSessionLifecycle, openSessionIds]);
+  }, [copilotSessions, claudeCodeSessions, filterTab, showRunningOnly, summaryOverrides, lifecycleTab, getSessionLifecycle, openSessionIds]);
 
   // #69: when groupByRepo is on, reorder filtered so sessions sharing a cwd
   // folder are contiguous, and groups are sorted by the most-recent activity
@@ -500,13 +484,21 @@ const CopilotPanel: React.FC = () => {
     [filtered, selectedIndex, openSession],
   );
 
+  // Debounce the IPC search so we don't re-grep every .jsonl on each keystroke.
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+  }, []);
+
   const handleSearch = useCallback((value: string) => {
-    // Filter client-side only - see the filtered useMemo above. The store's
-    // searchCopilotSessions / searchClaudeCodeSessions round-trip through IPC
-    // and read each session's .jsonl file on the main process, which made
-    // typing in this box feel janky.
     setQuery(value);
     setSelectedIndex(0);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      const store = useTerminalStore.getState();
+      store.searchCopilotSessions(value);
+      store.searchClaudeCodeSessions(value);
+    }, 200);
   }, []);
 
   // Listen for keybinding-triggered prompts dialog request
