@@ -646,10 +646,14 @@ async function loadRelease() {
       osName.textContent = primary.label;
       const releaseDate = new Date(data.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       osDetail.textContent = `${version} · ${(primaryAsset.size / 1024 / 1024).toFixed(0)} MB · ${releaseDate}`;
+      btn.setAttribute('data-goatcounter-click', `dl-primary-${primary.os}-${primary.arch}`);
+      btn.setAttribute('data-goatcounter-title', `Primary download: ${primary.label}`);
     } else {
       btn.href = releasesUrl;
       osName.textContent = detected.os;
       osDetail.textContent = 'View all downloads';
+      btn.setAttribute('data-goatcounter-click', 'dl-primary-fallback');
+      btn.setAttribute('data-goatcounter-title', 'Primary download: releases page (fallback)');
     }
 
     // Show mac note
@@ -666,6 +670,8 @@ async function loadRelease() {
         const a = document.createElement('a');
         a.href = asset.browser_download_url;
         a.innerHTML = `<span class="os-icon">${dl.icon}</span>${dl.label}`;
+        a.setAttribute('data-goatcounter-click', `dl-other-${dl.os}-${dl.arch}`);
+        a.setAttribute('data-goatcounter-title', `Other platform download: ${dl.label}`);
         grid.appendChild(a);
       }
     }
@@ -674,6 +680,8 @@ async function loadRelease() {
     const src = document.createElement('a');
     src.href = `https://github.com/${REPO}`;
     src.innerHTML = '<span class="os-icon">&#128736;</span>Build from source';
+    src.setAttribute('data-goatcounter-click', 'dl-source');
+    src.setAttribute('data-goatcounter-title', 'Build from source');
     grid.appendChild(src);
 
     // Render full changelog from CHANGELOG.md (falls back to release body)
@@ -759,6 +767,11 @@ loadRelease().then(() => {
   if (footer) footer.href = mailto;
 });
 </script>
+
+<!-- GoatCounter: privacy-friendly page analytics. Update data-goatcounter to
+     your site code (from goatcounter.com signup). Click events on download
+     links are tracked via data-goatcounter-click attributes set at render time. -->
+<script data-goatcounter="https://tmax.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 
 </body>
 </html>
