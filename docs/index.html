@@ -348,33 +348,17 @@
       font-family: monospace;
     }
 
-    /* Sticky top bar with a prominent Star-on-GitHub CTA. Visible from the
-       first pixel so drive-by visitors notice and click. */
-    .top-bar {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      display: flex;
+    /* Hero Star CTA - sits next to "View on GitHub" in the middle of the
+       hero so drive-by visitors see it without scrolling. */
+    .hero-actions {
+      display: inline-flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 10px 18px;
-      background: rgba(10, 10, 10, 0.85);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border-bottom: 1px solid var(--border);
+      justify-content: center;
+      gap: 14px;
+      margin-top: 4px;
+      flex-wrap: wrap;
     }
-    .top-bar-left {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--fg);
-      text-decoration: none;
-    }
-    .top-bar-left img { width: 22px; height: 22px; }
-    .top-bar-star {
+    .hero-star {
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -389,13 +373,13 @@
       transition: transform 0.12s, border-color 0.12s, background 0.12s;
       box-shadow: 0 1px 2px rgba(0,0,0,0.4);
     }
-    .top-bar-star:hover {
+    .hero-star:hover {
       border-color: var(--yellow);
       background: linear-gradient(180deg, #3a3a25 0%, #2a2a18 100%);
       transform: translateY(-1px);
     }
-    .top-bar-star .star-icon { color: var(--yellow); font-size: 14px; }
-    .top-bar-star-count {
+    .hero-star .star-icon { color: var(--yellow); font-size: 14px; }
+    .hero-star-count {
       padding-left: 8px;
       margin-left: 8px;
       border-left: 1px solid rgba(255,255,255,0.15);
@@ -407,18 +391,6 @@
   </style>
 </head>
 <body>
-
-<div class="top-bar">
-  <a class="top-bar-left" href="#top">
-    <img src="https://raw.githubusercontent.com/InbarR/tmax/main/assets/icon.png" alt="tmax">
-    <span>tmax</span>
-  </a>
-  <a class="top-bar-star" href="https://github.com/InbarR/tmax" target="_blank" rel="noopener" aria-label="Star tmax on GitHub">
-    <span class="star-icon">&#9733;</span>
-    <span>Star on GitHub</span>
-    <span class="top-bar-star-count" id="top-bar-star-count">&middot;</span>
-  </a>
-</div>
 
 <div style="text-align:center;padding:12px;color:var(--fg2);font-size:12px;border-bottom:1px solid var(--border);">&copy; Inbar Rotem 314</div>
 
@@ -434,7 +406,14 @@
     <a class="badge link" href="https://github.com/InbarR/tmax/stargazers" id="star-badge">&#10038; Stars</a>
     <a class="badge link" href="https://github.com/InbarR/tmax/releases/latest" id="version-badge">v1.5.1</a>
   </div>
-  <p style="font-size:14px;"><a href="https://github.com/InbarR/tmax">View on GitHub &rarr;</a></p>
+  <div class="hero-actions">
+    <a href="https://github.com/InbarR/tmax" style="font-size:14px;">View on GitHub &rarr;</a>
+    <a class="hero-star" href="https://github.com/InbarR/tmax" target="_blank" rel="noopener" aria-label="Star tmax on GitHub">
+      <span class="star-icon">&#9733;</span>
+      <span>Star on GitHub</span>
+      <span class="hero-star-count" id="hero-star-count">&middot;</span>
+    </a>
+  </div>
 </div>
 
 <div class="screenshot">
@@ -739,8 +718,8 @@ async function loadRelease() {
       const repoData = await repoRes.json();
       const stars = repoData.stargazers_count;
       document.getElementById('star-badge').textContent = `\u2733 ${stars} stars`;
-      const topCount = document.getElementById('top-bar-star-count');
-      if (topCount) topCount.textContent = String(stars);
+      const heroCount = document.getElementById('hero-star-count');
+      if (heroCount) heroCount.textContent = String(stars);
     } catch {}
 
   } catch (e) {
