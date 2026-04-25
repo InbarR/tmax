@@ -773,16 +773,19 @@ loadRelease().then(() => {
      links are tracked via data-goatcounter-click attributes set at render time. -->
 <script data-goatcounter="https://tmax.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 <script>
-  // Fire a universal 'dl' event on every download click, on top of the
-  // specific dl-primary-*/dl-other-*/dl-source events. This lets the stats
-  // page fetch a single aggregate counter (!dl) instead of summing every
-  // per-OS event name.
+  // Fire BOTH the per-platform event AND a universal 'dl' aggregate event on
+  // every download click. The download buttons are added to the DOM
+  // dynamically after the GoatCounter script has already scanned, so its
+  // built-in data-goatcounter-click auto-instrumentation can miss them.
+  // We dispatch manually to guarantee both granular and aggregate counters.
   document.addEventListener('click', (e) => {
     const a = e.target.closest('[data-goatcounter-click]');
     if (!a) return;
     const name = a.getAttribute('data-goatcounter-click') || '';
     if (!name.startsWith('dl-')) return;
     if (window.goatcounter && typeof window.goatcounter.count === 'function') {
+      const title = a.getAttribute('data-goatcounter-title') || name;
+      window.goatcounter.count({ path: name, title, event: true });
       window.goatcounter.count({ path: 'dl', title: 'Download click (any)', event: true });
     }
   }, true);

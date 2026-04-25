@@ -670,7 +670,7 @@ const PLATFORMS = [
   const ctrEl = document.getElementById('gcCtr');
   const [visits, clicks] = await Promise.all([
     fetchGcCounter('TOTAL'),
-    fetchGcCounter('!dl'),
+    fetchGcCounter('dl'),
   ]);
   if (visits == null) {
     visitsEl.textContent = 'n/a';
