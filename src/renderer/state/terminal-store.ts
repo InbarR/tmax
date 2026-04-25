@@ -669,6 +669,12 @@ interface TerminalStore {
 
 // Cached session extras (layouts, etc.) so saveSession doesn't need async load
 let _sessionExtras: Record<string, unknown> = {};
+
+// When the renderer process started. Used by the AI-session auto-linker to
+// reject sessions whose last activity predates this run - a session that was
+// already running before we opened isn't allowed to retroactively claim a
+// freshly-spawned terminal in the same cwd.
+const _appStartTime = Date.now();
 // Guard against early saveSession calls wiping persisted overrides before
 // restoreSession has populated the store. Flipped to true once restoreSession
 // has completed (or confirmed no saved session exists).
@@ -2321,9 +2327,14 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     // pwsh in C:\projects\tmax doesn't get retroactively attached to a
     // months-old session in the same folder.
     const normCwd = (p: string) => p.replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase();
+    // Two gates: (a) session must have ticked since tmax launched - blocks
+    // pre-existing sessions from claiming brand-new terminals; (b) the tick
+    // must be recent (10-minute window) - so even after a long uptime, only
+    // active sessions auto-link.
     const SESSION_FRESH_MS = 10 * 60_000;
     const sessionFresh =
       !!session.lastActivityTime &&
+      session.lastActivityTime > _appStartTime &&
       Date.now() - session.lastActivityTime < SESSION_FRESH_MS;
 
     let candidateId: string | null = null;
