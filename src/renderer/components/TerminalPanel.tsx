@@ -1059,11 +1059,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     const search = searchAddonRef.current;
     if (!search || !text) return;
     search.clearDecorations();
+    // Only style the active match. Setting matchBackground would highlight
+    // *every* occurrence in the buffer, which is overwhelming for short
+    // prompts like 'hi' or 'yes' that appear all over assistant output.
     const opts = {
       decorations: {
-        matchOverviewRuler: '#888',
         activeMatchColorOverviewRuler: '#fff',
-        matchBackground: '#585b70',
         activeMatchBackground: '#89b4fa',
       },
       caseSensitive: false,
