@@ -630,7 +630,7 @@ interface TerminalStore {
   searchCopilotSessions: (query: string) => Promise<void>;
   openCopilotSession: (sessionId: string) => Promise<void>;
   setCopilotSessions: (sessions: CopilotSessionSummary[]) => void;
-  updateTerminalTitleFromSession: (session: CopilotSessionSummary, sessionType?: 'copilot' | 'claude', canAutoLink?: boolean) => void;
+  updateTerminalTitleFromSession: (session: CopilotSessionSummary, sessionType?: 'copilot' | 'claude') => void;
   addCopilotSession: (session: CopilotSessionSummary) => void;
   updateCopilotSession: (session: CopilotSessionSummary) => void;
   removeCopilotSession: (sessionId: string) => void;
@@ -670,11 +670,6 @@ interface TerminalStore {
 // Cached session extras (layouts, etc.) so saveSession doesn't need async load
 let _sessionExtras: Record<string, unknown> = {};
 
-// When the renderer process started. Used by the AI-session auto-linker to
-// reject sessions whose last activity predates this run - a session that was
-// already running before we opened isn't allowed to retroactively claim a
-// freshly-spawned terminal in the same cwd.
-const _appStartTime = Date.now();
 // Guard against early saveSession calls wiping persisted overrides before
 // restoreSession has populated the store. Flipped to true once restoreSession
 // has completed (or confirmed no saved session exists).
@@ -2299,7 +2294,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set({ copilotSessions: sessions });
   },
 
-  updateTerminalTitleFromSession: (session: CopilotSessionSummary, _sessionType?: 'copilot' | 'claude', canAutoLink: boolean = false) => {
+  updateTerminalTitleFromSession: (session: CopilotSessionSummary, _sessionType?: 'copilot' | 'claude') => {
     if (!session.summary) return;
     const { terminals, focusedTerminalId } = get();
     const newTerminals = new Map(terminals);
@@ -2327,18 +2322,15 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     // pwsh in C:\projects\tmax doesn't get retroactively attached to a
     // months-old session in the same folder.
     const normCwd = (p: string) => p.replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase();
-    // Two gates: (a) session must have ticked since tmax launched - blocks
-    // pre-existing sessions from claiming brand-new terminals; (b) the tick
-    // must be recent (10-minute window) - so even after a long uptime, only
-    // active sessions auto-link.
-    const SESSION_FRESH_MS = 10 * 60_000;
-    const sessionFresh =
-      !!session.lastActivityTime &&
-      session.lastActivityTime > _appStartTime &&
-      Date.now() - session.lastActivityTime < SESSION_FRESH_MS;
+    // Auto-link gate: the session must currently be active. Status is
+    // 'idle' once nothing has happened for 30s, so an actively-running
+    // agent (in this window or another tmax instance) keeps a non-idle
+    // status and attaches to a matching-cwd terminal here. A long-quiet
+    // session can't poach a fresh pwsh you just opened.
+    const sessionActive = session.status !== 'idle';
 
     let candidateId: string | null = null;
-    if (canAutoLink && !alreadyLinked && session.cwd && sessionFresh) {
+    if (!alreadyLinked && session.cwd && sessionActive) {
       const sessionCwd = normCwd(session.cwd);
       const eligible: string[] = [];
       for (const [id, t] of terminals) {
@@ -2385,10 +2377,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set((s) => ({
       copilotSessions: [...s.copilotSessions.filter((x) => x.id !== session.id), session],
     }));
-    // Add events fire when tmax sees a session for the first time. Allow
-    // auto-link here, since this is the moment a freshly-spawned agent
-    // (e.g. ag.bat → copilot) creates its session file.
-    get().updateTerminalTitleFromSession(session, 'copilot', true);
+    get().updateTerminalTitleFromSession(session, 'copilot');
   },
 
   updateCopilotSession: (session: CopilotSessionSummary) => {
@@ -2396,10 +2385,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set((s) => ({
       copilotSessions: s.copilotSessions.map((x) => (x.id === session.id ? session : x)),
     }));
-    // No auto-link on updates - an already-known session ticking again is
-    // never a signal to claim a new terminal (it's already linked, or it
-    // belongs to another tmax window / a manual claude --resume).
-    get().updateTerminalTitleFromSession(session, 'copilot', false);
+    get().updateTerminalTitleFromSession(session, 'copilot');
     // Auto-reactivate only if session has a linked terminal in tmax
     const lifecycle = get().sessionLifecycleOverrides[session.id];
     if ((lifecycle === 'completed' || lifecycle === 'old') && oldSession) {
@@ -2446,7 +2432,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set((s) => ({
       claudeCodeSessions: [...s.claudeCodeSessions.filter((x) => x.id !== session.id), session],
     }));
-    get().updateTerminalTitleFromSession(session, 'claude', true);
+    get().updateTerminalTitleFromSession(session, 'claude');
   },
 
   updateClaudeCodeSession: (session: CopilotSessionSummary) => {
@@ -2454,7 +2440,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set((s) => ({
       claudeCodeSessions: s.claudeCodeSessions.map((x) => (x.id === session.id ? session : x)),
     }));
-    get().updateTerminalTitleFromSession(session, 'claude', false);
+    get().updateTerminalTitleFromSession(session, 'claude');
     // Auto-reactivate only if session has a linked terminal in tmax
     const lifecycle = get().sessionLifecycleOverrides[session.id];
     if ((lifecycle === 'completed' || lifecycle === 'old') && oldSession) {
