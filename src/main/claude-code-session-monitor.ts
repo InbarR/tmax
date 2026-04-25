@@ -88,14 +88,25 @@ export class ClaudeCodeSessionMonitor {
         const summary = this.loadSession(filePath);
 
         if (summary) {
-          const isNew = !this.sessions.has(summary.id);
+          const old = this.sessions.get(summary.id);
           currentIds.add(summary.id);
           this.sessions.set(summary.id, summary);
           this.filePaths.set(summary.id, filePath);
           summaries.push(summary);
 
-          if (isNew) {
+          if (!old) {
             this.callbacks.onSessionAdded?.(summary);
+          } else if (
+            old.status !== summary.status ||
+            old.messageCount !== summary.messageCount ||
+            old.toolCallCount !== summary.toolCallCount ||
+            old.summary !== summary.summary ||
+            old.latestPrompt !== summary.latestPrompt
+          ) {
+            // Chokidar's awaitWriteFinish can suppress 'change' events during
+            // long streaming turns (file never stable for 300ms), so this 10s
+            // fallback scan is often the only thing that ships updates.
+            this.callbacks.onSessionUpdated?.(summary);
           }
         }
       }

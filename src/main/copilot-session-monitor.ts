@@ -81,13 +81,22 @@ export class CopilotSessionMonitor {
       const session = this.loadSession(sessionId, sessionDir);
 
       if (session) {
-        const isNew = !this.sessions.has(sessionId);
+        const oldSession = this.sessions.get(sessionId);
         this.sessions.set(sessionId, session);
         const summary = this.toSummary(session);
         summaries.push(summary);
 
-        if (isNew) {
+        if (!oldSession) {
           this.callbacks.onSessionAdded?.(summary);
+        } else if (
+          oldSession.status !== session.status ||
+          oldSession.messageCount !== session.messageCount ||
+          oldSession.toolCallCount !== session.toolCallCount ||
+          oldSession.latestPrompt !== session.latestPrompt
+        ) {
+          // Mirror of refreshSession's diff-check so the 10s fallback scan
+          // actually notifies the renderer when chokidar misses a 'change'.
+          this.callbacks.onSessionUpdated?.(summary);
         }
       }
     }
