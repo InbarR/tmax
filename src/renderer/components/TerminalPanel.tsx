@@ -1044,13 +1044,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   }, []);
 
   // Click-to-jump on the last-prompt banner: search the terminal buffer for
-  // the prompt text and scroll/highlight it. Mirrors PromptsDialog.jumpToPrompt:
-  // try progressively shorter prefixes so wrapped or re-rendered prompts still
-  // find a match. Walks backward (findPrevious) since prompts live in scrollback.
-  // Caveat: TUI agents (Claude Code, Copilot CLI) repaint the user-prompt line
-  // many times during a turn - by the time you click, the original prompt
-  // characters are gone from xterm's buffer even though the .jsonl still
-  // remembers them. We surface that as a toast instead of failing silently.
+  // the prompt text and scroll/highlight it. We try progressively shorter
+  // prefixes (full -> 60 -> 30 -> 15 chars) because TUI redraws and line
+  // wrapping can break the longer matches even when a shorter prefix still
+  // identifies the spot uniquely.
+  //
+  // We deliberately walk every prefix regardless of return value: xterm's
+  // SearchAddon.findPrevious has been observed to apply decorations but
+  // return false on some calls, so the boolean isn't load-bearing here.
+  // Don't refocus the terminal afterwards - that scrolls back to the cursor
+  // and undoes the match scroll.
   const jumpToLatestPrompt = useCallback(() => {
     const text = (latestPrompt || '').trim();
     const search = searchAddonRef.current;
@@ -1065,25 +1068,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       },
       caseSensitive: false,
     };
-    const tryQuery = (q: string) => !!q && search.findPrevious(q, opts);
-    // Try several progressively-relaxed prefixes. A 30-char prefix usually
-    // still matches a unique point in the buffer even if the full prompt
-    // was wrapped, indented, or had leading TUI markup like '> '.
-    const found =
-      tryQuery(text.slice(0, 120)) ||
-      tryQuery(text.slice(0, 60)) ||
-      tryQuery(text.slice(0, 30)) ||
-      tryQuery(text.slice(0, 15));
-    if (!found) {
-      useTerminalStore.getState().addToast(
-        'Last prompt not in scrollback - TUI agents (Claude Code, Copilot CLI) repaint over their input, so the original characters are gone. Use the ⋯ button for the prompt history.',
-      );
-      return;
+    const queries = [
+      text.slice(0, 120),
+      text.slice(0, 60),
+      text.slice(0, 30),
+      text.slice(0, 15),
+    ];
+    // Use the first non-empty unique query that lands a match. We stop on the
+    // first success to avoid clobbering the active-match position.
+    const seen = new Set<string>();
+    for (const q of queries) {
+      if (!q || seen.has(q)) continue;
+      seen.add(q);
+      if (search.findPrevious(q, opts)) break;
     }
-    // Deliberately don't focus the terminal here. Calling term.focus()
-    // scrolls the viewport back to the cursor (i.e. the bottom of the
-    // buffer), undoing the search's scroll-to-match. The user can click
-    // the terminal themselves when they want to type.
   }, [latestPrompt]);
 
   const className = `terminal-panel${isFocused ? ' focused' : ''}`;
