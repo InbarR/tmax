@@ -56,7 +56,13 @@
 </div>
 
 <div class="summary">
-  <div class="stat-card"><div class="label">Landing Visits (unique)</div><div class="value" id="gcVisits">-</div><div class="label" style="margin-top:4px;text-transform:none;letter-spacing:0;" id="gcVisitsSub">GoatCounter · deduplicated by visitor</div></div>
+  <div class="stat-card"><div class="label">Windows installs</div><div class="value" id="installsWindows">-</div></div>
+  <div class="stat-card"><div class="label">macOS installs</div><div class="value" id="installsMacos">-</div></div>
+  <div class="stat-card"><div class="label">Linux installs</div><div class="value" id="installsLinux">-</div></div>
+</div>
+
+<div class="summary">
+  <div class="stat-card"><div class="label">Unique Visitors</div><div class="value" id="gcVisits">-</div><div class="label" style="margin-top:4px;text-transform:none;letter-spacing:0;" id="gcVisitsSub">GoatCounter</div></div>
   <div class="stat-card"><div class="label">Download Clicks</div><div class="value" id="gcClicks">-</div><div class="label" style="margin-top:4px;text-transform:none;letter-spacing:0;" id="gcClicksSub">All platforms, any variant</div></div>
   <div class="stat-card"><div class="label">Click-through Rate</div><div class="value" id="gcCtr">-</div><div class="label" style="margin-top:4px;text-transform:none;letter-spacing:0;">Clicks / Visits</div></div>
 </div>
@@ -721,17 +727,26 @@ async function load() {
   allData = releases;
 
   let totalUsers = 0, totalUpdates = 0;
+  const installsByOs = { windows: 0, macos: 0, linux: 0 };
   for (const r of releases) {
     for (const a of r.assets) {
       if (IS_META(a.name)) continue;
-      if (IS_UPDATE(a.name)) totalUpdates += a.download_count;
-      else totalUsers += a.download_count;
+      if (IS_UPDATE(a.name)) {
+        totalUpdates += a.download_count;
+      } else {
+        totalUsers += a.download_count;
+        const os = platformOf(a.name);
+        if (os in installsByOs) installsByOs[os] += a.download_count;
+      }
     }
   }
 
   document.getElementById('total').textContent = totalUsers.toLocaleString();
   document.getElementById('updates').textContent = totalUpdates.toLocaleString();
   document.getElementById('releases').textContent = releases.length;
+  document.getElementById('installsWindows').textContent = installsByOs.windows.toLocaleString();
+  document.getElementById('installsMacos').textContent = installsByOs.macos.toLocaleString();
+  document.getElementById('installsLinux').textContent = installsByOs.linux.toLocaleString();
 
   renderChart(releases);
   render();
