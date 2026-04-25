@@ -47,14 +47,15 @@ function formatFirstPromptSummary(raw: string): string {
 }
 
 /**
- * Strip Claude-Code internal XML wrappers (<command-*>, <local-command-*>,
- * etc.) together with their contents. Used to keep first-prompt summaries
- * readable.
+ * Strip Claude-Code's internal XML wrappers - command-message, command-name,
+ * local-command-stdout, local-command-caveat, task-summary, executive-summary,
+ * system-reminder, user-prompt-submit-hook, and the next one Anthropic adds.
+ * These show up as "user messages" in the .jsonl but they're agent metadata,
+ * not real user prompts. We strip any balanced tag pair so we don't have to
+ * keep a hand-maintained allowlist.
  */
 function stripCommandXml(s: string): string {
-  // Matches any tag whose name contains "command", e.g. command-message,
-  // command-name, command-args, local-command-caveat, local-command-stdout.
-  return s.replace(/<([a-zA-Z-]*command[a-zA-Z-]*)\b[^>]*>[\s\S]*?<\/\1>/g, '');
+  return s.replace(/<([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*>[\s\S]*?<\/\1>/g, '');
 }
 
 export interface ClaudeCodeParsedSession {
@@ -346,10 +347,22 @@ export function extractClaudeCodePrompts(filePath: string, limit = 20): string[]
       if (!line.trim()) continue;
       try {
         const o = JSON.parse(line);
-        if (o.type === 'user' && o.message?.content) {
-          const text = extractText(o.message.content);
-          if (text) prompts.push(text.slice(0, 300).replace(/\n/g, ' '));
-        }
+        if (o.type !== 'user' || !o.message?.content) continue;
+        const text = extractText(o.message.content);
+        if (!text) continue;
+        if (text.startsWith('[Request interrupted')) continue;
+        // Skip meta-only messages (entirely wrapped in command-message /
+        // task-summary / system-reminder / etc.) - those are agent state,
+        // not user prompts.
+        const stripped = stripCommandXml(text).trim();
+        if (!stripped) continue;
+        // Slash commands: surface as /name with the rest tacked on, same
+        // shape as the title summary path so the history reads cleanly.
+        const nameMatch = text.match(/<command-name>([^<]+)<\/command-name>/);
+        const display = nameMatch
+          ? `/${nameMatch[1].replace(/^\/+/, '')}${stripped ? ` — ${stripped}` : ''}`
+          : stripped;
+        prompts.push(display.slice(0, 300).replace(/\n/g, ' '));
       } catch { /* skip */ }
     }
     const result = prompts.slice(-limit);
