@@ -2293,9 +2293,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set({ copilotSessions: sessions });
   },
 
-  updateTerminalTitleFromSession: (session: CopilotSessionSummary, sessionType?: 'copilot' | 'claude') => {
+  updateTerminalTitleFromSession: (session: CopilotSessionSummary, _sessionType?: 'copilot' | 'claude') => {
     if (!session.summary) return;
-    const { terminals } = get();
+    const { terminals, focusedTerminalId } = get();
     const newTerminals = new Map(terminals);
     let changed = false;
 
@@ -2308,38 +2308,52 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       }
     }
 
+    // Auto-link: pick at most one unlinked terminal as the candidate for
+    // this session. We used to gate on a process-name match (looking for
+    // 'copilot' / 'claude' / 'cc' in the OSC-set title), but that misses
+    // wrappers like ag.bat, ghcp, claude --resume via npx, custom aliases,
+    // and anything else that doesn't broadcast its agent-ness through a
+    // terminal title. cwd is far more reliable: AI session files always
+    // record the cwd they were started from.
+    //
+    // The recency guard is the safety net: we only auto-link when the
+    // session has had activity in the last 10 minutes, so opening a fresh
+    // pwsh in C:\projects\tmax doesn't get retroactively attached to a
+    // months-old session in the same folder.
+    const normCwd = (p: string) => p.replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase();
+    const SESSION_FRESH_MS = 10 * 60_000;
+    const sessionFresh =
+      !!session.lastActivityTime &&
+      Date.now() - session.lastActivityTime < SESSION_FRESH_MS;
+
+    let candidateId: string | null = null;
+    if (!alreadyLinked && session.cwd && sessionFresh) {
+      const sessionCwd = normCwd(session.cwd);
+      const eligible: string[] = [];
+      for (const [id, t] of terminals) {
+        if (t.aiSessionId) continue;
+        if (t.mode !== 'tiled' && t.mode !== 'floating') continue;
+        if (normCwd(t.cwd) !== sessionCwd) continue;
+        eligible.push(id);
+      }
+      if (eligible.length > 0) {
+        // Prefer the focused terminal when it's eligible - that's almost
+        // always the one the user just typed `ag` / `claude` / `ghcp` in.
+        candidateId = focusedTerminalId && eligible.includes(focusedTerminalId)
+          ? focusedTerminalId
+          : eligible[0];
+      }
+    }
+
     for (const [id, inst] of terminals) {
       let current = inst;
-      // Match by explicit aiSessionId
       let matched = current.aiSessionId === session.id;
 
-      // Auto-link: if no terminal has this session yet, match by cwd + process name.
-      // Only link if the process type matches the session type to avoid cross-linking
-      // (e.g. copilot monitor linking a terminal running claude code).
-      if (!matched && !alreadyLinked && !current.aiSessionId && session.cwd) {
-        const proc = current.lastProcess.toLowerCase();
-        const titleLower = current.title.toLowerCase();
-        const isCopilotProc = (s: string) => s.includes('copilot');
-        const isClaudeProc = (s: string) => s.includes('claude') || s === 'cc';
-        let isMatchingProcess = false;
-        if (sessionType === 'copilot') {
-          isMatchingProcess = isCopilotProc(proc) || isCopilotProc(titleLower);
-        } else if (sessionType === 'claude') {
-          isMatchingProcess = isClaudeProc(proc) || isClaudeProc(titleLower);
-        } else {
-          // Fallback: match any AI process
-          const isAiAgent = (s: string) => isClaudeProc(s) || isCopilotProc(s);
-          isMatchingProcess = isAiAgent(proc) || isAiAgent(titleLower);
-        }
-        const normCwd = (p: string) => p.replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase();
-        if (isMatchingProcess && normCwd(current.cwd) === normCwd(session.cwd)) {
-          // Link this terminal to the session; preserve existing custom title
-          current = { ...current, aiSessionId: session.id, aiAutoTitle: !current.customTitle, customTitle: true };
-          newTerminals.set(id, current);
-          alreadyLinked = true;
-          matched = true;
-          changed = true;
-        }
+      if (!matched && id === candidateId) {
+        current = { ...current, aiSessionId: session.id, aiAutoTitle: !current.customTitle, customTitle: true };
+        newTerminals.set(id, current);
+        matched = true;
+        changed = true;
       }
 
       if (matched && current.aiAutoTitle) {
