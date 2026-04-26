@@ -445,6 +445,17 @@ const StatusBar: React.FC = () => {
             <button
               className="context-menu-item"
               onClick={() => {
+                useTerminalStore.getState().togglePromptSearch();
+                setOverflowOpen(false);
+              }}
+              title="Search every pane's AI prompt history and jump to the match"
+            >
+              🔍 Search prompts
+              <span className="context-menu-shortcut">Ctrl+Shift+Y</span>
+            </button>
+            <button
+              className="context-menu-item"
+              onClick={() => {
                 useTerminalStore.getState().toggleBroadcastMode();
                 setOverflowOpen(false);
               }}

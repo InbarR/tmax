@@ -507,6 +507,7 @@ interface TerminalStore {
   draggedTerminalId: TerminalId | null;
   nextZIndex: number;
   showSwitcher: boolean;
+  showPromptSearch: boolean;
   showPaneHints: boolean;
   showShortcuts: boolean;
   showCommandPalette: boolean;
@@ -586,6 +587,7 @@ interface TerminalStore {
   colorizeAllTabs: () => void;
   setDragging: (isDragging: boolean, terminalId?: TerminalId) => void;
   toggleSwitcher: () => void;
+  togglePromptSearch: () => void;
   togglePaneHints: () => void;
   toggleShortcuts: () => void;
   toggleCommandPalette: () => void;
@@ -695,6 +697,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   draggedTerminalId: null,
   nextZIndex: 100,
   showSwitcher: false,
+  showPromptSearch: false,
   showPaneHints: false,
   showShortcuts: false,
   showCommandPalette: false,
@@ -1557,6 +1560,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   toggleSwitcher: () => {
     set((state) => ({ showSwitcher: !state.showSwitcher }));
+  },
+
+  togglePromptSearch: () => {
+    set((state) => ({ showPromptSearch: !state.showPromptSearch }));
   },
 
   togglePaneHints: () => {

@@ -104,6 +104,7 @@ const DEFAULT_BINDINGS: Record<string, string> = {
   'Ctrl+Shift+C': 'copilotPanel',
   'Ctrl+Shift+T': 'worktreePanel',
   'Ctrl+Shift+K': 'showPrompts',
+  'Ctrl+Shift+Y': 'searchPrompts',
   'Ctrl+Shift+B': 'hideTabBar',
   'Ctrl+Shift+X': 'fileExplorer',
   'Ctrl+Shift+L': 'cycleGridColumns',
@@ -272,6 +273,9 @@ function dispatchAction(action: string): void {
       break;
     case 'showPrompts':
       if (focusedId) store.showPromptsForTerminal(focusedId);
+      break;
+    case 'searchPrompts':
+      store.togglePromptSearch();
       break;
     case 'hideTabBar':
       store.toggleHideTabTitles();

@@ -14,6 +14,7 @@ import TilingLayout from './components/TilingLayout';
 import FloatingLayer from './components/FloatingLayer';
 import DropZoneOverlay from './components/DropZoneOverlay';
 import TerminalSwitcher from './components/TerminalSwitcher';
+import PromptSearchDialog from './components/PromptSearchDialog';
 import PaneHintOverlay from './components/PaneHintOverlay';
 import StatusBar from './components/StatusBar';
 import ShortcutsHelp from './components/ShortcutsHelp';
@@ -253,6 +254,7 @@ const App: React.FC = () => {
         {!hideTabBar && tabBarPosition === 'bottom' && <TabBar />}
         <StatusBar />
         <TerminalSwitcher />
+        <PromptSearchDialog />
         <PaneHintOverlay />
         <CommandPalette />
         <Settings />
