@@ -196,7 +196,11 @@ function createWindow(): void {
   // Content-Security-Policy — prevent XSS, eval, and unauthorized remote resources
   const isDev = !!MAIN_WINDOW_VITE_DEV_SERVER_URL;
   const scriptSrc = isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self'";
-  const connectSrc = isDev ? "connect-src 'self' ws://localhost:* http://localhost:*" : "connect-src 'self'";
+  // Allow the renderer to fetch from GitHub's API (release notes modal, etc.).
+  // api.github.com is Microsoft-controlled and returns CORS-friendly responses.
+  const connectSrc = isDev
+    ? "connect-src 'self' https://api.github.com ws://localhost:* http://localhost:*"
+    : "connect-src 'self' https://api.github.com";
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {

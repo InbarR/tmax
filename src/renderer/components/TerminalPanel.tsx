@@ -203,6 +203,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   const [showDiag, setShowDiag] = useState(false);
   const [isRenamingPane, setIsRenamingPane] = useState(false);
   const [renameValue, setRenameValue] = useState('');
+  // Per-pane overflow menu (replaces the row of inline title-bar buttons).
+  // Stored as anchor coords so the menu renders fixed-positioned next to ⋯.
+  const [paneMenuPos, setPaneMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [, tickDiag] = useReducer((x: number) => x + 1, 0);
   const diagRef = useRef({ keystrokeCount: 0, lastKeystrokeTime: 0, outputEventCount: 0, lastOutputTime: 0, outputBytes: 0, focusEventCount: 0, lastFocusTime: 0 });
   const mainDiagRef = useRef<{ pid: number; writeCount: number; lastWriteTime: number; dataCount: number; lastDataTime: number; dataBytes: number } | null>(null);
@@ -1295,22 +1298,75 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
             >{title}</span>
           )}
           <button
-            className="terminal-diff-btn"
-            title="Open diff review"
-            onMouseDown={(e) => {
-              e.stopPropagation();
-              useTerminalStore.getState().openDiffReview(terminalId);
-            }}
-          >Diff</button>
-          <button
-            className="terminal-pane-dormant-btn"
-            title="Hide pane (dormant)"
+            className="terminal-pane-menu-btn"
+            title="Pane actions"
+            aria-label="Pane actions"
             onClick={(e) => {
               e.stopPropagation();
-              useTerminalStore.getState().moveToDormant(terminalId);
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              setPaneMenuPos({ x: r.right, y: r.bottom });
             }}
-          >&#128065;</button>
+          >&#x22EF;</button>
         </div>
+      )}
+      {paneMenuPos && (
+        <>
+          <div
+            className="pane-menu-backdrop"
+            onMouseDown={() => setPaneMenuPos(null)}
+            onContextMenu={(e) => { e.preventDefault(); setPaneMenuPos(null); }}
+          />
+          <div
+            className="context-menu"
+            style={{
+              position: 'fixed',
+              right: Math.max(4, window.innerWidth - paneMenuPos.x),
+              top: paneMenuPos.y + 4,
+              zIndex: 1000,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button className="context-menu-item" onClick={() => {
+              setPaneMenuPos(null);
+              useTerminalStore.getState().openDiffReview(terminalId);
+            }}>📊 Diff review</button>
+            <button className="context-menu-item" onClick={() => {
+              setPaneMenuPos(null);
+              setRenameValue(title || '');
+              setIsRenamingPane(true);
+            }}>✏️ Rename pane</button>
+            {aiSessionId && (
+              <button className="context-menu-item" onClick={() => {
+                setPaneMenuPos(null);
+                useTerminalStore.getState().showPromptsForTerminal(terminalId);
+              }}>💬 Show prompts</button>
+            )}
+            {aiSessionId && (
+              <button className="context-menu-item" onClick={() => {
+                setPaneMenuPos(null);
+                useTerminalStore.getState().showSessionSummary(aiSessionId);
+              }}>ℹ Session summary</button>
+            )}
+            <div className="context-menu-separator" />
+            <button className="context-menu-item" onClick={() => {
+              setPaneMenuPos(null);
+              useTerminalStore.getState().moveToFloat(terminalId);
+            }}>🪟 Float pane</button>
+            <button className="context-menu-item" onClick={() => {
+              setPaneMenuPos(null);
+              useTerminalStore.getState().detachTerminal(terminalId);
+            }}>↗ Detach to window</button>
+            <button className="context-menu-item" onClick={() => {
+              setPaneMenuPos(null);
+              useTerminalStore.getState().moveToDormant(terminalId);
+            }}>👁 Hide pane</button>
+            <div className="context-menu-separator" />
+            <button className="context-menu-item danger" onClick={() => {
+              setPaneMenuPos(null);
+              useTerminalStore.getState().closeTerminal(terminalId);
+            }}>🗑 Close pane</button>
+          </div>
+        </>
       )}
       {showDiag && <DiagnosticsOverlay terminalId={terminalId} diagRef={diagRef} mainDiag={mainDiagRef.current} logPath={logPathRef.current} onClose={() => setShowDiag(false)} />}
       <div ref={containerRef} className="xterm-container" />

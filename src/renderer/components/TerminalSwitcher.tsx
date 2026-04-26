@@ -89,7 +89,9 @@ const TerminalSwitcher: React.FC = () => {
               onMouseEnter={() => setSelectedIndex(index)}
             >
               <span className="switcher-title">{terminal.title}</span>
-              <span className="switcher-mode">{terminal.mode}</span>
+              {terminal.mode !== 'tiled' && (
+                <span className="switcher-mode">{terminal.mode}</span>
+              )}
             </div>
           ))}
           {filtered.length === 0 && (

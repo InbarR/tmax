@@ -714,6 +714,40 @@ html.transparency-active .input-dialog {
   color: var(--text-primary);
 }
 
+/* Per-pane overflow menu button - replaces the row of inline action
+   buttons that used to live on the title bar. Hover-revealed; opens a
+   dropdown via the standard .context-menu styling. */
+.terminal-pane-menu-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  padding: 1px 8px;
+  margin-left: auto;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  pointer-events: auto;
+}
+.terminal-panel:hover .terminal-pane-menu-btn,
+.terminal-panel.focused .terminal-pane-menu-btn {
+  opacity: 1;
+}
+.terminal-pane-menu-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-primary);
+}
+
+/* Invisible click-outside backdrop for the pane overflow menu. */
+.pane-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+}
+
 .terminal-diff-btn {
   flex-shrink: 0;
   background: transparent;
@@ -2953,6 +2987,7 @@ select.settings-input {
   color: var(--text-secondary);
   font-size: 11px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .file-preview-btn:hover {
@@ -2974,7 +3009,9 @@ select.settings-input {
   line-height: 1.6;
   color: var(--text-primary);
   background: var(--bg-primary);
-  white-space: pre;
+  /* pre-wrap: wrap long lines but still respect the file's own newlines */
+  white-space: pre-wrap;
+  word-break: break-word;
   tab-size: 2;
 }
 
@@ -3434,6 +3471,11 @@ select.settings-input {
   font-family: 'Cascadia Code', 'Consolas', monospace;
   font-size: 10px;
   opacity: 0.7;
+}
+
+.ai-session-pin {
+  font-size: 11px;
+  margin-right: 2px;
 }
 
 .ai-open-badge {

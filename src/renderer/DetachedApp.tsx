@@ -100,23 +100,27 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
       term.loadAddon(new WebLinksAddon(undefined, { urlRegex }));
 
       // Clipboard paste/copy handling
+      const pasteToPty = (text: string) => {
+        const payload = term.modes.bracketedPasteMode ? `\x1b[200~${text}\x1b[201~` : text;
+        window.terminalAPI.writePty(terminalId, payload);
+      };
       term.attachCustomKeyEventHandler((event) => {
         if (event.type !== 'keydown') return true;
         if ((event.ctrlKey || event.metaKey) && (event.key === 'v' || event.key === 'V')) {
           if (window.terminalAPI.clipboardHasImage()) {
             window.terminalAPI.clipboardSaveImage().then((filePath) => {
-              window.terminalAPI.writePty(terminalId, filePath);
+              pasteToPty(filePath);
             });
           } else {
             const html = window.terminalAPI.clipboardReadHTML();
             const linkUrl = extractLinkFromHtml(html);
             if (linkUrl) {
-              window.terminalAPI.writePty(terminalId, linkUrl);
+              pasteToPty(linkUrl);
             } else {
               navigator.clipboard
                 .readText()
                 .then((text) => {
-                  if (text) window.terminalAPI.writePty(terminalId, text);
+                  if (text) pasteToPty(text);
                 })
                 .catch(() => {});
             }
