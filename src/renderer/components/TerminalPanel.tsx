@@ -1181,6 +1181,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   // the most recent user message so you don't have to scroll up through a
   // long agent run to remember what was asked.
   const aiSessionId = useTerminalStore((s) => s.terminals.get(terminalId)?.aiSessionId);
+  const paneMode = useTerminalStore((s) => s.terminals.get(terminalId)?.mode);
   const latestPrompt = useTerminalStore((s) => {
     if (!aiSessionId) return undefined;
     const cc = s.claudeCodeSessions.find((x) => x.id === aiSessionId);
@@ -1400,8 +1401,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
             <div className="context-menu-separator" />
             <button className="context-menu-item" onClick={() => {
               setPaneMenuPos(null);
-              useTerminalStore.getState().moveToFloat(terminalId);
-            }}>🪟 Float pane</button>
+              const store = useTerminalStore.getState();
+              if (paneMode === 'floating') {
+                store.moveToTiling(terminalId);
+              } else {
+                store.moveToFloat(terminalId);
+              }
+            }}>{paneMode === 'floating' ? '↩️ Restore to grid' : '🪟 Float pane'}</button>
             <button className="context-menu-item" onClick={() => {
               setPaneMenuPos(null);
               useTerminalStore.getState().detachTerminal(terminalId);

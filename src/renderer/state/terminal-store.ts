@@ -1139,10 +1139,31 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     } else if (targetId && side) {
       newRoot = insertLeaf(layout.tilingRoot, targetId, id, side);
     } else {
-      // Default: insert to the right of the last leaf
-      const order = getLeafOrder(layout.tilingRoot);
-      const lastId = order[order.length - 1];
-      newRoot = insertLeaf(layout.tilingRoot, lastId, id, 'right');
+      // No explicit target: insert at the position implied by tab order.
+      // Match wakeFromDormant's logic so "Restore" lands the pane next to
+      // its tab-bar neighbours instead of always at the end.
+      const tabOrder = Array.from(terminals.keys());
+      const myIdx = tabOrder.indexOf(id);
+      const tiledLeaves = new Set(getLeafOrder(layout.tilingRoot));
+
+      let insertAfterId: TerminalId | null = null;
+      for (let i = myIdx - 1; i >= 0; i--) {
+        if (tiledLeaves.has(tabOrder[i])) { insertAfterId = tabOrder[i]; break; }
+      }
+      if (insertAfterId) {
+        newRoot = insertLeaf(layout.tilingRoot, insertAfterId, id, 'right');
+      } else {
+        let insertBeforeId: TerminalId | null = null;
+        for (let i = myIdx + 1; i < tabOrder.length; i++) {
+          if (tiledLeaves.has(tabOrder[i])) { insertBeforeId = tabOrder[i]; break; }
+        }
+        if (insertBeforeId) {
+          newRoot = insertLeaf(layout.tilingRoot, insertBeforeId, id, 'left');
+        } else {
+          const order = getLeafOrder(layout.tilingRoot);
+          newRoot = insertLeaf(layout.tilingRoot, order[order.length - 1], id, 'right');
+        }
+      }
     }
 
     const updatedInstance: TerminalInstance = { ...instance, mode: 'tiled' };
