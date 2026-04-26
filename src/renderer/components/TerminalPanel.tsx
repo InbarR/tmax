@@ -2,8 +2,10 @@ import React, { useEffect, useRef, useCallback, useState, useReducer } from 'rea
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
+import { SerializeAddon } from '@xterm/addon-serialize';
 import { useTerminalStore } from '../state/terminal-store';
 import { registerTerminal, unregisterTerminal } from '../terminal-registry';
+import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache';
 import { isMac } from '../utils/platform';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import type { AppConfig } from '../state/types';
@@ -194,6 +196,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
+  const serializeAddonRef = useRef<SerializeAddon | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResult, setSearchResult] = useState<{ resultIndex: number; resultCount: number } | null>(null);
@@ -300,9 +303,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
 
     const fitAddon = new FitAddon();
     const searchAddon = new SearchAddon();
+    const serializeAddon = new SerializeAddon();
 
     term.loadAddon(fitAddon);
     term.loadAddon(searchAddon);
+    term.loadAddon(serializeAddon);
 
     // Custom multi-line URL link provider (#62): xterm's built-in WebLinksAddon
     // stops detecting wrapped URLs past a certain row count, so very long links
@@ -578,6 +583,18 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
 
     terminalRef.current = term;
     fitAddonRef.current = fitAddon;
+    serializeAddonRef.current = serializeAddon;
+
+    // Restore buffer from a previous mount (e.g. after float↔dock move or
+    // grid rebuild). Write the serialized content before fitting so the
+    // buffer is populated at its original dimensions first.
+    const savedBuffer = popTerminalBuffer(terminalId);
+    if (savedBuffer) {
+      try {
+        term.resize(savedBuffer.cols, savedBuffer.rows);
+      } catch { /* container may constrain size */ }
+      term.write(savedBuffer.serialized);
+    }
 
     // Initial fit
     requestAnimationFrame(() => {
@@ -972,11 +989,24 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       wheelRecoveryEl?.removeEventListener('wheel', wheelRecoveryHandler);
       wheelRecoveryEl?.removeEventListener('dblclick', manualSyncHandler);
       titleDisposable.dispose();
+      // Flush any pending PTY data so serialize captures the latest content
+      if (pendingData) {
+        term.write(pendingData);
+        pendingData = '';
+      }
+      // Save buffer before dispose so a remount can restore it
+      try {
+        const serialized = serializeAddon.serialize();
+        saveTerminalBuffer(terminalId, serialized, term.cols, term.rows);
+      } catch (e) {
+        console.warn('[tmax] Failed to serialize terminal buffer:', terminalId, e);
+      }
       unregisterTerminal(terminalId);
       term.dispose();
       terminalRef.current = null;
       fitAddonRef.current = null;
       searchAddonRef.current = null;
+      serializeAddonRef.current = null;
     };
   }, [terminalId, handleFocus]); // eslint-disable-line react-hooks/exhaustive-deps
 

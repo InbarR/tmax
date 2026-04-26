@@ -19,6 +19,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-search": "^0.16.0",
+    "@xterm/addon-serialize": "^0.14.0",
     "@xterm/addon-web-links": "^0.11.0",
     "@xterm/xterm": "^5.5.0",
     "chokidar": "^3.6.0",
