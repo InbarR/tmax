@@ -238,16 +238,6 @@ const StatusBar: React.FC = () => {
     <>
       <div className="status-bar">
         <div className="status-section status-left">
-          {dormantTerminals.length > 0 && (
-            <button
-              className="status-mode-btn status-dormant-btn"
-              onClick={() => setDormantPopoverOpen((v) => !v)}
-              title={`${dormantTerminals.length} hidden pane${dormantTerminals.length === 1 ? '' : 's'} - click to wake`}
-              aria-expanded={dormantPopoverOpen}
-            >
-              &#128065; {dormantTerminals.length} hidden &#9662;
-            </button>
-          )}
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleHideTabTitles()}
@@ -295,6 +285,16 @@ const StatusBar: React.FC = () => {
           )}
         </div>
         <div className="status-section status-right">
+          {dormantTerminals.length > 0 && (
+            <button
+              className="status-mode-btn status-dormant-btn"
+              onClick={() => setDormantPopoverOpen((v) => !v)}
+              title={`${dormantTerminals.length} hidden pane${dormantTerminals.length === 1 ? '' : 's'} - click to wake`}
+              aria-expanded={dormantPopoverOpen}
+            >
+              &#128065; {dormantTerminals.length} hidden &#9662;
+            </button>
+          )}
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleViewMode()}
