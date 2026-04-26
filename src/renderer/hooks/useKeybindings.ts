@@ -76,7 +76,10 @@ const DEFAULT_BINDINGS: Record<string, string> = {
   'Ctrl+-': 'zoomOut',
   'Ctrl+0': 'zoomReset',
   'Ctrl+Shift+F': 'toggleFocusMode',
-  'Ctrl+Alt+F': 'toggleFloat',
+  // Ctrl+Alt+F clashes with the Windows Files app shortcut, so use
+  // Ctrl+Shift+U for "pop up / float" instead. Free across the app and
+  // the Electron defaults.
+  'Ctrl+Shift+U': 'toggleFloat',
   'Ctrl+Shift+A': 'toggleBroadcastMode',
   'Ctrl+Shift+H': 'toggleDormant',
   'Ctrl+Shift+E': 'equalizeLayout',

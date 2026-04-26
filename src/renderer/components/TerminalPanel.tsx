@@ -211,6 +211,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   const processStatusRef = useRef(processStatus);
   const [showDiag, setShowDiag] = useState(false);
   const [isRenamingPane, setIsRenamingPane] = useState(false);
+  const statusDotMouseDownDuringRename = useRef(false);
   const [renameValue, setRenameValue] = useState('');
   // Per-pane overflow menu (replaces the row of inline title-bar buttons).
   // Stored as anchor coords so the menu renders fixed-positioned next to ⋯.
@@ -251,9 +252,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // Skip when textarea already has DOM focus: a redundant term.focus()
     // in the same frame corrupts xterm's cursor-blink state and paints a
     // stale cursor (#41).
+    // Also skip when the pane's rename input has DOM focus - re-focusing
+    // xterm here would synchronously blur the rename input, flip
+    // isRenamingPane to false, and (because this fires from the root's
+    // onMouseDownCapture) flush a re-render before the target's mousedown
+    // handler runs. That breaks the "click status-dot while renaming
+    // doesn't close the pane" guard further down the title bar.
     try {
       const textarea = containerRef.current?.querySelector('textarea');
-      if (!textarea || document.activeElement !== textarea) {
+      const renameActive = containerRef.current?.parentElement
+        ?.querySelector('.pane-rename-input') === document.activeElement;
+      if (!renameActive && (!textarea || document.activeElement !== textarea)) {
         terminalRef.current?.focus();
       }
     } catch { /* terminal may be disposed */ }
@@ -1190,6 +1199,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   // long agent run to remember what was asked.
   const aiSessionId = useTerminalStore((s) => s.terminals.get(terminalId)?.aiSessionId);
   const paneMode = useTerminalStore((s) => s.terminals.get(terminalId)?.mode);
+  const paneCwd = useTerminalStore((s) => s.terminals.get(terminalId)?.cwd);
   const latestPrompt = useTerminalStore((s) => {
     if (!aiSessionId) return undefined;
     const cc = s.claudeCodeSessions.find((x) => x.id === aiSessionId);
@@ -1309,8 +1319,30 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         >
           <div
             className="status-dot-container"
+            onMouseDown={(e) => {
+              // The pane root has an onMouseDownCapture that re-focuses
+              // xterm; that fires *before* this handler in the capture
+              // phase, blurring the rename input which flips
+              // isRenamingPane=false synchronously. So the React state we
+              // see here is already stale. Use DOM presence of the rename
+              // input as the source of truth instead.
+              const parent = e.currentTarget.parentElement as HTMLElement | null;
+              const renameInput = parent?.querySelector('.pane-rename-input');
+              statusDotMouseDownDuringRename.current = !!renameInput;
+              // Also stop the parent's mousedown chain so the input doesn't
+              // lose focus to the xterm textarea: keeps the user in rename
+              // mode after the accidental click.
+              if (renameInput) {
+                e.stopPropagation();
+                e.preventDefault();
+              }
+            }}
             onClick={(e) => {
               e.stopPropagation();
+              if (statusDotMouseDownDuringRename.current) {
+                statusDotMouseDownDuringRename.current = false;
+                return;
+              }
               useTerminalStore.getState().closeTerminal(terminalId);
             }}
           >
@@ -1430,11 +1462,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               } else {
                 store.moveToFloat(terminalId);
               }
-            }}>{paneMode === 'floating' ? '↩️ Restore to grid' : '🪟 Float pane'}</button>
+            }}>
+              {paneMode === 'floating' ? '↩️ Restore to grid' : '🪟 Float pane'}
+              <span className="context-menu-shortcut">Ctrl+Shift+U</span>
+            </button>
             <button className="context-menu-item" onClick={() => {
               setPaneMenuPos(null);
               useTerminalStore.getState().detachTerminal(terminalId);
             }}>↗ Detach to window</button>
+            {paneCwd && (
+              <button className="context-menu-item" onClick={() => {
+                setPaneMenuPos(null);
+                window.terminalAPI.openPath(paneCwd);
+              }} title={paneCwd}>📂 Open folder in explorer</button>
+            )}
             <button className="context-menu-item" onClick={() => {
               setPaneMenuPos(null);
               useTerminalStore.getState().moveToDormant(terminalId);

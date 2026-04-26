@@ -153,7 +153,7 @@ const defaultConfig: AppConfig = {
     { action: 'splitVertical', key: 'Ctrl+Alt+ArrowDown' },
     { action: 'splitVerticalUp', key: 'Ctrl+Alt+ArrowUp' },
     { action: 'toggleFocusMode', key: 'Ctrl+Shift+F' },
-    { action: 'toggleFloat', key: 'Ctrl+Alt+F' },
+    { action: 'toggleFloat', key: 'Ctrl+Shift+U' },
     { action: 'resizeUp', key: 'Ctrl+Shift+Alt+ArrowUp' },
     { action: 'resizeDown', key: 'Ctrl+Shift+Alt+ArrowDown' },
     { action: 'resizeLeft', key: 'Ctrl+Shift+Alt+ArrowLeft' },

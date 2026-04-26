@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { launchTmax } from './fixtures/launch';
 
-// Pin Ctrl+Alt+F as the toggleFloat shortcut. User asked for a binding
+// Pin Ctrl+Shift+U as the toggleFloat shortcut. User asked for a binding
 // that mirrors Ctrl+Shift+F (focus mode) - press once to float the
 // focused pane, press again to dock it back.
 
-test('Ctrl+Alt+F floats the focused pane; pressing again restores it to the tile tree', async () => {
+test('Ctrl+Shift+U floats the focused pane; pressing again restores it to the tile tree', async () => {
   const { window, close } = await launchTmax();
   try {
     await window.waitForSelector('.terminal-panel', { timeout: 15_000 });
@@ -22,7 +22,7 @@ test('Ctrl+Alt+F floats the focused pane; pressing again restores it to the tile
     }, id);
     expect(initialMode).toBe('tiled');
 
-    await window.keyboard.press('Control+Alt+f');
+    await window.keyboard.press('Control+Shift+u');
     await window.waitForTimeout(300);
 
     const afterFirstPress = await window.evaluate((tid) => {
@@ -35,7 +35,7 @@ test('Ctrl+Alt+F floats the focused pane; pressing again restores it to the tile
     expect(afterFirstPress.mode).toBe('floating');
     expect(afterFirstPress.floating).toContain(id);
 
-    await window.keyboard.press('Control+Alt+f');
+    await window.keyboard.press('Control+Shift+u');
     await window.waitForTimeout(300);
 
     const afterSecondPress = await window.evaluate((tid) => {
