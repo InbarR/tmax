@@ -182,10 +182,9 @@ const StatusBar: React.FC = () => {
   const hasAnyColor = useTerminalStore((s) => s.autoColorTabs);
   const hideTabBar = useTerminalStore((s) => s.hideTabTitles);
   const focused = focusedId ? terminals.get(focusedId) : null;
-  // When the focused pane is an AI session waiting for user input, surface
-  // a quiet Ctrl+U hint - Claude Code / Copilot CLI eat Ctrl+C as a turn
-  // interrupt, but Ctrl+U cleanly clears the input line. Hint disappears
-  // once the agent goes thinking/idle so the footer doesn't keep yelling.
+  // Rotating tips in the status bar. Cycle through ~20 short hints so users
+  // discover features without us dumping a help screen on them. Tips marked
+  // ai:true only appear when the focused pane is linked to an AI session.
   const focusedAiSession = useTerminalStore((s) => {
     if (!focused?.aiSessionId) return null;
     return (
@@ -194,9 +193,43 @@ const StatusBar: React.FC = () => {
       null
     );
   });
-  const showCtrlUHint =
-    !!focusedAiSession &&
-    (focusedAiSession.status === 'waitingForUser' || focusedAiSession.status === 'idle');
+  const TIPS: { text: string; ai?: boolean }[] = React.useMemo(() => [
+    { text: 'Ctrl+U clears the input line in Claude Code / Copilot CLI (Ctrl+C interrupts the agent).', ai: true },
+    { text: 'Press F5 to send "continue" to the focused AI session.', ai: true },
+    { text: 'Click the prompt text on the banner to jump to it in the scrollback.', ai: true },
+    { text: 'Click the colored dot on the banner for a story-style session summary.', ai: true },
+    { text: 'Right-click an AI session in the sidebar → 📖 View summary.', ai: true },
+    { text: 'Pin AI sessions to the top with the 📌 button or right-click menu.', ai: true },
+    { text: 'Ctrl+Shift+K opens the prompts history for the focused pane.' },
+    { text: 'Ctrl+Shift+G jumps to a terminal by name.' },
+    { text: 'Ctrl+Shift+J shows pane hints — press a letter to jump to that pane.' },
+    { text: 'Ctrl+T / Ctrl+W open and close terminals.' },
+    { text: 'Ctrl+Shift+A toggles broadcast — typing goes to every tiled pane.' },
+    { text: 'Ctrl+Shift+B hides the tab bar to save vertical space.' },
+    { text: 'Ctrl+Shift+F cycles view modes: split / focus / grid.' },
+    { text: 'Ctrl+Shift+L cycles grid column count.' },
+    { text: 'Ctrl + mouse wheel zooms the focused terminal.' },
+    { text: 'Double-click a pane title to rename it.' },
+    { text: 'Hover a pane title → ⋯ menu has Float, Detach, Hide, Diff and more.' },
+    { text: 'Drag a pane title onto another pane to swap, or to an edge to split.' },
+    { text: 'Paste a URL — tmax unwraps Outlook safelinks automatically.' },
+    { text: 'Click any row of a multi-line URL to open the full link.' },
+    { text: 'Hidden a pane and lost the tab bar? The 👁 indicator on the left brings them back.' },
+  ], []);
+  const eligibleTips = React.useMemo(
+    () => TIPS.filter((t) => !t.ai || !!focusedAiSession),
+    [TIPS, focusedAiSession],
+  );
+  const [tipIndex, setTipIndex] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTipIndex((i) => i + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  // Reset cycle when the eligible set changes (focusing AI vs non-AI flips
+  // which tips are valid). Without this we could land on an AI-only tip
+  // right after focusing a non-AI pane and have to wait 30s for it to roll.
+  useEffect(() => { setTipIndex(0); }, [eligibleTips.length, !!focusedAiSession]);
+  const currentTip = eligibleTips.length > 0 ? eligibleTips[tipIndex % eligibleTips.length] : null;
   const totalCount = terminals.size;
   const tiledCount = layout.tilingRoot ? getLeafOrder(layout.tilingRoot).length : 0;
   const floatingCount = layout.floatingPanels.length;
@@ -276,12 +309,12 @@ const StatusBar: React.FC = () => {
               &#128193; {focused.cwd}
             </span>
           )}
-          {showCtrlUHint && (
+          {currentTip && (
             <span
-              className="status-dim status-ctrl-u-hint"
-              title="In Claude Code / Copilot CLI, Ctrl+U clears the input line. Ctrl+C interrupts the agent's current turn instead - use Ctrl+U if you just want to clear what you typed."
+              className="status-dim status-tip"
+              title={currentTip.text}
             >
-              {'  '}Ctrl+U: clear input
+              {'  '}💡 {currentTip.text}
             </span>
           )}
         </div>

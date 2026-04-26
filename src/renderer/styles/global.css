@@ -1160,6 +1160,19 @@ html.transparency-active .input-dialog {
   cursor: help;
 }
 
+/* Rotating discoverability tip. Single line, italic, dim - quietly cycles
+   through ~20 keyboard / UI hints every 30s so users learn features they
+   wouldn't find by reading docs. */
+.status-tip {
+  margin-left: 16px;
+  font-style: italic;
+  cursor: help;
+  max-width: 540px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Hidden-panes indicator + popover. Surfaces dormant terminals when the
    tab bar is hidden, so they're never unreachable. */
 .status-dormant-btn {
