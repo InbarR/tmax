@@ -170,6 +170,9 @@ const StatusBar: React.FC = () => {
     return out;
   }, [terminals]);
   const [dormantPopoverOpen, setDormantPopoverOpen] = useState(false);
+  // Anchor for the dormant popover - so it opens directly above the
+  // 👁 hidden button no matter where in the footer the button sits.
+  const [dormantPopoverAnchor, setDormantPopoverAnchor] = useState<{ right: number; bottom: number } | null>(null);
   // Overflow menu for low-traffic footer items (Colors, Logs, Report).
   // Keeps the status bar from growing every time we add a new tool.
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -288,7 +291,22 @@ const StatusBar: React.FC = () => {
           {dormantTerminals.length > 0 && (
             <button
               className="status-mode-btn status-dormant-btn"
-              onClick={() => setDormantPopoverOpen((v) => !v)}
+              onClick={(e) => {
+                if (dormantPopoverOpen) {
+                  setDormantPopoverOpen(false);
+                  return;
+                }
+                const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                // Anchor the popover so its right edge aligns with the
+                // button's right edge and its bottom sits just above the
+                // button. Stays glued to the button no matter where in the
+                // footer the button is laid out.
+                setDormantPopoverAnchor({
+                  right: window.innerWidth - r.right,
+                  bottom: window.innerHeight - r.top + 4,
+                });
+                setDormantPopoverOpen(true);
+              }}
               title={`${dormantTerminals.length} hidden pane${dormantTerminals.length === 1 ? '' : 's'} - click to wake`}
               aria-expanded={dormantPopoverOpen}
             >
@@ -360,7 +378,18 @@ const StatusBar: React.FC = () => {
       {dormantPopoverOpen && (
         <>
           <div className="dormant-popover-backdrop" onClick={() => setDormantPopoverOpen(false)} />
-          <div className="dormant-popover" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="dormant-popover"
+            onClick={(e) => e.stopPropagation()}
+            // Override the CSS default (bottom-left of viewport) with the
+            // button's actual position so the popover sticks to the
+            // 👁 hidden button.
+            style={dormantPopoverAnchor ? {
+              left: 'auto',
+              bottom: dormantPopoverAnchor.bottom,
+              right: dormantPopoverAnchor.right,
+            } : undefined}
+          >
             <div className="dormant-popover-header">
               Hidden panes ({dormantTerminals.length}) - click to wake
             </div>
