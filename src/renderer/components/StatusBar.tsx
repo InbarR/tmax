@@ -166,6 +166,21 @@ const StatusBar: React.FC = () => {
   const hasAnyColor = useTerminalStore((s) => s.autoColorTabs);
   const hideTabBar = useTerminalStore((s) => s.hideTabTitles);
   const focused = focusedId ? terminals.get(focusedId) : null;
+  // When the focused pane is an AI session waiting for user input, surface
+  // a quiet Ctrl+U hint - Claude Code / Copilot CLI eat Ctrl+C as a turn
+  // interrupt, but Ctrl+U cleanly clears the input line. Hint disappears
+  // once the agent goes thinking/idle so the footer doesn't keep yelling.
+  const focusedAiSession = useTerminalStore((s) => {
+    if (!focused?.aiSessionId) return null;
+    return (
+      s.claudeCodeSessions.find((x) => x.id === focused.aiSessionId) ||
+      s.copilotSessions.find((x) => x.id === focused.aiSessionId) ||
+      null
+    );
+  });
+  const showCtrlUHint =
+    !!focusedAiSession &&
+    (focusedAiSession.status === 'waitingForUser' || focusedAiSession.status === 'idle');
   const totalCount = terminals.size;
   const tiledCount = layout.tilingRoot ? getLeafOrder(layout.tilingRoot).length : 0;
   const floatingCount = layout.floatingPanels.length;
@@ -233,6 +248,14 @@ const StatusBar: React.FC = () => {
               title="Open folder"
             >
               &#128193; {focused.cwd}
+            </span>
+          )}
+          {showCtrlUHint && (
+            <span
+              className="status-dim status-ctrl-u-hint"
+              title="In Claude Code / Copilot CLI, Ctrl+U clears the input line. Ctrl+C interrupts the agent's current turn instead - use Ctrl+U if you just want to clear what you typed."
+            >
+              {'  '}Ctrl+U: clear input
             </span>
           )}
         </div>

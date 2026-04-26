@@ -1122,6 +1122,15 @@ html.transparency-active .input-dialog {
   pointer-events: auto;
 }
 
+/* Quiet contextual hint in the status bar when the focused pane is an AI
+   session waiting for input. Reminds users that Ctrl+U clears the input
+   line - Ctrl+C is intercepted by Ink-based CLIs as an interrupt. */
+.status-ctrl-u-hint {
+  margin-left: 16px;
+  font-style: italic;
+  cursor: help;
+}
+
 /* ===== Pane Drop Zones (inside each pane) ===== */
 .pane-drop-zones-container {
   position: absolute;

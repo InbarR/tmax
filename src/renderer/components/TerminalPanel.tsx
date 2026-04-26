@@ -5,6 +5,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { useTerminalStore } from '../state/terminal-store';
 import { registerTerminal, unregisterTerminal } from '../terminal-registry';
 import { isMac } from '../utils/platform';
+import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import type { AppConfig } from '../state/types';
 import '@xterm/xterm/css/xterm.css';
 
@@ -585,6 +586,37 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       }
     });
 
+    // Auto-recovery for the "wheel does nothing" failure mode. xterm's
+    // viewport scrollArea occasionally desyncs from the buffer (after pane
+    // moves, focus-mode toggles, etc.) so wheel events fire but the
+    // viewport's scrollTop never moves. Catch that here and re-sync; the
+    // next wheel will work.
+    const wheelRecoveryHandler = (e: WheelEvent) => {
+      const viewport = containerRef.current?.querySelector('.xterm-viewport') as HTMLElement | null;
+      if (!viewport) return;
+      const before = viewport.scrollTop;
+      requestAnimationFrame(() => {
+        if (viewport.scrollTop === before) {
+          syncViewportScrollArea(term);
+        }
+      });
+      // Don't preventDefault - let xterm handle its own wheel logic too.
+      void e;
+    };
+    // Manual escape hatch: double-click the right edge (where the scrollbar
+    // would be) forces a sync. Useful when the auto-recovery hasn't yet
+    // kicked in - the user can manually refresh the scroll area.
+    const manualSyncHandler = (e: MouseEvent) => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      // Only fire if the dblclick was within ~16px of the right edge.
+      if (e.clientX < rect.right - 18) return;
+      try { syncViewportScrollArea(term); } catch { /* ignore */ }
+    };
+    const wheelRecoveryEl = containerRef.current;
+    wheelRecoveryEl?.addEventListener('wheel', wheelRecoveryHandler, { passive: true });
+    wheelRecoveryEl?.addEventListener('dblclick', manualSyncHandler);
+
     // Write data to PTY when user types. When broadcast mode is on, the same
     // bytes are sent to every tiled pane (tmux synchronize-panes style).
     const dataDisposable = term.onData((data) => {
@@ -934,6 +966,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       containerEl.removeEventListener('contextmenu', handleContextMenu, true);
       containerEl.removeEventListener('mousedown', handleRightMouseButton, true);
       containerEl.removeEventListener('mouseup', handleRightMouseButton, true);
+      wheelRecoveryEl?.removeEventListener('wheel', wheelRecoveryHandler);
+      wheelRecoveryEl?.removeEventListener('dblclick', manualSyncHandler);
       titleDisposable.dispose();
       unregisterTerminal(terminalId);
       term.dispose();
@@ -1142,49 +1176,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     terminalRef.current?.focus();
   }, []);
 
-  // Click-to-jump on the last-prompt banner: search the terminal buffer for
-  // the prompt text and scroll/highlight it. We try progressively shorter
-  // prefixes (full -> 60 -> 30 -> 15 chars) because TUI redraws and line
-  // wrapping can break the longer matches even when a shorter prefix still
-  // identifies the spot uniquely.
-  //
-  // We deliberately walk every prefix regardless of return value: xterm's
-  // SearchAddon.findPrevious has been observed to apply decorations but
-  // return false on some calls, so the boolean isn't load-bearing here.
-  // Don't refocus the terminal afterwards - that scrolls back to the cursor
-  // and undoes the match scroll.
   const jumpToLatestPrompt = useCallback(() => {
     const text = (latestPrompt || '').trim();
     const search = searchAddonRef.current;
-    if (!search || !text) return;
-    search.clearDecorations();
-    // Only style the active match. Setting matchBackground would highlight
-    // *every* occurrence in the buffer, which is overwhelming for short
-    // prompts like 'hi' or 'yes' that appear all over assistant output.
-    // xterm's ISearchOptions wants matchBackground+matchOverviewRuler too,
-    // but those decorate every occurrence in the buffer - bad UX for short
-    // prompts. Cast to any so we can supply only the active-match fields.
-    const opts = {
-      decorations: {
-        activeMatchColorOverviewRuler: '#fff',
-        activeMatchBackground: '#89b4fa',
-      },
-      caseSensitive: false,
-    } as any;
-    const queries = [
-      text.slice(0, 120),
-      text.slice(0, 60),
-      text.slice(0, 30),
-      text.slice(0, 15),
-    ];
-    // Use the first non-empty unique query that lands a match. We stop on the
-    // first success to avoid clobbering the active-match position.
-    const seen = new Set<string>();
-    for (const q of queries) {
-      if (!q || seen.has(q)) continue;
-      seen.add(q);
-      if (search.findPrevious(q, opts)) break;
-    }
+    const term = terminalRef.current;
+    if (!search || !term || !text) return;
+    runJumpToPromptSearch(search, term, text);
   }, [latestPrompt]);
 
   const className = `terminal-panel${isFocused ? ' focused' : ''}`;
