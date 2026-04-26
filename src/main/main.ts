@@ -250,6 +250,15 @@ function createWindow(): void {
         mainWindow!.webContents.setZoomLevel(0);
       }
     }
+    // Re-bind DevTools - the default Ctrl+Shift+I path goes through the
+    // application menu, which we strip via Menu.setApplicationMenu(null).
+    // Without this, there's no way to open the inspector at all.
+    if (primaryMod && input.shift && !input.alt && (input.key === 'I' || input.key === 'i')) {
+      mainWindow!.webContents.toggleDevTools();
+    }
+    if (input.key === 'F12' && !primaryMod && !input.shift && !input.alt) {
+      mainWindow!.webContents.toggleDevTools();
+    }
   });
 
   mainWindow.on('closed', () => {

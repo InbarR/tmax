@@ -1352,7 +1352,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
           >&#x22EF;</button>
         </div>
       )}
-      {paneMenuPos && (
+      {paneMenuPos && ReactDOM.createPortal(
+        // Portal to body so the menu's `position: fixed` is resolved against
+        // the viewport rather than the panel. `.terminal-panel` has
+        // `contain: layout style` (it scopes layout/paint for terminal
+        // updates), which makes it a containing block for fixed descendants
+        // - so without the portal the menu lands at panel-relative coords
+        // and can end up off-screen in multi-pane layouts.
         <>
           <div
             className="pane-menu-backdrop"
@@ -1410,7 +1416,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
               useTerminalStore.getState().closeTerminal(terminalId);
             }}>🗑 Close pane</button>
           </div>
-        </>
+        </>,
+        document.body,
       )}
       {showDiag && <DiagnosticsOverlay terminalId={terminalId} diagRef={diagRef} mainDiag={mainDiagRef.current} logPath={logPathRef.current} onClose={() => setShowDiag(false)} />}
       <div ref={containerRef} className="xterm-container" />
