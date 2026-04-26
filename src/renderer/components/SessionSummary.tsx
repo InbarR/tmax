@@ -39,7 +39,9 @@ function turnsPhrase(n: number): string {
   if (n === 2) return 'a couple of messages';
   if (n < 6) return `${n} messages`;
   if (n < 15) return `${n} messages back and forth`;
-  return `${n} exchanges so far`;
+  if (n < 50) return `${n} exchanges so far`;
+  if (n < 200) return 'a long conversation - dozens of exchanges';
+  return 'a very long conversation';
 }
 
 const STATUS_PHRASING: Record<CopilotSessionStatus, string> = {

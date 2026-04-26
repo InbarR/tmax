@@ -1242,12 +1242,7 @@ html.transparency-active .input-dialog {
   line-height: 1.55;
   color: var(--text-primary);
 }
-.session-summary-body p {
-  margin: 0 0 10px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-}
+.session-summary-body p { margin: 0 0 10px; }
 .session-summary-body p:last-child { margin-bottom: 0; }
 .session-summary-body em { color: var(--text-secondary); font-style: italic; }
 .session-summary-body strong { color: var(--text-primary); }
@@ -1257,7 +1252,9 @@ html.transparency-active .input-dialog {
   height: 8px;
   border-radius: 50%;
   margin-right: 8px;
-  flex-shrink: 0;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
 }
 
 /* ===== Pane Drop Zones (inside each pane) ===== */
