@@ -687,7 +687,7 @@ async function loadRelease() {
     // Render full changelog from CHANGELOG.md (falls back to release body)
     const changelogEl = document.getElementById('changelog-content');
     try {
-      const clRes = await fetch(`https://raw.githubusercontent.com/${REPO}/main/CHANGELOG.md`);
+      const clRes = await fetch(`https://raw.githubusercontent.com/${REPO}/main/CHANGELOG.md`, { cache: 'no-cache' });
       if (clRes.ok) {
         const clText = await clRes.text();
         changelogEl.innerHTML = renderMarkdown(clText.replace(/^# Changelog\s*\n/, ''));
