@@ -238,6 +238,16 @@ const StatusBar: React.FC = () => {
     <>
       <div className="status-bar">
         <div className="status-section status-left">
+          {dormantTerminals.length > 0 && (
+            <button
+              className="status-mode-btn status-dormant-btn"
+              onClick={() => setDormantPopoverOpen((v) => !v)}
+              title={`${dormantTerminals.length} hidden pane${dormantTerminals.length === 1 ? '' : 's'} - click to wake`}
+              aria-expanded={dormantPopoverOpen}
+            >
+              &#128065; {dormantTerminals.length} hidden &#9662;
+            </button>
+          )}
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleHideTabTitles()}
@@ -273,48 +283,14 @@ const StatusBar: React.FC = () => {
           >
             &#127793; Worktrees
           </button>
-          {dormantTerminals.length > 0 && (
-            <button
-              className="status-mode-btn status-dormant-btn"
-              onClick={() => setDormantPopoverOpen((v) => !v)}
-              title={`${dormantTerminals.length} hidden pane${dormantTerminals.length === 1 ? '' : 's'} - click to wake`}
-              aria-expanded={dormantPopoverOpen}
-            >
-              &#128065; {dormantTerminals.length} hidden &#9662;
-            </button>
-          )}
-          {focused ? (
-            <>
-              <span className="status-indicator" />
-              <span className="status-label">{focused.title}</span>
-              <span className="status-dim">
-                {focused.mode === 'floating' ? '(floating)' : ''}
-              </span>
-            </>
-          ) : (
-            <span className="status-dim">No terminal focused</span>
-          )}
         </div>
         <div className="status-section status-center">
-          {focused && (
-            <span
-              className="status-cwd"
-              onClick={() => {
-                if (focused.cwd) {
-                  window.terminalAPI.openPath(focused.cwd);
-                }
-              }}
-              title="Open folder"
-            >
-              &#128193; {focused.cwd}
-            </span>
-          )}
           {currentTip && (
             <span
               className="status-dim status-tip"
               title={currentTip.text}
             >
-              {'  '}💡 {currentTip.text}
+              💡 {currentTip.text}
             </span>
           )}
         </div>
@@ -326,13 +302,15 @@ const StatusBar: React.FC = () => {
           >
             &#9638; {viewMode === 'focus' ? 'Focus' : viewMode === 'grid' ? (gridColumns ? `Grid ${gridColumns}col` : 'Grid') : 'Split'}
           </button>
-          <button
-            className={`status-mode-btn${broadcastMode ? ' status-broadcast-active' : ''}`}
-            onClick={() => useTerminalStore.getState().toggleBroadcastMode()}
-            title="Broadcast typing to all panes (Ctrl+Shift+A)"
-          >
-            &#128227; Broadcast{broadcastMode ? ' ON' : ''}
-          </button>
+          {broadcastMode && (
+            <button
+              className="status-mode-btn status-broadcast-active"
+              onClick={() => useTerminalStore.getState().toggleBroadcastMode()}
+              title="Broadcast is on - click to disable (Ctrl+Shift+A)"
+            >
+              &#128227; Broadcast ON
+            </button>
+          )}
           <span className="status-dim">
             {totalCount} terminal{totalCount !== 1 ? 's' : ''}
             {floatingCount > 0 ? ` (${tiledCount} tiled, ${floatingCount} floating)` : ''}
@@ -406,34 +384,60 @@ const StatusBar: React.FC = () => {
       {overflowOpen && (
         <>
           <div className="dormant-popover-backdrop" onClick={() => setOverflowOpen(false)} />
-          <div className="status-overflow-popover" onClick={(e) => e.stopPropagation()}>
+          <div className="context-menu status-overflow-menu" onClick={(e) => e.stopPropagation()}>
             <button
-              className="dormant-popover-item"
+              className="context-menu-item"
+              onClick={() => {
+                useTerminalStore.getState().toggleBroadcastMode();
+                setOverflowOpen(false);
+              }}
+              title="Type into every tiled pane at once"
+            >
+              📢 Broadcast typing{broadcastMode ? ' ✓' : ''}
+              <span className="context-menu-shortcut">Ctrl+Shift+A</span>
+            </button>
+            <button
+              className="context-menu-item"
               onClick={() => {
                 useTerminalStore.getState().colorizeAllTabs();
                 setOverflowOpen(false);
               }}
+              title="Auto-assign a color to every tab based on its cwd"
             >
-              <span className="dormant-popover-title">🎨 {hasAnyColor ? 'Tab colors ✓' : 'Tab colors'}</span>
-              <span className="dormant-popover-cwd">Ctrl+Shift+O</span>
+              🎨 Tab colors{hasAnyColor ? ' ✓' : ''}
+              <span className="context-menu-shortcut">Ctrl+Shift+O</span>
+            </button>
+            <div className="context-menu-separator" />
+            <button
+              className="context-menu-item"
+              onClick={() => {
+                setOverflowOpen(false);
+                openChangelog();
+              }}
+              title="See what changed in this version"
+            >
+              📜 Changelog
+              <span className="context-menu-shortcut">v{appVersion}</span>
             </button>
             <button
-              className="dormant-popover-item"
+              className="context-menu-item"
               onClick={() => {
                 window.terminalAPI.getDiagLogPath().then((p: string) => (window.terminalAPI as any).openPath(p));
                 setOverflowOpen(false);
               }}
+              title="Open the renderer/main diagnostics log file"
             >
-              <span className="dormant-popover-title">📋 Open diagnostics log</span>
+              📋 Open diagnostics log
             </button>
             <button
-              className="dormant-popover-item"
+              className="context-menu-item"
               onClick={() => {
                 setShowReportModal(true);
                 setOverflowOpen(false);
               }}
+              title="File a GitHub issue with version + platform pre-filled"
             >
-              <span className="dormant-popover-title">⚠️ Report an issue</span>
+              ⚠️ Report an issue
             </button>
           </div>
         </>

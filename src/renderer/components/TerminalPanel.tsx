@@ -1479,7 +1479,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             <button className="context-menu-item" onClick={() => {
               setPaneMenuPos(null);
               useTerminalStore.getState().moveToDormant(terminalId);
-            }}>👁 Hide pane</button>
+            }}>👁 Hide pane <span className="context-menu-shortcut">Ctrl+Shift+H</span></button>
             <div className="context-menu-separator" />
             <button className="context-menu-item danger" onClick={() => {
               setPaneMenuPos(null);

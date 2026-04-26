@@ -1247,20 +1247,25 @@ html.transparency-active .input-dialog {
   font-size: 16px;
   line-height: 1;
 }
-.status-overflow-popover {
-  position: fixed;
+/* Position the footer ⋯ overflow menu above the status bar, right-anchored
+   near the ⋯ button. Uses the shared .context-menu look so the footer menu
+   matches the per-pane menu style. */
+.status-overflow-menu {
   bottom: 36px;
   right: 12px;
-  z-index: 1000;
+  top: auto;
+  left: auto;
   min-width: 220px;
-  max-width: 320px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 4px 0;
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
+}
+
+/* Per-pane overflow menu reuses the status-bar popover styling. The
+   only delta is the destructive Close action - tinted red on hover so
+   users can spot it at the bottom of the menu without reading. */
+.pane-menu .pane-menu-danger:hover {
+  background: rgba(243, 139, 168, 0.18);
+}
+.pane-menu .pane-menu-danger .dormant-popover-title {
+  color: var(--error, #f38ba8);
 }
 
 /* Session summary popover - opened from the per-pane banner status icon
