@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 import type { CopilotSessionSummary, CopilotSessionStatus } from '../../shared/copilot-types';
 
@@ -21,18 +21,6 @@ function relativePhrase(ts: number): string {
   return `${Math.floor(diff / 86400)} days ago`;
 }
 
-function durationPhrase(ms: number): string {
-  if (ms < 60_000) return 'less than a minute';
-  if (ms < 3600_000) return `about ${Math.max(1, Math.round(ms / 60_000))} minutes`;
-  if (ms < 86400_000) {
-    const hrs = ms / 3600_000;
-    if (hrs < 1.5) return 'about an hour';
-    if (hrs < 24) return `about ${Math.round(hrs)} hours`;
-  }
-  const days = Math.round(ms / 86400_000);
-  return days === 1 ? 'a day' : `${days} days`;
-}
-
 function turnsPhrase(n: number): string {
   if (n <= 0) return 'no messages yet';
   if (n === 1) return 'one message';
@@ -49,7 +37,7 @@ const STATUS_PHRASING: Record<CopilotSessionStatus, string> = {
   thinking: 'thinking through your request.',
   executingTool: 'running tools to make changes.',
   awaitingApproval: 'paused, waiting for you to approve a tool call.',
-  waitingForUser: "waiting for your next message.",
+  waitingForUser: 'waiting for your next message.',
 };
 
 const STATUS_COLORS: Record<CopilotSessionStatus, string> = {
@@ -64,6 +52,55 @@ const PROVIDER_NAME: Record<string, string> = {
   copilot: 'Copilot CLI',
   'claude-code': 'Claude Code',
 };
+
+// Common acknowledgments that aren't really new directions in the
+// conversation. Filtered out of the timeline so the picks are real
+// turning points, not "k" / "yes" / "continue" noise.
+const TRIVIAL_ACKS = new Set([
+  'k', 'ok', 'okay', 'yes', 'no', 'sure', 'go', 'do it', 'thanks', 'thx',
+  'continue', 'cont', 'go on', 'next', 'ship it', 'push it', 'great',
+  'good', 'nice', 'lgtm', 'looks good', 'yep', 'nope', 'right', 'correct',
+  'true', 'false', '1', '2', '3',
+]);
+
+function isTrivial(p: string): boolean {
+  const trimmed = p.trim().toLowerCase();
+  if (trimmed.length < 4) return true;
+  if (TRIVIAL_ACKS.has(trimmed)) return true;
+  // single-word ack with a punctuation mark
+  if (/^[a-z]{1,8}[.!?]$/i.test(trimmed)) return true;
+  return false;
+}
+
+/**
+ * Picks a representative subset of prompts to tell the session's story:
+ * always include the first and last, plus a few evenly-spaced from the
+ * middle. Skips trivial acknowledgments unless the conversation is so
+ * short that they're all there is.
+ */
+function pickStoryPrompts(all: string[]): { first: string | null; middle: string[]; last: string | null } {
+  if (all.length === 0) return { first: null, middle: [], last: null };
+  if (all.length === 1) return { first: all[0], middle: [], last: null };
+
+  const meaningful = all.filter((p) => !isTrivial(p));
+  const pool = meaningful.length >= 2 ? meaningful : all;
+
+  const first = pool[0];
+  const last = pool[pool.length - 1];
+  const inner = pool.slice(1, -1);
+  // Sample up to 4 prompts evenly from the middle.
+  const max = 4;
+  let middle: string[] = [];
+  if (inner.length <= max) {
+    middle = inner;
+  } else {
+    const step = inner.length / max;
+    for (let i = 0; i < max; i++) {
+      middle.push(inner[Math.floor(step * i + step / 2)]);
+    }
+  }
+  return { first, middle, last };
+}
 
 const SessionSummary: React.FC = () => {
   const sessionId = useTerminalStore((s) => s.sessionSummaryRequest);
@@ -88,6 +125,21 @@ const SessionSummary: React.FC = () => {
   });
   const summaryOverride = useTerminalStore((s) => sessionId ? s.sessionNameOverrides[sessionId] : '');
 
+  // Fetch the prompt history when the popover opens. Each prompt comes back
+  // already cleaned by the parser (XML-stripped, trimmed, capped at 300 chars).
+  const [prompts, setPrompts] = useState<string[]>([]);
+  const [loadingPrompts, setLoadingPrompts] = useState(false);
+  useEffect(() => {
+    if (!sessionId || !session) { setPrompts([]); return; }
+    setLoadingPrompts(true);
+    const api = window.terminalAPI as any;
+    const fetcher = session.provider === 'claude-code' ? api.getClaudeCodePrompts : api.getCopilotPrompts;
+    fetcher(sessionId)
+      .then((p: string[] | undefined) => setPrompts(Array.isArray(p) ? p : []))
+      .catch(() => setPrompts([]))
+      .finally(() => setLoadingPrompts(false));
+  }, [sessionId, session?.provider]);
+
   if (!sessionId || !session) return null;
 
   const title = summaryOverride || session.summary || session.id.slice(0, 8);
@@ -97,70 +149,10 @@ const SessionSummary: React.FC = () => {
   const lastPromptAgo = session.latestPromptTime ? relativePhrase(session.latestPromptTime) : null;
   const statusText = STATUS_PHRASING[session.status] || 'in an unknown state.';
   const statusColor = STATUS_COLORS[session.status] || '#6c7086';
-
-  // Estimate session duration: from latestPrompt back to (lastActivityTime
-  // can be roughly when the session was last active overall). If we don't
-  // have a clean firstActivityTime, fall back to "since [ago]".
-  const messageCount = session.messageCount || 0;
-  const durationMs =
-    session.latestPromptTime && session.lastActivityTime
-      ? Math.max(0, session.lastActivityTime - (session.lastActivityTime - durationFromCount(messageCount, session.latestPromptTime)))
-      : 0;
-
-  // Cleaner: estimate "active over the last X" using lastActivityTime - first message time
-  // We only have lastActivityTime, not first. Approximate using messageCount as a fallback signal.
-  // For now, keep it simple: report when the session was last active.
   const lastActivityAgo = session.lastActivityTime ? relativePhrase(session.lastActivityTime) : null;
+  const messageCount = session.messageCount || 0;
 
-  const lines: React.ReactNode[] = [];
-
-  // Where: project + branch + provider, on one line.
-  if (folder) {
-    lines.push(
-      <p key="where">
-        Working on <strong>{folder}</strong>{branch} with <strong>{provider}</strong>.
-      </p>,
-    );
-  }
-
-  // History: how it started + how much has been going on.
-  if (session.summary && lastActivityAgo) {
-    const turns = turnsPhrase(messageCount);
-    lines.push(
-      <p key="origin">
-        Started <strong>{lastActivityAgo === 'just now' ? 'just now' : lastActivityAgo}</strong>{' '}
-        with: <em>"{session.summary}"</em>
-        {messageCount > 1 ? <> &nbsp;·&nbsp; {turns}.</> : null}
-      </p>,
-    );
-  }
-
-  // Now: current status, with a colored dot mirroring the AI sessions list.
-  lines.push(
-    <p key="status">
-      <span
-        className="session-summary-status-dot"
-        style={{ background: statusColor }}
-        aria-hidden
-      />
-      <strong>Right now:</strong> {statusText}
-    </p>,
-  );
-
-  // What you just asked.
-  if (session.latestPrompt && session.latestPrompt !== session.summary) {
-    lines.push(
-      <p key="latest">
-        Your most recent message{lastPromptAgo ? ` ${lastPromptAgo}` : ''}: <em>"{session.latestPrompt}"</em>
-      </p>,
-    );
-  } else if (session.latestPrompt && session.latestPrompt === session.summary && messageCount === 1) {
-    lines.push(
-      <p key="oneshot">
-        That first prompt is also the only one so far - the conversation hasn't continued yet.
-      </p>,
-    );
-  }
+  const story = pickStoryPrompts(prompts);
 
   return (
     <div className="palette-backdrop" onClick={close} style={{ paddingTop: 80 }}>
@@ -175,17 +167,59 @@ const SessionSummary: React.FC = () => {
           <button className="session-summary-close" onClick={close} aria-label="Close">&times;</button>
         </div>
         <div className="session-summary-body">
-          {lines}
+          {folder && (
+            <p>
+              Working on <strong>{folder}</strong>{branch} with <strong>{provider}</strong>.
+            </p>
+          )}
+
+          {messageCount > 0 && lastActivityAgo && (
+            <p>
+              Last active {lastActivityAgo}. {turnsPhrase(messageCount).replace(/^./, (c) => c.toUpperCase())}.
+            </p>
+          )}
+
+          <p>
+            <span
+              className="session-summary-status-dot"
+              style={{ background: statusColor }}
+              aria-hidden
+            />
+            <strong>Right now:</strong> {statusText}
+          </p>
+
+          {loadingPrompts && prompts.length === 0 && (
+            <p><em>Loading conversation history...</em></p>
+          )}
+
+          {story.first && (
+            <div className="session-summary-section">
+              <div className="session-summary-section-label">How it started</div>
+              <blockquote className="session-summary-quote">{story.first}</blockquote>
+            </div>
+          )}
+
+          {story.middle.length > 0 && (
+            <div className="session-summary-section">
+              <div className="session-summary-section-label">Along the way</div>
+              {story.middle.map((p, i) => (
+                <blockquote key={i} className="session-summary-quote">{p}</blockquote>
+              ))}
+            </div>
+          )}
+
+          {story.last && (
+            <div className="session-summary-section">
+              <div className="session-summary-section-label">
+                Most recent{lastPromptAgo ? ` (${lastPromptAgo})` : ''}
+              </div>
+              <blockquote className="session-summary-quote">{story.last}</blockquote>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
-
-// Reserved for a future enhancement: estimate session start time from
-// message count. Today we only persist lastActivityTime in the summary.
-function durationFromCount(_count: number, _latestTs: number): number {
-  return 0;
-}
 
 export default SessionSummary;

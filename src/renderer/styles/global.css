@@ -1257,6 +1257,34 @@ html.transparency-active .input-dialog {
   top: -1px;
 }
 
+.session-summary-section {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+.session-summary-section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.session-summary-quote {
+  margin: 0 0 6px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--focus-border, #89b4fa);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 2px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.session-summary-quote:last-child { margin-bottom: 0; }
+
 /* ===== Pane Drop Zones (inside each pane) ===== */
 .pane-drop-zones-container {
   position: absolute;
