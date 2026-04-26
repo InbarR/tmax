@@ -30,21 +30,37 @@ interface BufferSnapshot {
 }
 
 const cache = new Map<string, BufferSnapshot>();
+// Per-id expiry timers. Tracked separately so a re-save of the same id can
+// cancel the previous timer - otherwise the older timer would fire and
+// silently delete the fresher snapshot before the next mount can read it.
+const expiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function clearExpiryTimer(id: string): void {
+  const t = expiryTimers.get(id);
+  if (t) {
+    clearTimeout(t);
+    expiryTimers.delete(id);
+  }
+}
 
 export function saveTerminalBuffer(id: string, serialized: string, cols: number, rows: number): void {
   if (serialized.length > MAX_SERIALIZED_BYTES) {
     // Too large — skip rather than hog memory
     return;
   }
+  clearExpiryTimer(id);
   cache.set(id, { serialized, cols, rows, savedAt: Date.now() });
-
-  setTimeout(() => { cache.delete(id); }, expiryMs);
+  expiryTimers.set(id, setTimeout(() => {
+    cache.delete(id);
+    expiryTimers.delete(id);
+  }, expiryMs));
 }
 
 export function popTerminalBuffer(id: string): BufferSnapshot | undefined {
   const entry = cache.get(id);
   if (!entry) return undefined;
   cache.delete(id);
+  clearExpiryTimer(id);
   // Discard stale entries (shouldn't happen with setTimeout, but belt & suspenders)
   if (Date.now() - entry.savedAt > expiryMs) return undefined;
   return entry;
