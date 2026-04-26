@@ -170,6 +170,9 @@ const StatusBar: React.FC = () => {
     return out;
   }, [terminals]);
   const [dormantPopoverOpen, setDormantPopoverOpen] = useState(false);
+  // Overflow menu for low-traffic footer items (Colors, Logs, Report).
+  // Keeps the status bar from growing every time we add a new tool.
+  const [overflowOpen, setOverflowOpen] = useState(false);
 
   const fontSize = useTerminalStore((s) => s.fontSize);
   const config = useTerminalStore((s) => s.config);
@@ -285,13 +288,6 @@ const StatusBar: React.FC = () => {
         <div className="status-section status-right">
           <button
             className="status-mode-btn"
-            onClick={() => useTerminalStore.getState().colorizeAllTabs()}
-            title="Toggle tab colors (Ctrl+Shift+O)"
-          >
-            &#127912; {hasAnyColor ? 'Colors \u2713' : 'Colors'}
-          </button>
-          <button
-            className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleViewMode()}
             title="Toggle view mode (Ctrl+Shift+F)"
           >
@@ -334,18 +330,12 @@ const StatusBar: React.FC = () => {
             <span className="status-dim" style={{ cursor: 'pointer' }} onClick={openChangelog} data-tooltip="View changelog">v{appVersion}</span>
           )}
           <button
-            className="status-mode-btn"
-            onClick={() => window.terminalAPI.getDiagLogPath().then((p: string) => (window.terminalAPI as any).openPath(p))}
-            title="Open diagnostics log"
+            className="status-mode-btn status-overflow-btn"
+            onClick={() => setOverflowOpen((v) => !v)}
+            title="More options"
+            aria-expanded={overflowOpen}
           >
-            &#129658; Logs
-          </button>
-          <button
-            className="status-mode-btn"
-            onClick={() => setShowReportModal(true)}
-            title="Report an issue (opens GitHub)"
-          >
-            &#9888; Report
+            &#x22EF;
           </button>
           <button
             className="status-help-btn"
@@ -377,6 +367,41 @@ const StatusBar: React.FC = () => {
                 {t.cwd && <span className="dormant-popover-cwd">{t.cwd}</span>}
               </button>
             ))}
+          </div>
+        </>
+      )}
+      {overflowOpen && (
+        <>
+          <div className="dormant-popover-backdrop" onClick={() => setOverflowOpen(false)} />
+          <div className="status-overflow-popover" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="dormant-popover-item"
+              onClick={() => {
+                useTerminalStore.getState().colorizeAllTabs();
+                setOverflowOpen(false);
+              }}
+            >
+              <span className="dormant-popover-title">🎨 {hasAnyColor ? 'Tab colors ✓' : 'Tab colors'}</span>
+              <span className="dormant-popover-cwd">Ctrl+Shift+O</span>
+            </button>
+            <button
+              className="dormant-popover-item"
+              onClick={() => {
+                window.terminalAPI.getDiagLogPath().then((p: string) => (window.terminalAPI as any).openPath(p));
+                setOverflowOpen(false);
+              }}
+            >
+              <span className="dormant-popover-title">📋 Open diagnostics log</span>
+            </button>
+            <button
+              className="dormant-popover-item"
+              onClick={() => {
+                setShowReportModal(true);
+                setOverflowOpen(false);
+              }}
+            >
+              <span className="dormant-popover-title">⚠️ Report an issue</span>
+            </button>
           </div>
         </>
       )}

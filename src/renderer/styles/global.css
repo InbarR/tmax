@@ -1227,6 +1227,29 @@ html.transparency-active .input-dialog {
   white-space: nowrap;
 }
 
+/* Status-bar overflow ⋯ menu - mirrors the dormant popover but right-anchored
+   so it doesn't run off the screen edge. Holds low-traffic items that used
+   to crowd the footer (Tab colors, Logs, Report). */
+.status-overflow-btn {
+  font-size: 16px;
+  line-height: 1;
+}
+.status-overflow-popover {
+  position: fixed;
+  bottom: 36px;
+  right: 12px;
+  z-index: 1000;
+  min-width: 220px;
+  max-width: 320px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 0;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+}
+
 /* Session summary popover - opened from the per-pane banner status icon
    or the AI sessions panel context menu. Plain-language story, not a
    metrics dashboard. */
