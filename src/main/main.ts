@@ -214,9 +214,20 @@ function createWindow(): void {
     console.log('Window ready-to-show, displaying...');
     // Reset any Chromium zoom to 100% - we handle zoom ourselves via terminal fontSize
     mainWindow!.webContents.setZoomLevel(0);
-    mainWindow!.maximize();
-    mainWindow!.show();
-    mainWindow!.focus();
+
+    if (process.env.TMAX_E2E === '1') {
+      // Playwright launches mid-workday and the test windows used to pop up
+      // over whatever the user was doing, stealing focus. In E2E mode show
+      // the window inactive, off-screen, and out of the taskbar.
+      mainWindow!.setPosition(-3000, -3000);
+      mainWindow!.setSize(1200, 800);
+      mainWindow!.setSkipTaskbar(true);
+      mainWindow!.showInactive();
+    } else {
+      mainWindow!.maximize();
+      mainWindow!.show();
+      mainWindow!.focus();
+    }
 
     // Apply background material *after* the window is visible and maximized
     // so the native maximize button stays enabled.
