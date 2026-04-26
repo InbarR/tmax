@@ -1160,6 +1160,73 @@ html.transparency-active .input-dialog {
   cursor: help;
 }
 
+/* Hidden-panes indicator + popover. Surfaces dormant terminals when the
+   tab bar is hidden, so they're never unreachable. */
+.status-dormant-btn {
+  color: var(--text-secondary);
+}
+
+.dormant-popover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+}
+.dormant-popover {
+  position: fixed;
+  bottom: 36px;
+  left: 12px;
+  z-index: 1000;
+  min-width: 240px;
+  max-width: 360px;
+  max-height: 50vh;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 0;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+}
+.dormant-popover-header {
+  padding: 6px 14px 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 4px;
+}
+.dormant-popover-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+}
+.dormant-popover-item:hover {
+  background: rgba(137, 180, 250, 0.15);
+}
+.dormant-popover-title {
+  font-weight: 500;
+}
+.dormant-popover-cwd {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  margin-top: 1px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Session summary popover - opened from the per-pane banner status icon
    or the AI sessions panel context menu. Plain-language story, not a
    metrics dashboard. */

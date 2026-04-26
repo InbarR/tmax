@@ -158,6 +158,19 @@ const StatusBar: React.FC = () => {
   const focusedId = useTerminalStore((s) => s.focusedTerminalId);
   const layout = useTerminalStore((s) => s.layout);
 
+  // Dormant terminals - hidden via the per-pane menu's 'Hide pane'. Without
+  // this list, the only way to bring them back was clicking them in the tab
+  // bar; with the bar hidden (Ctrl+Shift+B) they were unreachable. The
+  // indicator below is the always-on alternative.
+  const dormantTerminals = React.useMemo(() => {
+    const out: { id: string; title: string; cwd: string }[] = [];
+    for (const [id, t] of terminals) {
+      if (t.mode === 'dormant') out.push({ id, title: t.title || 'Terminal', cwd: t.cwd || '' });
+    }
+    return out;
+  }, [terminals]);
+  const [dormantPopoverOpen, setDormantPopoverOpen] = useState(false);
+
   const fontSize = useTerminalStore((s) => s.fontSize);
   const config = useTerminalStore((s) => s.config);
   const viewMode = useTerminalStore((s) => s.viewMode);
@@ -224,6 +237,16 @@ const StatusBar: React.FC = () => {
           >
             &#127793; Worktrees
           </button>
+          {dormantTerminals.length > 0 && (
+            <button
+              className="status-mode-btn status-dormant-btn"
+              onClick={() => setDormantPopoverOpen((v) => !v)}
+              title={`${dormantTerminals.length} hidden pane${dormantTerminals.length === 1 ? '' : 's'} - click to wake`}
+              aria-expanded={dormantPopoverOpen}
+            >
+              &#128065; {dormantTerminals.length} hidden &#9662;
+            </button>
+          )}
           {focused ? (
             <>
               <span className="status-indicator" />
@@ -333,6 +356,30 @@ const StatusBar: React.FC = () => {
           </button>
         </div>
       </div>
+      {dormantPopoverOpen && (
+        <>
+          <div className="dormant-popover-backdrop" onClick={() => setDormantPopoverOpen(false)} />
+          <div className="dormant-popover" onClick={(e) => e.stopPropagation()}>
+            <div className="dormant-popover-header">
+              Hidden panes ({dormantTerminals.length}) - click to wake
+            </div>
+            {dormantTerminals.map((t) => (
+              <button
+                key={t.id}
+                className="dormant-popover-item"
+                onClick={() => {
+                  useTerminalStore.getState().wakeFromDormant(t.id);
+                  setDormantPopoverOpen(false);
+                }}
+                title={t.cwd}
+              >
+                <span className="dormant-popover-title">{t.title}</span>
+                {t.cwd && <span className="dormant-popover-cwd">{t.cwd}</span>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       {showUpdateModal && updateInfo && (
         <UpdateModal info={updateInfo} appVersion={appVersion} onClose={() => setShowUpdateModal(false)} />
       )}
