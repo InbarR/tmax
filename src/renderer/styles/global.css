@@ -1108,12 +1108,18 @@ html.transparency-active .input-dialog {
   position: absolute;
   inset: 0;
   visibility: hidden;
+  /* Explicitly drop pointer-events so wheel/click events pass through to
+     the focused leaf below them in z-order. visibility:hidden is supposed
+     to do this on its own but can be flaky inside a visibility:hidden
+     stacking context (the parent .split-container). */
+  pointer-events: none;
 }
 
 .tiling-focus-mode .tiling-leaf:has(.terminal-panel.focused) {
   visibility: visible;
   display: flex;
   z-index: 10;
+  pointer-events: auto;
 }
 
 /* ===== Pane Drop Zones (inside each pane) ===== */
