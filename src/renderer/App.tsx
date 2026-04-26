@@ -26,6 +26,7 @@ import DiffReview from './components/DiffReview';
 import FileExplorer from './components/FileExplorer';
 import FloatingRenameInput from './components/FloatingRenameInput';
 import Toast from './components/Toast';
+import SessionSummary from './components/SessionSummary';
 
 const App: React.FC = () => {
   const loadConfig = useTerminalStore((s) => s.loadConfig);
@@ -260,6 +261,7 @@ const App: React.FC = () => {
         )}
         <DiffReview />
         <FloatingRenameInput />
+        <SessionSummary />
         <Toast />
       </div>
     </DndContext>

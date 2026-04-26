@@ -1149,6 +1149,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
     const cp = s.copilotSessions.find((x) => x.id === aiSessionId);
     return cp?.latestPromptTime;
   });
+  const sessionStatus = useTerminalStore((s) => {
+    if (!aiSessionId) return undefined;
+    const cc = s.claudeCodeSessions.find((x) => x.id === aiSessionId);
+    if (cc) return cc.status;
+    const cp = s.copilotSessions.find((x) => x.id === aiSessionId);
+    return cp?.status;
+  });
   // Force a re-render every 30s so the relative time stays fresh even when
   // nothing else in the session changes.
   const [, tickForClock] = useReducer((n: number) => n + 1, 0);
@@ -1310,6 +1317,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
       {bgTint && <div className="terminal-color-overlay" style={{ background: bgTint + '18' }} />}
       {latestPrompt && (
         <div className="terminal-pane-latest-prompt" title={`${latestPrompt}\n\nClick to jump to this prompt in the buffer`}>
+          {aiSessionId && (
+            <button
+              className={`terminal-pane-status-dot terminal-pane-status-${sessionStatus || 'idle'}`}
+              title="Show session status"
+              aria-label="Show session status"
+              onClick={(e) => {
+                e.stopPropagation();
+                useTerminalStore.getState().showSessionSummary(aiSessionId);
+              }}
+            />
+          )}
           <span className="terminal-pane-latest-prompt-label">last prompt:</span>
           <span
             className="terminal-pane-latest-prompt-text terminal-pane-latest-prompt-jump"

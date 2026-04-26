@@ -546,6 +546,8 @@ interface TerminalStore {
   selectedCopilotSessionId: string | null;
   // Prompts dialog state
   promptsDialogRequest: { terminalId: TerminalId } | null;
+  // AI session summary popover - holds the session ID that should be shown.
+  sessionSummaryRequest: string | null;
   // Diff review state
   diffReviewOpen: boolean;
   diffReviewTerminalId: TerminalId | null;
@@ -650,6 +652,8 @@ interface TerminalStore {
   // Prompts dialog action
   showPromptsForTerminal: (terminalId: TerminalId) => void;
   clearPromptsDialogRequest: () => void;
+  showSessionSummary: (sessionId: string) => void;
+  clearSessionSummary: () => void;
   // Self-healing: in grid mode, ensures every tiled terminal is present in
   // the tilingRoot. Called from a subscribe() side-effect so any code path
   // that accidentally leaves an orphan pane gets reconciled on the next tick.
@@ -702,6 +706,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   autoColorTabs: true,
   showCopilotPanel: false,
   promptsDialogRequest: null,
+  sessionSummaryRequest: null,
   copilotSessions: [],
   claudeCodeSessions: [],
   sessionNameOverrides: {},
@@ -2263,6 +2268,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
   clearPromptsDialogRequest: () => {
     set({ promptsDialogRequest: null });
+  },
+  showSessionSummary: (sessionId: string) => {
+    set({ sessionSummaryRequest: sessionId });
+  },
+  clearSessionSummary: () => {
+    set({ sessionSummaryRequest: null });
   },
 
   // ── Copilot panel actions ──────────────────────────────────────────

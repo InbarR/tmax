@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import ReactDOM from 'react-dom';
 import { useTerminalStore } from '../state/terminal-store';
 import { getTerminalEntry } from '../terminal-registry';
+import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import type { CopilotSessionSummary, CopilotSessionStatus, SessionProvider, SessionLifecycle } from '../../shared/copilot-types';
 
 const MIN_WIDTH = 180;
@@ -844,6 +845,9 @@ const CopilotPanel: React.FC = () => {
           <button className="context-menu-item" onClick={() => { openSession(ctxMenu.session); setCtxMenu(null); }}>
             ▶ Resume session <span className="context-menu-shortcut">double-click</span>
           </button>
+          <button className="context-menu-item" onClick={() => { useTerminalStore.getState().showSessionSummary(ctxMenu.session.id); setCtxMenu(null); }}>
+            ℹ View summary
+          </button>
           <button className="context-menu-item" onClick={() => handleShowPrompts(ctxMenu.session)}>
             💬 Show prompts
           </button>
@@ -948,44 +952,15 @@ const PromptsDialog: React.FC<{
       return;
     }
     const { searchAddon, terminal } = entry;
-    searchAddon.clearDecorations();
-    const opts = {
-      decorations: {
-        matchOverviewRuler: '#888',
-        activeMatchColorOverviewRuler: '#fff',
-        matchBackground: '#585b70',
-        activeMatchBackground: '#89b4fa',
-      },
-    };
-    // Strip trailing whitespace/newlines that xterm wouldn't render the same
-    // way, and cap the length so regex-unfriendly prompts don't hurt.
-    const trimmed = promptText.trim();
-    const tryQuery = (q: string): boolean => {
-      if (!q) return false;
-      return searchAddon.findPrevious(q, opts);
-    };
-    // Try in order: full trimmed prompt, first 80 chars, first 40 chars.
-    // A shorter prefix usually still matches a unique point in the buffer
-    // even if the full prompt was wrapped or re-rendered.
-    const found =
-      tryQuery(trimmed.slice(0, 120)) ||
-      tryQuery(trimmed.slice(0, 60)) ||
-      tryQuery(trimmed.slice(0, 30));
+    const found = runJumpToPromptSearch(searchAddon, terminal, promptText);
     try {
       (window as any).terminalAPI?.diagLog?.('renderer:jump-to-prompt', {
         terminalId,
-        queryLen: trimmed.length,
+        queryLen: promptText.trim().length,
         found,
       });
     } catch { /* ignore */ }
-    if (!found) {
-      setJumpWarning(
-        'Not found in terminal buffer. TUIs like Claude Code keep their own history - try scrolling inside the app, or the buffer may have been cleared.',
-      );
-      return;
-    }
     onClose();
-    requestAnimationFrame(() => terminal.focus());
   }, [terminalId, onClose]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {

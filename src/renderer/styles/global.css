@@ -650,6 +650,31 @@ html.transparency-active .input-dialog {
   flex: 1;
 }
 
+/* Clickable AI session status dot on the per-pane banner. Color reflects
+   status; click opens the session summary popover. Mirrors the dot in
+   the AI sessions list so users learn the colors once. */
+.terminal-pane-status-dot {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  margin-right: 4px;
+  border: none;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.terminal-pane-status-dot:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.15);
+}
+.terminal-pane-status-thinking { background: #f9e2af; }
+.terminal-pane-status-executingTool { background: #89b4fa; }
+.terminal-pane-status-awaitingApproval { background: #f38ba8; }
+.terminal-pane-status-waitingForUser { background: #a6e3a1; }
+.terminal-pane-status-idle { background: #6c7086; }
+
 .terminal-pane-latest-prompt-jump {
   cursor: pointer;
 }
@@ -1130,6 +1155,63 @@ html.transparency-active .input-dialog {
   font-style: italic;
   cursor: help;
 }
+
+/* Session summary popover - opened from the per-pane banner status icon
+   or the AI sessions panel context menu. Plain-language story, not a
+   metrics dashboard. */
+.session-summary-card {
+  width: 480px;
+  max-width: 90vw;
+  max-height: 80vh;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.session-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.session-summary-title {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 12px;
+}
+
+.session-summary-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.session-summary-close:hover { color: var(--text-primary); }
+
+.session-summary-body {
+  padding: 14px 18px 18px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+.session-summary-body p { margin: 0 0 10px; }
+.session-summary-body p:last-child { margin-bottom: 0; }
+.session-summary-body em { color: var(--text-secondary); font-style: italic; }
+.session-summary-body strong { color: var(--text-primary); }
 
 /* ===== Pane Drop Zones (inside each pane) ===== */
 .pane-drop-zones-container {
