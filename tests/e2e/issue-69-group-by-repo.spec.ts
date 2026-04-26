@@ -12,24 +12,34 @@ test('Group toggle renders group headers and contiguous sessions per repo (#69)'
     await window.waitForTimeout(500);
 
     // If there are no AI sessions on this machine, skip the assertion portion.
-    const initialItems = await window.$$('.ai-session-item');
+    const initialItems = await window.$$('.ai-session-item, .ai-session-group-header');
     if (initialItems.length === 0) {
       console.log('no AI sessions found on this machine; skipping');
       return;
     }
 
-    // Group off: no headers rendered
+    // Group is on by default (#69) - click the Group button once to turn it
+    // OFF, so the test starts from a known headerless state, then click again
+    // to turn it back on and exercise the grouping path.
+    const findGroupBtn = async () => {
+      for (const b of await window.$$('.ai-session-tab')) {
+        const text = (await b.textContent() || '').trim();
+        if (text === 'Group') return b;
+      }
+      return null;
+    };
+    const groupOff = await findGroupBtn();
+    expect(groupOff).not.toBeNull();
+    await groupOff!.click();
+    await window.waitForTimeout(300);
+
     const headersBefore = await window.$$('.ai-session-group-header');
     expect(headersBefore.length).toBe(0);
 
-    // Click the Group button
-    const buttons = await window.$$('.ai-session-tab');
-    let clicked = false;
-    for (const b of buttons) {
-      const text = (await b.textContent() || '').trim();
-      if (text === 'Group') { await b.click(); clicked = true; break; }
-    }
-    expect(clicked).toBe(true);
+    // Click Group again - now we're testing the off→on transition.
+    const groupOn = await findGroupBtn();
+    expect(groupOn).not.toBeNull();
+    await groupOn!.click();
     await window.waitForTimeout(400);
 
     // Now headers should appear. Groups auto-collapse on first toggle, so by

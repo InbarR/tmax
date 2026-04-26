@@ -58,11 +58,11 @@ test('clicking "Show prompts" in the pane ⋯ menu opens the prompts dialog', as
     }, { id: terminalId, prompt: 'a remembered prompt' });
 
     await window.click('.terminal-pane-menu-btn');
-    await window.waitForSelector('.pane-menu', { timeout: 3_000 });
+    await window.waitForSelector('.context-menu', { timeout: 3_000 });
 
     // The Show prompts button only renders when aiSessionId is set on the
     // panel, which our injection ensures. Find it by visible text.
-    const btn = window.locator('.dormant-popover-item', { hasText: 'Show prompts' });
+    const btn = window.locator('.context-menu-item', { hasText: 'Show prompts' });
     await expect(btn).toBeVisible({ timeout: 2_000 });
     await btn.click();
 

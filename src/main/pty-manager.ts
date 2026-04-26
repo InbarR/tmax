@@ -7,10 +7,13 @@ import { diagLog, sanitize } from './diag-logger';
 // Dot-sourced by each pwsh session so the full snippet isn't echoed into the terminal.
 // Rewritten once per app launch (stable filename, overwrite).
 const PS_INTEGRATION_PATH = join(tmpdir(), 'tmax-pwsh-integration.ps1');
+// `& $sb` is used instead of `$sb.Invoke()` because oh-my-posh and similar
+// prompt providers rely on module-level state that .Invoke() can't reach
+// across scopes - matches the VS Code pwsh-integration pattern.
 const PS_INTEGRATION_CONTENT =
-  '$__tmax_origPrompt = $function:prompt\n' +
-  'function prompt {\n' +
-  '  $p = $__tmax_origPrompt.Invoke()\n' +
+  '$Global:__tmax_origPrompt = $function:prompt\n' +
+  'function Global:prompt {\n' +
+  '  $p = & $Global:__tmax_origPrompt\n' +
   '  $d = $executionContext.SessionState.Path.CurrentLocation.Path\n' +
   '  $u = "file:///" + ($d -replace "\\\\","/")\n' +
   '  [Console]::Write("`e]7;$u`a")\n' +

@@ -18,7 +18,7 @@ async function clickAndDiag(window: any) {
   await window.waitForTimeout(200);
 
   return window.evaluate(() => {
-    const menu = document.querySelector('.pane-menu') as HTMLElement | null;
+    const menu = document.querySelector('.context-menu') as HTMLElement | null;
     const panel = document.querySelector('.terminal-panel') as HTMLElement | null;
     if (!menu) return { menuExists: false };
     const r = menu.getBoundingClientRect();
@@ -47,7 +47,7 @@ test('the ⋯ menu is portaled out of .terminal-panel so its fixed positioning r
     await window.waitForTimeout(200);
 
     const where = await window.evaluate(() => {
-      const menu = document.querySelector('.pane-menu') as HTMLElement | null;
+      const menu = document.querySelector('.context-menu') as HTMLElement | null;
       if (!menu) return { exists: false };
       let hasContainedAncestor = false;
       let p: HTMLElement | null = menu.parentElement;
@@ -121,7 +121,7 @@ test('clicking the ⋯ menu in focus mode (multi-pane) shows a visible menu', as
     await window.waitForTimeout(250);
 
     const diag = await window.evaluate(() => {
-      const menu = document.querySelector('.pane-menu') as HTMLElement | null;
+      const menu = document.querySelector('.context-menu') as HTMLElement | null;
       if (!menu) return { menuExists: false };
       const r = menu.getBoundingClientRect();
       return {
@@ -179,7 +179,7 @@ test('clicking the ⋯ menu of a non-leftmost pane in a horizontal split shows a
     await window.waitForTimeout(250);
 
     const diag = await window.evaluate(() => {
-      const menu = document.querySelector('.pane-menu') as HTMLElement | null;
+      const menu = document.querySelector('.context-menu') as HTMLElement | null;
       if (!menu) return { menuExists: false };
       const r = menu.getBoundingClientRect();
       return {
