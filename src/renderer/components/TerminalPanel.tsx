@@ -1315,7 +1315,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
               className="pane-rename-input"
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
+                e.stopPropagation();
                 if (e.key === 'Enter') {
                   const trimmed = renameValue.trim();
                   if (trimmed) useTerminalStore.getState().renameTerminal(terminalId, trimmed, true);
@@ -1325,6 +1328,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
                 }
               }}
               onBlur={() => {
+                // Commit on blur, but only when the focus actually went to
+                // something outside this input. Clicking inside the input to
+                // position the cursor used to bubble a parent mousedown that
+                // re-focused the xterm textarea; the e.stopPropagation() on
+                // mousedown above prevents that, so blur now genuinely means
+                // 'user clicked elsewhere or pressed Tab'.
                 const trimmed = renameValue.trim();
                 if (trimmed) useTerminalStore.getState().renameTerminal(terminalId, trimmed, true);
                 setIsRenamingPane(false);
@@ -1385,12 +1394,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
               setPaneMenuPos(null);
               setRenameValue(title || '');
               setIsRenamingPane(true);
-            }}>✏️ Rename pane</button>
+            }}>✏️ Rename pane <span className="context-menu-shortcut">Ctrl+Shift+R</span></button>
             {aiSessionId && (
               <button className="context-menu-item" onClick={() => {
                 setPaneMenuPos(null);
                 useTerminalStore.getState().showPromptsForTerminal(terminalId);
-              }}>💬 Show prompts</button>
+              }}>💬 Show prompts <span className="context-menu-shortcut">Ctrl+Shift+K</span></button>
             )}
             {aiSessionId && (
               <button className="context-menu-item" onClick={() => {
@@ -1420,7 +1429,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId }) => {
             <button className="context-menu-item danger" onClick={() => {
               setPaneMenuPos(null);
               useTerminalStore.getState().closeTerminal(terminalId);
-            }}>🗑 Close pane</button>
+            }}>🗑 Close pane <span className="context-menu-shortcut">Ctrl+W</span></button>
           </div>
         </>,
         document.body,

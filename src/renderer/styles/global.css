@@ -1161,6 +1161,10 @@ html.transparency-active .input-dialog {
 
 .tiling-focus-mode .split-container {
   visibility: hidden;
+  /* Belt-and-suspenders: split-containers in focus mode are layout-only
+     backdrops behind the absolute-positioned focused leaf. Don't let them
+     swallow wheel/click events that should reach the focused leaf. */
+  pointer-events: none;
 }
 
 .tiling-focus-mode .tiling-leaf {
