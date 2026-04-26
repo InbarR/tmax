@@ -51,10 +51,10 @@ test('Float menu item toggles to Restore while floating, and clicking it returns
     // Now click the floating pane's ⋯ menu and verify the label says
     // "Restore", not "Float".
     await window.click(`.terminal-panel[data-terminal-id="${t0}"] .terminal-pane-menu-btn`);
-    await window.waitForSelector('.pane-menu', { timeout: 3_000 });
-    const restoreBtn = window.locator('.dormant-popover-item', { hasText: 'Restore to grid' });
+    await window.waitForSelector('.context-menu', { timeout: 3_000 });
+    const restoreBtn = window.locator('.context-menu-item', { hasText: 'Restore to grid' });
     await expect(restoreBtn).toBeVisible({ timeout: 2_000 });
-    const floatBtn = window.locator('.dormant-popover-item', { hasText: 'Float pane' });
+    const floatBtn = window.locator('.context-menu-item', { hasText: 'Float pane' });
     await expect(floatBtn).toHaveCount(0);
 
     // Click Restore. The pane should rejoin the tiling tree.
