@@ -1224,6 +1224,27 @@ html.transparency-active .input-dialog {
   margin-right: 12px;
 }
 
+.session-summary-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.session-summary-copy {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.session-summary-copy:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+}
 .session-summary-close {
   background: transparent;
   border: none;

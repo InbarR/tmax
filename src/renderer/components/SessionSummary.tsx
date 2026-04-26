@@ -140,6 +140,8 @@ const SessionSummary: React.FC = () => {
       .finally(() => setLoadingPrompts(false));
   }, [sessionId, session?.provider]);
 
+  const [copied, setCopied] = useState(false);
+
   if (!sessionId || !session) return null;
 
   const title = summaryOverride || session.summary || session.id.slice(0, 8);
@@ -154,6 +156,45 @@ const SessionSummary: React.FC = () => {
 
   const story = pickStoryPrompts(prompts);
 
+  const buildCopyText = (): string => {
+    const out: string[] = [];
+    out.push(title);
+    out.push('');
+    if (folder) {
+      out.push(`Working on ${folder}${branch} with ${provider}.`);
+    }
+    if (messageCount > 0 && lastActivityAgo) {
+      const turns = turnsPhrase(messageCount);
+      out.push(`Last active ${lastActivityAgo}. ${turns.charAt(0).toUpperCase() + turns.slice(1)}.`);
+    }
+    out.push(`Right now: ${statusText}`);
+    if (story.first) {
+      out.push('');
+      out.push('How it started:');
+      out.push(`> ${story.first}`);
+    }
+    if (story.middle.length > 0) {
+      out.push('');
+      out.push('Along the way:');
+      for (const p of story.middle) out.push(`> ${p}`);
+    }
+    if (story.last) {
+      out.push('');
+      out.push(`Most recent${lastPromptAgo ? ` (${lastPromptAgo})` : ''}:`);
+      out.push(`> ${story.last}`);
+    }
+    return out.join('\n');
+  };
+
+  const onCopy = () => {
+    const text = buildCopyText();
+    try {
+      window.terminalAPI.clipboardWrite(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* ignore */ }
+  };
+
   return (
     <div className="palette-backdrop" onClick={close} style={{ paddingTop: 80 }}>
       <div
@@ -164,7 +205,17 @@ const SessionSummary: React.FC = () => {
       >
         <div className="session-summary-header">
           <span className="session-summary-title" title={title}>{title}</span>
-          <button className="session-summary-close" onClick={close} aria-label="Close">&times;</button>
+          <div className="session-summary-header-actions">
+            <button
+              className="session-summary-copy"
+              onClick={onCopy}
+              title="Copy summary to clipboard"
+              aria-label="Copy summary to clipboard"
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+            <button className="session-summary-close" onClick={close} aria-label="Close">&times;</button>
+          </div>
         </div>
         <div className="session-summary-body">
           {folder && (
