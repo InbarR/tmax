@@ -2404,10 +2404,19 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       }
 
       if (matched && current.aiAutoTitle) {
-        // Strip XML/HTML tags from summary (e.g. slash command markup)
-        const clean = session.summary.replace(/<[^>]+>/g, '').trim();
-        const summary = clean.length > 60 ? clean.slice(0, 57) + '...' : clean;
-        const title = summary || current.title;
+        // Honor user-set name overrides first so a renamed session keeps its
+        // name in the pane title (matching what CopilotPanel shows in the
+        // session list).
+        const override = get().sessionNameOverrides[session.id];
+        let title: string;
+        if (override) {
+          title = override;
+        } else {
+          // Strip XML/HTML tags from summary (e.g. slash command markup)
+          const clean = session.summary.replace(/<[^>]+>/g, '').trim();
+          const summary = clean.length > 60 ? clean.slice(0, 57) + '...' : clean;
+          title = summary || current.title;
+        }
         if (current.title !== title) {
           newTerminals.set(id, { ...newTerminals.get(id)!, title });
           changed = true;
