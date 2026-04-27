@@ -737,24 +737,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     const flushPendingData = () => {
       rafScheduled = false;
       if (pendingData) {
-        // Scroll lock: if the user has scrolled up, preserve their distance
-        // from the bottom across this write. Without this, the viewport
-        // drifts toward the bottom one line per chunk as the scrollback
-        // buffer trims old lines.
-        const preBuf = term.buffer.active;
-        const linesFromBottom = preBuf.baseY - preBuf.viewportY;
-        const wasScrolledUp = linesFromBottom > 0;
-        const data = pendingData;
+        term.write(pendingData);
         pendingData = '';
-        term.write(data, () => {
-          if (wasScrolledUp) {
-            const postBuf = term.buffer.active;
-            const newLinesFromBottom = postBuf.baseY - postBuf.viewportY;
-            if (newLinesFromBottom < linesFromBottom) {
-              term.scrollLines(newLinesFromBottom - linesFromBottom);
-            }
-          }
-        });
       }
       // Apply our cursor override AFTER the PTY data is written. In xterm,
       // DECTCEM (cursor visibility) is per-buffer, so if the data switched
