@@ -151,6 +151,11 @@ const CopilotPanel: React.FC = () => {
   const [renaming, setRenaming] = useState<{ id: string; provider: SessionProvider; value: string } | null>(null);
   const [promptsDialog, setPromptsDialog] = useState<{ title: string; prompts: string[]; terminalId: string | null } | null>(null);
   const [showRunningOnly, setShowRunningOnly] = useState(false);
+  // Header overflow menu (⋯) + the cleanup-low-prompts modal it triggers
+  // (TASK-37 follow-up: window.prompt is a no-op in Electron, plus the
+  // header was getting crowded with inline buttons - moved them here).
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  const [cleanupModal, setCleanupModal] = useState<{ thresholdStr: string } | null>(null);
   // #69: collapsed groups - Set of repo keys the user has collapsed in-session.
   // Not persisted intentionally: collapse state is ephemeral navigation, not a preference.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -685,15 +690,7 @@ const CopilotPanel: React.FC = () => {
 
       <div className="dir-panel-header">
         <span>✨ AI Sessions</span>
-        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-          <button
-            className={`ai-session-tab${showRunningOnly ? ' active' : ''}`}
-            onClick={() => setShowRunningOnly((v) => !v)}
-            data-tooltip="Show running only"
-            style={{ fontSize: '10px', padding: '1px 6px' }}
-          >
-            Running
-          </button>
+        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', position: 'relative' }}>
           <button
             className={`ai-session-tab${groupByRepo ? ' active' : ''}`}
             onClick={toggleGroupByRepo}
@@ -702,54 +699,133 @@ const CopilotPanel: React.FC = () => {
           >
             Group
           </button>
-          {groupByRepo && (() => {
-            const allKeys = Array.from(groupSizes.keys());
-            const allCollapsed = allKeys.length > 0 && allKeys.every((k) => collapsedGroups.has(k));
-            return (
-              <button
-                className="ai-session-tab"
-                onClick={() => setCollapsedGroups(allCollapsed ? new Set() : new Set(allKeys))}
-                data-tooltip={allCollapsed ? 'Expand all groups' : 'Collapse all groups'}
-                style={{ fontSize: '10px', padding: '1px 6px' }}
-              >
-                {allCollapsed ? '▸ Expand' : '▾ Collapse'}
-              </button>
-            );
-          })()}
           <button
-            className="ai-session-tab"
-            onClick={() => {
-              const store = useTerminalStore.getState();
-              const raw = window.prompt('Archive sessions with fewer than how many prompts?', '10');
-              if (raw === null) return;
-              const threshold = Number(raw);
-              if (!Number.isFinite(threshold) || threshold <= 0) {
-                window.alert(`"${raw}" is not a positive number.`);
-                return;
-              }
-              const count = store.countLowPromptSessions(threshold);
-              if (count === 0) {
-                window.alert(`No sessions to clean up (none have fewer than ${threshold} prompts, or matching ones are pinned / already archived).`);
-                return;
-              }
-              const ok = window.confirm(
-                `Archive ${count} session${count === 1 ? '' : 's'} with fewer than ${threshold} prompts?\n\nPinned and already-archived sessions will be skipped. Underlying transcript files are not deleted.`,
-              );
-              if (!ok) return;
-              const archived = store.cleanupLowPromptSessions(threshold);
-              if (archived > 0) {
-                store.addToast(`Archived ${archived} low-prompt session${archived === 1 ? '' : 's'}.`);
-              }
-            }}
-            data-tooltip="Archive sessions with few prompts"
-            style={{ fontSize: '10px', padding: '1px 6px' }}
+            className="dir-panel-close"
+            onClick={() => setHeaderMenuOpen((v) => !v)}
+            data-tooltip="More actions"
+            aria-label="More actions"
           >
-            🧹 Cleanup
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/></svg>
           </button>
           <button className="dir-panel-close" onClick={handleRefresh} data-tooltip="Refresh"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 1v5h5"/><path d="M3.5 10a5.5 5.5 0 1 0 1.1-5.5L1 8"/></svg></button>
           <button className="dir-panel-close" onClick={() => useTerminalStore.getState().toggleCopilotPanel()} data-tooltip="Close">&#10005;</button>
+          {headerMenuOpen && (
+            <>
+              {/* click-away to close */}
+              <div
+                style={{ position: 'fixed', inset: 0, zIndex: 999 }}
+                onClick={() => setHeaderMenuOpen(false)}
+              />
+              <div className="context-menu" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 1000, minWidth: 200 }}>
+                <button
+                  className="context-menu-item"
+                  onClick={() => { setShowRunningOnly((v) => !v); setHeaderMenuOpen(false); }}
+                >
+                  {showRunningOnly ? '☑' : '☐'} Show running only
+                </button>
+                {groupByRepo && (() => {
+                  const allKeys = Array.from(groupSizes.keys());
+                  const allCollapsed = allKeys.length > 0 && allKeys.every((k) => collapsedGroups.has(k));
+                  return (
+                    <button
+                      className="context-menu-item"
+                      onClick={() => { setCollapsedGroups(allCollapsed ? new Set() : new Set(allKeys)); setHeaderMenuOpen(false); }}
+                    >
+                      {allCollapsed ? '▸ Expand all groups' : '▾ Collapse all groups'}
+                    </button>
+                  );
+                })()}
+                <div className="context-menu-separator" />
+                <button
+                  className="context-menu-item"
+                  onClick={() => { setCleanupModal({ thresholdStr: '10' }); setHeaderMenuOpen(false); }}
+                >
+                  🧹 Cleanup low-prompt sessions...
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Cleanup modal (window.prompt is a no-op in Electron, so we use
+          our own dialog). Threshold input + projected count + Cancel/
+          Archive. */}
+      {cleanupModal && (() => {
+        const threshold = Number(cleanupModal.thresholdStr);
+        const valid = Number.isFinite(threshold) && threshold > 0;
+        const projectedCount = valid
+          ? useTerminalStore.getState().countLowPromptSessions(threshold)
+          : 0;
+        return (
+          <div
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000,
+            }}
+            onClick={() => setCleanupModal(null)}
+          >
+            <div
+              style={{
+                background: 'var(--bg-secondary, #1e1e2e)', color: 'var(--fg, #cdd6f4)',
+                border: '1px solid var(--border, #45475a)', borderRadius: 6, padding: 20,
+                minWidth: 340, maxWidth: 420, boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 10 }}>🧹 Cleanup low-prompt sessions</div>
+              <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 12 }}>
+                Archive sessions with fewer than this many prompts. Pinned and
+                already-archived sessions are skipped. Transcript files are
+                not deleted.
+              </div>
+              <label style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>Prompt count threshold</label>
+              <input
+                type="number"
+                min={1}
+                value={cleanupModal.thresholdStr}
+                onChange={(e) => setCleanupModal({ thresholdStr: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && valid && projectedCount > 0) {
+                    const n = useTerminalStore.getState().cleanupLowPromptSessions(threshold);
+                    if (n > 0) useTerminalStore.getState().addToast(`Archived ${n} low-prompt session${n === 1 ? '' : 's'}.`);
+                    setCleanupModal(null);
+                  } else if (e.key === 'Escape') {
+                    setCleanupModal(null);
+                  }
+                }}
+                autoFocus
+                style={{
+                  width: '100%', padding: '6px 8px',
+                  background: 'var(--bg, #11111b)', color: 'inherit',
+                  border: '1px solid var(--border, #45475a)', borderRadius: 4, fontSize: 14,
+                }}
+              />
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 10, minHeight: 18 }}>
+                {!valid
+                  ? <span style={{ color: '#f38ba8' }}>Enter a positive number.</span>
+                  : projectedCount === 0
+                    ? <span>No sessions match (none below {threshold}, or matches are pinned / already archived).</span>
+                    : <span>Will archive <strong>{projectedCount}</strong> session{projectedCount === 1 ? '' : 's'} with fewer than {threshold} prompts.</span>}
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+                <button className="ai-session-tab" onClick={() => setCleanupModal(null)}>Cancel</button>
+                <button
+                  className="ai-session-tab active"
+                  disabled={!valid || projectedCount === 0}
+                  onClick={() => {
+                    const n = useTerminalStore.getState().cleanupLowPromptSessions(threshold);
+                    if (n > 0) useTerminalStore.getState().addToast(`Archived ${n} low-prompt session${n === 1 ? '' : 's'}.`);
+                    setCleanupModal(null);
+                  }}
+                >
+                  Archive {projectedCount > 0 ? `(${projectedCount})` : ''}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Lifecycle tabs */}
       <div className="ai-session-tabs">

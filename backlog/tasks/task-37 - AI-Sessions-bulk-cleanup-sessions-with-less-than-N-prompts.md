@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-04-28 13:29'
-updated_date: '2026-04-28 13:32'
+updated_date: '2026-04-28 13:43'
 labels: []
 dependencies: []
 ---
@@ -43,6 +43,12 @@ Implementation:
 - Test: tests/e2e/ai-sessions-cleanup-low-prompts.spec.ts pins three cases - threshold filtering, pinned/override skipping, invalid-threshold no-op.
 
 Not using window.prompt/confirm in the test because they're browser-modal dialogs Playwright cannot drive via DOM; the store-action layer is the testable surface. The UI integration is small enough (just calls + alerts) that visual verification by the user is fine.
+
+Follow-up after user testing: window.prompt is a no-op in Electron (returns null silently), so the original implementation did nothing on click. Also the inline header buttons (Running, Group, Collapse, Cleanup) made the panel header crowded.
+
+Replaced with:
+- A ⋯ overflow menu in the header that holds Running toggle, Collapse/Expand toggle, and the Cleanup action. Group toggle stays inline as the most-used.
+- A custom React modal for the cleanup flow: numeric input, live projected-count, Cancel / Archive buttons. Enter applies, Esc cancels. Disabled-state when input is invalid or no sessions match.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -58,4 +64,6 @@ Files:
 - tests/e2e/ai-sessions-cleanup-low-prompts.spec.ts: 3 store-action tests.
 
 How it complements TASK-32: TASK-32 auto-archives by AGE on launch. TASK-37 archives by PROMPT COUNT on demand. The two rules are independent and skip the same set (pinned + existing-override).
+
+Follow-up commit: replaced the broken window.prompt flow (Electron returns null) with a proper React modal, and moved the header buttons (Running, Collapse, Cleanup) into a ⋯ overflow menu so the header isn't crowded. Group toggle stays inline.
 <!-- SECTION:FINAL_SUMMARY:END -->
