@@ -733,7 +733,7 @@ const CopilotPanel: React.FC = () => {
                   className="context-menu-item"
                   onClick={() => { setShowRunningOnly((v) => !v); setHeaderMenuOpen(false); }}
                 >
-                  <span style={{ display: 'inline-block', width: 16, color: showRunningOnly ? 'var(--focus-border, #89b4fa)' : undefined }}>{showRunningOnly ? '☑' : '☐'}</span>
+                  <span style={{ display: 'inline-block', width: 16, color: showRunningOnly ? 'var(--focus-border, #89b4fa)' : 'transparent' }}>✓</span>
                   Show running only
                 </button>
                 {groupByRepo && (() => {
