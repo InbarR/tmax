@@ -247,13 +247,36 @@ export class CopilotSessionMonitor {
       const content = fs.readFileSync(wsPath, 'utf-8');
       const result = { ...defaults };
 
-      for (const line of content.split('\n')) {
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
         const colonIdx = line.indexOf(':');
         if (colonIdx === -1) continue;
 
+        const indent = line.length - line.trimStart().length;
         const key = line.slice(0, colonIdx).trim().toLowerCase();
         // Handle values that may contain colons (e.g. timestamps, URLs)
-        const value = line.slice(colonIdx + 1).trim().replace(/^["']|["']$/g, '');
+        let value = line.slice(colonIdx + 1).trim().replace(/^["']|["']$/g, '');
+
+        // YAML block scalars: `|`, `|-`, `|+`, `>`, `>-`, `>+`. Copilot CLI
+        // writes summaries that span multiple lines using `summary: |-`
+        // followed by an indented block. The previous line-by-line parser
+        // took `|-` as the literal value, leaving the sidebar showing the
+        // YAML indicator instead of the actual prompt. Collapse the block
+        // into a single space-joined string - good enough for the
+        // single-line title we render.
+        if (/^[|>][-+]?\s*$/.test(value)) {
+          const blockLines: string[] = [];
+          while (i + 1 < lines.length) {
+            const next = lines[i + 1];
+            if (next.trim() === '') { blockLines.push(''); i++; continue; }
+            const nextIndent = next.length - next.trimStart().length;
+            if (nextIndent <= indent) break;
+            blockLines.push(next.trim());
+            i++;
+          }
+          value = blockLines.join(' ').trim();
+        }
 
         switch (key) {
           case 'cwd':
