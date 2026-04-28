@@ -724,6 +724,14 @@ const CopilotPanel: React.FC = () => {
               >
                 <button
                   className="context-menu-item"
+                  onClick={() => { handleRefresh(); setHeaderMenuOpen(false); }}
+                >
+                  <span style={{ display: 'inline-block', width: 16 }}>⟲</span>
+                  Refresh
+                </button>
+                <div className="context-menu-separator" />
+                <button
+                  className="context-menu-item"
                   onClick={() => { setShowRunningOnly((v) => !v); setHeaderMenuOpen(false); }}
                 >
                   <span style={{ display: 'inline-block', width: 16, color: showRunningOnly ? 'var(--focus-border, #89b4fa)' : 'transparent' }}>✓</span>
@@ -749,13 +757,6 @@ const CopilotPanel: React.FC = () => {
                 >
                   <span style={{ display: 'inline-block', width: 16 }}>🧹</span>
                   Cleanup by prompt count…
-                </button>
-                <button
-                  className="context-menu-item"
-                  onClick={() => { handleRefresh(); setHeaderMenuOpen(false); }}
-                >
-                  <span style={{ display: 'inline-block', width: 16 }}>⟲</span>
-                  Refresh
                 </button>
               </div>
             </>
