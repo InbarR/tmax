@@ -7,7 +7,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-04-28 10:54'
-updated_date: '2026-04-28 11:01'
+updated_date: '2026-04-28 11:05'
 labels:
   - bug
   - ai-sessions
@@ -39,3 +39,36 @@ User saw two separate 'CLAWPILOT' group headers in the AI sessions sidebar - one
 4. Run the new spec + the existing issue-69-group-by-repo spec to confirm no regression.
 5. Tick AC #1, #2, #3, #5. AC #4 (mac/linux behavior): document in implementation notes - lowercase normalization is applied uniformly because (a) macOS default APFS is case-insensitive, (b) on case-sensitive Linux FSes a user with cwd /a/Foo and /a/foo would still want them merged in the sidebar UX since they refer to the same project visually.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Reproduced via tests/e2e/ai-sessions-cwd-case-grouping.spec.ts (failed pre-fix: 2 groups; passed post-fix: 1 group, count=2).
+
+Fix in CopilotPanel.tsx:
+- repoKey() now lowercases for grouping; repoDisplay() preserves casing for the visible label.
+- groupDisplayNames Map captures casing of the first session encountered in each lowercase bucket and feeds the header render.
+- PINNED_GROUP_KEY (lowercased) used for sort comparisons; PINNED_GROUP retained for display.
+
+Real-world verification: existing issue-69 spec output shows the user's on-disk sessions now render a single "Clawpilot" group (was two). 6/6 related pre-existing specs still pass.
+
+AC #4 decision: lowercase normalization applied uniformly across platforms. Rationale: macOS APFS default is case-insensitive too, and on case-sensitive Linux FSes a user with /a/Foo and /a/foo almost always means the same project visually. The cost of merging two genuinely-distinct case-sensitive folders into one sidebar group is far smaller than the cost of the user-visible duplicate-group bug.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+**TASK-35: AI sessions panel duplicate-group fix**
+
+Sidebar grouped by `shortPath(cwd)` returned as-is, so cwds differing only in case (e.g. `C:\projects\ClawPilot` vs `...awpilot`) became distinct Map keys but rendered as identical-looking "CLAWPILOT" headers - the user saw two groups for the same project.
+
+**Changes**
+- `src/renderer/components/CopilotPanel.tsx`: split grouping key (lowercase) from display label (original casing of the first session in the bucket). New `groupDisplayNames` memo feeds the header label and tooltip; sort comparators updated to use the lowercased pinned-group key.
+
+**Tests**
+- New: `tests/e2e/ai-sessions-cwd-case-grouping.spec.ts` - inject two fixture sessions with cwds differing only in case, assert exactly one group with count=2.
+- Re-ran: `issue-69-group-by-repo`, `session-sidebar-highlight` (all 6 cases) - still green.
+
+**Risk**
+- On case-sensitive filesystems (Linux), two genuinely-different folders that share a basename with different casing now collapse into one group. Documented in implementation notes; acceptable trade-off since the basename collision UX was already poor (identical visible labels).
+<!-- SECTION:FINAL_SUMMARY:END -->

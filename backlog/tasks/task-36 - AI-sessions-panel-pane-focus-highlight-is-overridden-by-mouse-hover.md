@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-04-28 10:54'
-updated_date: '2026-04-28 11:01'
+updated_date: '2026-04-28 11:05'
 labels:
   - bug
   - ai-sessions
@@ -37,3 +37,34 @@ Two related symptoms reported via screenshots 2026-04-28:\n\n1. Clicking a termi
 4. Keep the existing setSelectedIndex on pane-focus effect so keyboard Enter still opens the pane-focused row when nothing else is selected.
 5. Run the new spec + the existing session-sidebar-highlight specs to confirm no regression.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Reproduced via tests/e2e/ai-sessions-pane-active-vs-hover.spec.ts (failed pre-fix: 0 .pane-active rows; passed post-fix: 1 row, survives hover over other rows).
+
+Fix in CopilotPanel.tsx + global.css:
+- New activePaneSessionId memo derived from focusedTerminalId + terminals.
+- Row whose session.id matches gets a stable `pane-active` class - distinct from .selected (keyboard cursor) and :hover.
+- CSS rule .ai-session-item.pane-active uses inset box-shadow + stronger background, so neither hover nor .selected can overpaint it.
+- selectedIndex behaviour for keyboard nav and Enter-to-open is untouched.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+**TASK-36: pane-focus highlight no longer overridden by mouse hover**
+
+The sidebar's `selectedIndex` was doing double duty - both the keyboard-cursor / pane-focus reveal target and rewritten by every `onMouseEnter` for hover. Hover stomped the active-pane indicator, and clicking a pane while hovered over a different row visually highlighted the wrong session.
+
+**Changes**
+- `src/renderer/components/CopilotPanel.tsx`: derive `activePaneSessionId` from focused terminal's `aiSessionId`, apply new `pane-active` class to the matching row.
+- `src/renderer/styles/global.css`: `.ai-session-item.pane-active` rule with inset left rail + distinct background that hover/selected cannot override.
+
+**Tests**
+- New: `tests/e2e/ai-sessions-pane-active-vs-hover.spec.ts` - link two panes to two sessions, focus pane A, hover row B, assert .pane-active still on row A.
+- Re-ran: existing `session-sidebar-highlight` specs (5 cases) - still green; the pane-focus reveal/scroll behaviour and TASK-29 auto-link are unaffected.
+
+**Risk**
+- Visual: the new highlight is bolder than the old `.selected` style on the active-pane row. If users find it too strong we can soften the rgba.
+<!-- SECTION:FINAL_SUMMARY:END -->
