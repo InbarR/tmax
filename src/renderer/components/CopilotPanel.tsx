@@ -716,12 +716,19 @@ const CopilotPanel: React.FC = () => {
                 style={{ position: 'fixed', inset: 0, zIndex: 999 }}
                 onClick={() => setHeaderMenuOpen(false)}
               />
-              <div className="context-menu" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 1000, minWidth: 200 }}>
+              <div
+                className="context-menu"
+                style={{
+                  position: 'absolute', top: '100%', right: 0, marginTop: 4,
+                  zIndex: 1000, minWidth: 230, whiteSpace: 'nowrap',
+                }}
+              >
                 <button
                   className="context-menu-item"
                   onClick={() => { setShowRunningOnly((v) => !v); setHeaderMenuOpen(false); }}
                 >
-                  {showRunningOnly ? '☑' : '☐'} Show running only
+                  <span style={{ display: 'inline-block', width: 16, color: showRunningOnly ? 'var(--focus-border, #89b4fa)' : 'transparent' }}>✓</span>
+                  Show running only
                 </button>
                 {groupByRepo && (() => {
                   const allKeys = Array.from(groupSizes.keys());
@@ -731,7 +738,8 @@ const CopilotPanel: React.FC = () => {
                       className="context-menu-item"
                       onClick={() => { setCollapsedGroups(allCollapsed ? new Set() : new Set(allKeys)); setHeaderMenuOpen(false); }}
                     >
-                      {allCollapsed ? '▸ Expand all groups' : '▾ Collapse all groups'}
+                      <span style={{ display: 'inline-block', width: 16 }}>{allCollapsed ? '▸' : '▾'}</span>
+                      {allCollapsed ? 'Expand all groups' : 'Collapse all groups'}
                     </button>
                   );
                 })()}
@@ -740,7 +748,8 @@ const CopilotPanel: React.FC = () => {
                   className="context-menu-item"
                   onClick={() => { setCleanupModal({ thresholdStr: '10' }); setHeaderMenuOpen(false); }}
                 >
-                  🧹 Cleanup low-prompt sessions...
+                  <span style={{ display: 'inline-block', width: 16 }}>🧹</span>
+                  Cleanup by prompt count…
                 </button>
               </div>
             </>
