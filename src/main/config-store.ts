@@ -137,7 +137,9 @@ const defaultConfig: AppConfig = {
   defaultShellId: platformShells.defaultShellId,
   keybindings: [
     { action: 'createTerminal', key: 'Ctrl+T' },
-    { action: 'closeTerminal', key: 'Ctrl+W' },
+    // Ctrl+W intentionally omitted - it's the readline / bash / zsh /
+    // Claude Code shortcut for "delete previous word". Pane-close is
+    // Ctrl+Shift+W only. (TASK-38)
     { action: 'createTerminal', key: 'Ctrl+Shift+N' },
     { action: 'closeTerminal', key: 'Ctrl+Shift+W' },
     { action: 'focusUp', key: 'Shift+ArrowUp' },
@@ -216,16 +218,37 @@ export class ConfigStore {
     this.store.set('defaultShellId', 'pwsh');
   }
 
-  /** Inject Ctrl+T/Ctrl+W bindings for existing users if those keys aren't already taken */
+  /**
+   * Migrations:
+   *  - Inject Ctrl+T binding for existing users who pre-date it.
+   *  - Remove Ctrl+W -> closeTerminal (TASK-38). It conflicts with
+   *    readline / bash / zsh / Claude Code's "delete previous word" -
+   *    users have lost panes typing Ctrl+W expecting a word delete.
+   *    Pane-close stays on Ctrl+Shift+W only. We strip it
+   *    unconditionally; users who explicitly want Ctrl+W to close
+   *    can re-add it via the bindings file.
+   */
   private migrateKeybindings(): void {
-    const bindings = this.store.get('keybindings') as Keybinding[];
-    const boundKeys = new Set(bindings.map((b) => b.key));
-    const additions: Keybinding[] = [];
-    if (!boundKeys.has('Ctrl+T')) additions.push({ action: 'createTerminal', key: 'Ctrl+T' });
-    if (!boundKeys.has('Ctrl+W')) additions.push({ action: 'closeTerminal', key: 'Ctrl+W' });
-    if (additions.length > 0) {
-      this.store.set('keybindings', [...additions, ...bindings]);
+    let bindings = this.store.get('keybindings') as Keybinding[];
+    let changed = false;
+
+    // Strip the legacy Ctrl+W -> closeTerminal entry.
+    const filtered = bindings.filter(
+      (b) => !(b.key === 'Ctrl+W' && b.action === 'closeTerminal'),
+    );
+    if (filtered.length !== bindings.length) {
+      bindings = filtered;
+      changed = true;
     }
+
+    // Ensure Ctrl+T is bound for older users.
+    const boundKeys = new Set(bindings.map((b) => b.key));
+    if (!boundKeys.has('Ctrl+T')) {
+      bindings = [{ action: 'createTerminal', key: 'Ctrl+T' }, ...bindings];
+      changed = true;
+    }
+
+    if (changed) this.store.set('keybindings', bindings);
   }
 
   get<K extends keyof AppConfig>(key: K): AppConfig[K] {

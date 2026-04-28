@@ -1389,7 +1389,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               className={`terminal-status-dot ${processStatus}`}
               title={processStatus === 'active' ? 'Active' : processStatus === 'exited-error' ? 'Exited with error' : processStatus === 'idle' ? 'Idle' : 'Exited'}
             />
-            <span className="pane-close-x" title="Close pane (Ctrl+W)">✕</span>
+            <span className="pane-close-x" title="Close pane (Ctrl+Shift+W)">✕</span>
           </div>
           {isRenamingPane ? (
             <input
@@ -1529,7 +1529,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             <button className="context-menu-item danger" onClick={() => {
               setPaneMenuPos(null);
               useTerminalStore.getState().closeTerminal(terminalId);
-            }}>🗑 Close pane <span className="context-menu-shortcut">Ctrl+W</span></button>
+            }}>🗑 Close pane <span className="context-menu-shortcut">Ctrl+Shift+W</span></button>
           </div>
         </>,
         document.body,

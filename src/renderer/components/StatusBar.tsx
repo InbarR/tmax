@@ -217,7 +217,7 @@ const StatusBar: React.FC = () => {
     { text: 'Ctrl+Shift+Y searches every pane\'s prompts and jumps to the match.' },
     { text: 'Ctrl+Shift+G jumps to a terminal by name.' },
     { text: 'Ctrl+Shift+J shows pane hints — press a letter to jump to that pane.' },
-    { text: 'Ctrl+T / Ctrl+W open and close terminals.' },
+    { text: 'Ctrl+T opens a new terminal; Ctrl+Shift+W closes the focused one.' },
     { text: 'Ctrl+Shift+A toggles broadcast — typing goes to every tiled pane.' },
     { text: 'Ctrl+Shift+B hides the tab bar to save vertical space.' },
     { text: 'Ctrl+Shift+F cycles view modes: split / focus / grid.' },

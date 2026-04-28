@@ -8,7 +8,7 @@ interface ShortcutsHelpProps {
 const shortcuts = [
   { category: 'Terminals', items: [
     { key: 'Ctrl+T', action: 'New terminal (also Ctrl+Shift+N)' },
-    { key: 'Ctrl+W', action: 'Close terminal (also Ctrl+Shift+W)' },
+    { key: 'Ctrl+Shift+W', action: 'Close terminal' },
     { key: 'Ctrl+Shift+R', action: 'Rename terminal' },
     { key: 'Ctrl+Shift+G', action: 'Jump to terminal by name' },
     { key: 'Ctrl+Shift+J', action: 'Pane hints (press letter to jump)' },

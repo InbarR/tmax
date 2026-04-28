@@ -60,7 +60,11 @@ function matchesCombo(event: KeyboardEvent, combo: KeyCombo): boolean {
 
 const DEFAULT_BINDINGS: Record<string, string> = {
   'Ctrl+T': 'createTerminal',
-  'Ctrl+W': 'closeTerminal',
+  // Ctrl+W intentionally NOT mapped: it's the universal readline /
+  // bash / zsh / Claude Code shortcut for "delete previous word".
+  // Intercepting it to close the pane was destructive - users typing
+  // Ctrl+W expecting to delete a word lost their pane. Close pane is
+  // Ctrl+Shift+W only. (TASK-38)
   'Ctrl+Shift+N': 'createTerminal',
   'Ctrl+Shift+W': 'closeTerminal',
   'Shift+ArrowUp': 'focusUp',

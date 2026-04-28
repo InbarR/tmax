@@ -31,13 +31,18 @@ test('Ctrl+T creates a new terminal', async () => {
   }
 });
 
-test('Ctrl+W closes the focused terminal', async () => {
+test('Ctrl+Shift+W closes the focused terminal', async () => {
+  // TASK-38: Ctrl+W is the readline / bash / zsh "delete previous word"
+  // shortcut and was lost when we mapped it to closeTerminal. Pane-close
+  // is Ctrl+Shift+W only. This spec pins both halves of the contract:
+  //   - Ctrl+Shift+W still closes the focused terminal
+  //   - Ctrl+W is NOT bound to closeTerminal (no terminal disappears)
   const { window, close } = await launchTmax();
   try {
     await window.waitForSelector('.terminal-panel', { timeout: 15_000 });
     await window.waitForTimeout(500);
 
-    // Create a second terminal so Ctrl+W has something to close without exiting the app
+    // Create a second terminal so we have something to close.
     await window.keyboard.press('Control+t');
     await window.waitForFunction(
       () => ((window as any).__terminalStore.getState().terminals.size as number) >= 2,
@@ -47,7 +52,14 @@ test('Ctrl+W closes the focused terminal', async () => {
     const before = await terminalCount(window);
     expect(before).toBe(2);
 
+    // Ctrl+W must NOT close anything - it should pass through to the
+    // shell so readline can delete a word.
     await window.keyboard.press('Control+w');
+    await window.waitForTimeout(400);
+    expect(await terminalCount(window)).toBe(before);
+
+    // Ctrl+Shift+W is the actual close shortcut.
+    await window.keyboard.press('Control+Shift+w');
     await window.waitForFunction(
       (n) => ((window as any).__terminalStore.getState().terminals.size as number) < n,
       before,
