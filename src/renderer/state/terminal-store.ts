@@ -711,6 +711,11 @@ interface TerminalStore {
   removeClaudeCodeSession: (sessionId: string) => void;
   setSessionNameOverride: (sessionId: string, name: string) => void;
   setSessionLifecycle: (sessionId: string, lifecycle: import('../../shared/copilot-types').SessionLifecycle) => void;
+  // Move stale AI sessions to the 'old' (Archived) lifecycle on app start
+  // so the Active tab stays scrollable. Skips pinned sessions and any
+  // session that already has a lifecycle override (the user's manual
+  // choice wins). Idempotent - safe to call multiple times. (TASK-32)
+  autoArchiveStaleSessions: () => void;
   togglePinSession: (sessionId: string) => void;
   checkStaleActiveSessions: () => void;
   addToast: (message: string) => void;
@@ -2431,6 +2436,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   loadCopilotSessions: async () => {
     const sessions = await (window.terminalAPI as any).listCopilotSessions();
     set({ copilotSessions: sessions ?? [] });
+    get().autoArchiveStaleSessions();
   },
 
   searchCopilotSessions: async (query: string) => {
@@ -2457,6 +2463,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const { terminals, focusedTerminalId } = get();
     const newTerminals = new Map(terminals);
     let changed = false;
+    // Captured during the auto-link block below; applied after the loop so
+    // setSessionNameOverride doesn't fight with the in-flight `set`.
+    let pendingOverride: { sessionId: string; name: string } | null = null;
 
     // Check if any terminal already has this session linked
     let alreadyLinked = false;
@@ -2518,6 +2527,19 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       let matched = current.aiSessionId === session.id;
 
       if (!matched && id === candidateId) {
+        // If the user already renamed this pane before the AI session was
+        // matched (typed `claude` / `copilot`, renamed the pane, waited for
+        // the first summary), propagate the rename to sessionNameOverrides
+        // now. The earlier renameTerminal call couldn't propagate because
+        // aiSessionId was still undefined at that moment.
+        if (
+          current.customTitle &&
+          current.title &&
+          !get().sessionNameOverrides[session.id] &&
+          !pendingOverride
+        ) {
+          pendingOverride = { sessionId: session.id, name: current.title };
+        }
         current = { ...current, aiSessionId: session.id, aiAutoTitle: !current.customTitle, customTitle: true };
         newTerminals.set(id, current);
         matched = true;
@@ -2545,6 +2567,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       }
     }
     if (changed) set({ terminals: newTerminals });
+    if (pendingOverride) {
+      get().setSessionNameOverride(pendingOverride.sessionId, pendingOverride.name);
+    }
   },
 
   addCopilotSession: (session: CopilotSessionSummary) => {
@@ -2586,6 +2611,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   loadClaudeCodeSessions: async () => {
     const sessions = await (window.terminalAPI as any).listClaudeCodeSessions();
     set({ claudeCodeSessions: sessions ?? [] });
+    get().autoArchiveStaleSessions();
   },
 
   searchClaudeCodeSessions: async (query: string) => {
@@ -2658,6 +2684,51 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set((s) => ({
       sessionLifecycleOverrides: { ...s.sessionLifecycleOverrides, [sessionId]: lifecycle },
     }));
+    get().saveSession();
+  },
+
+  autoArchiveStaleSessions: () => {
+    const { copilotSessions, claudeCodeSessions, sessionPinned, sessionLifecycleOverrides, config } = get();
+    // Both knobs are configurable in config; defaults mirror what felt
+    // right on the user's report (252 active, mostly noise): age out
+    // anything quiet for two weeks, plus a quick archive of one-shot
+    // sessions abandoned the next day.
+    const ageDays = (config as any)?.aiAutoArchiveDays ?? 14;
+    const lowActivityDays = (config as any)?.aiAutoArchiveLowActivityDays ?? 1;
+    const ageMs = ageDays * 24 * 60 * 60 * 1000;
+    const lowActivityMs = lowActivityDays * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+
+    const additions: Record<string, import('../../shared/copilot-types').SessionLifecycle> = {};
+    for (const s of [...copilotSessions, ...claudeCodeSessions]) {
+      // Manual choices win - never overwrite an existing override (user
+      // may have explicitly un-archived something).
+      if (sessionLifecycleOverrides[s.id]) continue;
+      // Pinned sessions are user-curated; never auto-archive them.
+      if (sessionPinned[s.id]) continue;
+      const last = s.lastActivityTime || 0;
+      const ageStale = last > 0 && last < now - ageMs;
+      const lowActivityStale =
+        s.messageCount < 2 && s.toolCallCount === 0 && last > 0 && last < now - lowActivityMs;
+      if (ageStale || lowActivityStale) {
+        additions[s.id] = 'old';
+      }
+    }
+
+    const archivedIds = Object.keys(additions);
+    if (archivedIds.length === 0) return;
+
+    set((state) => ({
+      sessionLifecycleOverrides: { ...state.sessionLifecycleOverrides, ...additions },
+    }));
+    // Breadcrumb so users can see what disappeared from the active list
+    // (TASK-32 AC #5). A proper status-bar / toast is a follow-up; for
+    // now this lands in DevTools and tmax's own diag log.
+    // eslint-disable-next-line no-console
+    console.info(`[auto-archive] Moved ${archivedIds.length} stale AI session${archivedIds.length === 1 ? '' : 's'} to Archived (threshold: ${ageDays}d activity / <2 prompts after ${lowActivityDays}d).`);
+    try {
+      (window as any).terminalAPI?.diagLog?.(`auto-archive: ${archivedIds.length} sessions`);
+    } catch { /* main process may not be reachable yet */ }
     get().saveSession();
   },
 

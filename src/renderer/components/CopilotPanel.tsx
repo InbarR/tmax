@@ -48,15 +48,28 @@ function shortPath(p: string): string {
   return parts[parts.length - 1] || p;
 }
 
+// Treat session summaries as missing when they're pure structural noise.
+// AI providers occasionally emit summaries like "|-" (a tree-render
+// artifact when the first response was think-only / cancelled), single
+// punctuation, or all-whitespace. These look worse in the sidebar than
+// the cwd/id fallback, so filter them out at the title step. (TASK-31)
+function isMeaninglessSummary(summary: string): boolean {
+  const trimmed = summary.trim();
+  if (trimmed.length < 3) return true;
+  // Strip common Markdown / tree-rendering noise and check what's left.
+  const stripped = trimmed.replace(/[|\-_*`#>~—–\s]/g, '');
+  return stripped.length === 0;
+}
+
 function getTitle(s: CopilotSessionSummary): string {
-  if (s.summary) return s.summary;
+  if (s.summary && !isMeaninglessSummary(s.summary)) return s.summary;
   if (s.cwd) return shortPath(s.cwd);
   if (s.repository) return shortPath(s.repository);
   return s.id.slice(0, 8);
 }
 
 function getSubtitle(s: CopilotSessionSummary): string | null {
-  if (s.summary && s.cwd) return shortPath(s.cwd);
+  if (s.summary && !isMeaninglessSummary(s.summary) && s.cwd) return shortPath(s.cwd);
   return null;
 }
 
