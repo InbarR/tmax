@@ -132,7 +132,7 @@ function getDefaultShells(): { shells: ShellProfile[]; defaultShellId: string } 
 
 const platformShells = getDefaultShells();
 
-const defaultConfig: AppConfig = {
+export const defaultConfig: AppConfig = {
   shells: platformShells.shells,
   defaultShellId: platformShells.defaultShellId,
   keybindings: [

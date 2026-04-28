@@ -4,8 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import Store from 'electron-store';
 import { PtyManager } from './pty-manager';
-import { ConfigStore } from './config-store';
-import type { BackgroundMaterial } from './config-store';
+import { ConfigStore, defaultConfig } from './config-store';
+import type { BackgroundMaterial, Keybinding } from './config-store';
+import { KeybindingsFile } from './keybindings-file';
 import { IPC } from '../shared/ipc-channels';
 import { CopilotSessionMonitor } from './copilot-session-monitor';
 import { CopilotSessionWatcher } from './copilot-session-watcher';
@@ -126,6 +127,7 @@ function applyMaterialToWindow(win: BrowserWindow): void {
 let mainWindow: BrowserWindow | null = null;
 let ptyManager: PtyManager | null = null;
 let configStore: ConfigStore | null = null;
+let keybindingsFile: KeybindingsFile | null = null;
 let copilotMonitor: CopilotSessionMonitor | null = null;
 let copilotWatcher: CopilotSessionWatcher | null = null;
 let claudeCodeMonitor: ClaudeCodeSessionMonitor | null = null;
@@ -328,6 +330,63 @@ function setupConfigStore(): void {
   configStore = new ConfigStore();
 }
 
+// Action ids that the renderer's keybindings runtime knows how to dispatch.
+// Documented in the keybindings.json header so users discover what's bindable
+// without reading source. (TASK-39)
+const KEYBINDING_ACTIONS = [
+  'createTerminal',
+  'closeTerminal',
+  'focusUp',
+  'focusDown',
+  'focusLeft',
+  'focusRight',
+  'moveUp',
+  'moveDown',
+  'moveLeft',
+  'moveRight',
+  'splitHorizontal',
+  'splitVertical',
+  'toggleFloat',
+  'toggleFocusMode',
+  'toggleBroadcast',
+  'toggleTabBar',
+  'toggleCopilotPanel',
+  'commandPalette',
+  'paneHints',
+  'jumpToTerminal',
+  'renamePane',
+  'showPrompts',
+  'searchPrompts',
+  'hidePane',
+  'zoomIn',
+  'zoomOut',
+  'zoomReset',
+];
+
+function setupKeybindingsFile(): void {
+  if (!configStore) return;
+  const userDataDir = app.getPath('userData');
+  keybindingsFile = new KeybindingsFile(userDataDir, KEYBINDING_ACTIONS);
+  // Seed the file from the legacy config keybindings on first launch with the
+  // new system. After that, the file is authoritative; the legacy field is
+  // left in place but ignored.
+  const seed: Keybinding[] = configStore.get('keybindings') as Keybinding[];
+  const initial = keybindingsFile.init(seed, (msg) => console.warn(`[keybindings] ${msg}`));
+  // Reflect the parsed file back into the in-process config so the renderer's
+  // first CONFIG_GET picks it up without a separate fetch.
+  configStore.set('keybindings', initial);
+
+  keybindingsFile.onChange((bindings) => {
+    if (!configStore) return;
+    configStore.set('keybindings', bindings);
+    // Push the new bindings to all renderer windows so the keymap rebinds
+    // without an app restart.
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC.KEYBINDINGS_CHANGED, bindings);
+    }
+  });
+}
+
 function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC.PTY_CREATE,
@@ -443,6 +502,23 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IPC.CONFIG_OPEN, () => {
     const configPath = configStore!.getPath();
     shell.openPath(configPath);
+  });
+
+  // ── Keybindings file (TASK-39) ───────────────────────────────────────
+  ipcMain.handle(IPC.KEYBINDINGS_GET, () => {
+    return keybindingsFile?.read() ?? configStore!.get('keybindings');
+  });
+  ipcMain.handle(IPC.KEYBINDINGS_OPEN_FILE, () => {
+    if (keybindingsFile) shell.openPath(keybindingsFile.getPath());
+  });
+  ipcMain.handle(IPC.KEYBINDINGS_RESET, () => {
+    if (!keybindingsFile || !configStore) return [];
+    const bindings = keybindingsFile.resetToDefaults(defaultConfig.keybindings);
+    configStore.set('keybindings', bindings);
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC.KEYBINDINGS_CHANGED, bindings);
+    }
+    return bindings;
   });
 
   // Extensions that can execute code when opened via shell.openPath. Opens
@@ -906,6 +982,7 @@ app.whenReady().then(() => {
     initDiagLogger();
     setupConfigStore();
     console.log('Config store ready');
+    setupKeybindingsFile();
     setupPtyManager();
     console.log('PTY manager ready');
     setupCopilotMonitor();

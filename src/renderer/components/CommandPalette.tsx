@@ -81,6 +81,14 @@ const CommandPalette: React.FC = () => {
       { id: 'searchPrompts', label: 'Search Prompts Across All Panes', shortcut: 'Ctrl+Shift+Y', action: () => store().togglePromptSearch() },
       { id: 'shortcuts', label: 'Show Keyboard Shortcuts', shortcut: 'Ctrl+Shift+?', action: () => store().toggleShortcuts() },
       { id: 'settings', label: 'Open Settings', shortcut: 'Ctrl+,', action: () => store().toggleSettings() },
+      { id: 'openKeybindings', label: 'Keybindings: Open File', action: () => {
+        (window.terminalAPI as any).openKeybindingsFile?.();
+      }},
+      { id: 'resetKeybindings', label: 'Keybindings: Reset to Defaults', action: () => {
+        if (window.confirm('Overwrite keybindings.json with the default bindings? Your customizations will be lost.')) {
+          (window.terminalAPI as any).resetKeybindings?.();
+        }
+      }},
       { id: 'checkForUpdates', label: 'Check for Updates', action: () => {
         window.terminalAPI.checkForUpdates();
       }},

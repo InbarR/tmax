@@ -202,6 +202,18 @@ const App: React.FC = () => {
       store().removeClaudeCodeSession(sessionId);
     });
 
+    // Hot-reload keybindings when the user edits keybindings.json on disk.
+    // The main process watches the file and pushes new bindings here. We
+    // patch the in-memory config directly (NOT updateConfig - that would
+    // round-trip back to disk and re-fire the watcher in a loop).
+    // useKeybindings reads config.keybindings on its next render. (TASK-39)
+    const unsubKeybindings = api.onKeybindingsChanged?.((bindings) => {
+      const current = store().config;
+      if (!current) return;
+      useTerminalStore.setState({ config: { ...current, keybindings: bindings } });
+      store().addToast('Keybindings reloaded');
+    });
+
     return () => {
       api.stopCopilotWatching?.();
       api.stopClaudeCodeWatching?.();
@@ -211,6 +223,7 @@ const App: React.FC = () => {
       unsubClaudeUpdated?.();
       unsubClaudeAdded?.();
       unsubClaudeRemoved?.();
+      unsubKeybindings?.();
     };
   }, []);
 

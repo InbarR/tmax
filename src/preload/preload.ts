@@ -45,6 +45,11 @@ export interface TerminalAPI {
   diagLog(event: string, data?: Record<string, unknown>): void;
   getDiagLogPath(): Promise<string>;
   getSystemFonts(): Promise<string[]>;
+  // ── Keybindings file (TASK-39) ────────────────────────────────────
+  getKeybindings(): Promise<{ key: string; action: string }[]>;
+  openKeybindingsFile(): Promise<void>;
+  resetKeybindings(): Promise<{ key: string; action: string }[]>;
+  onKeybindingsChanged(cb: (bindings: { key: string; action: string }[]) => void): () => void;
   // ── Transparency ──────────────────────────────────────────────────
   setBackgroundMaterial(material: string): Promise<void>;
   getPlatformSupportsMaterial(): Promise<boolean>;
@@ -131,6 +136,22 @@ const terminalAPI: TerminalAPI = {
 
   openConfigFile() {
     return ipcRenderer.invoke(IPC.CONFIG_OPEN);
+  },
+
+  // ── Keybindings file (TASK-39) ──────────────────────────────────────
+  getKeybindings() {
+    return ipcRenderer.invoke(IPC.KEYBINDINGS_GET);
+  },
+  openKeybindingsFile() {
+    return ipcRenderer.invoke(IPC.KEYBINDINGS_OPEN_FILE);
+  },
+  resetKeybindings() {
+    return ipcRenderer.invoke(IPC.KEYBINDINGS_RESET);
+  },
+  onKeybindingsChanged(cb: (bindings: { key: string; action: string }[]) => void) {
+    const handler = (_e: unknown, bindings: { key: string; action: string }[]) => cb(bindings);
+    ipcRenderer.on(IPC.KEYBINDINGS_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC.KEYBINDINGS_CHANGED, handler);
   },
 
   openPath(filePath: string) {

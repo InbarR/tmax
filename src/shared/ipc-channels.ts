@@ -60,6 +60,11 @@ export const IPC = {
   GIT_CREATE_WORKTREE: 'git:createWorktree',
   GIT_DELETE_WORKTREE: 'git:deleteWorktree',
   GIT_GET_BRANCHES: 'git:getBranches',
+  // ── Keybindings file (TASK-39) ─────────────────────────────────────
+  KEYBINDINGS_GET: 'keybindings:get',
+  KEYBINDINGS_OPEN_FILE: 'keybindings:openFile',
+  KEYBINDINGS_RESET: 'keybindings:reset',
+  KEYBINDINGS_CHANGED: 'keybindings:changed',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
