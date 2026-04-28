@@ -24,6 +24,17 @@ export type LayoutNode = LayoutSplitNode | LayoutLeafNode;
 
 // ── Floating panels ──────────────────────────────────────────────────
 
+// Snapshot taken when a tile is floated, used to put it back in the same spot
+// when un-floated. Without this, the tile-to-tile round trip flattens
+// non-trivial grids into a single row (toggleFloat re-inserted via the
+// tab-neighbour heuristic, which always splits horizontally).
+export interface PreFloatAnchor {
+  parentPath: ('first' | 'second')[]; // path to the floated leaf's parent in the tree at float time
+  parentDirection: SplitDirection;
+  parentRatio: number;
+  position: 'first' | 'second'; // where the floated leaf sat in its parent
+}
+
 export interface FloatingPanelState {
   terminalId: TerminalId;
   x: number;
@@ -32,6 +43,7 @@ export interface FloatingPanelState {
   height: number;
   zIndex: number;
   maximized?: boolean;
+  preFloatAnchor?: PreFloatAnchor;
 }
 
 // ── Layout root ──────────────────────────────────────────────────────

@@ -91,7 +91,9 @@ const CopilotPanel: React.FC = () => {
   const lifecycleOverrides = useTerminalStore((s) => s.sessionLifecycleOverrides);
   const pinnedSessions = useTerminalStore((s) => s.sessionPinned);
   const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
+  const aiSessionHighlightRequest = useTerminalStore((s) => s.aiSessionHighlightRequest);
   const prevFocusedIdRef = useRef<string | null>(null);
+  const prevHighlightRequestRef = useRef<number>(0);
   const pendingHighlightRef = useRef<string | null>(null);
 
   // Track which AI session IDs have open terminals
@@ -335,8 +337,11 @@ const CopilotPanel: React.FC = () => {
   // pending ref so the selection resolves after the tab-switch re-render.
   useEffect(() => {
     if (!show) return;
-    if (focusedTerminalId === prevFocusedIdRef.current) return;
+    const focusChanged = focusedTerminalId !== prevFocusedIdRef.current;
+    const requestChanged = aiSessionHighlightRequest !== prevHighlightRequestRef.current;
+    if (!focusChanged && !requestChanged) return;
     prevFocusedIdRef.current = focusedTerminalId;
+    prevHighlightRequestRef.current = aiSessionHighlightRequest;
     if (!focusedTerminalId) return;
 
     const store = useTerminalStore.getState();
@@ -347,12 +352,25 @@ const CopilotPanel: React.FC = () => {
     const session = [...store.copilotSessions, ...store.claudeCodeSessions].find((s) => s.id === aiSessionId);
     if (!session) return;
 
-    // If the target session sits inside a collapsed group, no DOM node
-    // gets the .selected class - the {!isCollapsed && ...} guard below
-    // skips rendering. The user then sees whichever item happened to be
-    // selected before (often the pinned tmax session at index 0) staying
-    // visually highlighted instead of the focused pane's session. Expand
-    // the relevant group so the target row actually renders.
+    // Clear filters that would hide the target row entirely. Without
+    // this, setSelectedIndex picks the right idx in displayList but the
+    // matching .ai-session-item never renders - the user sees a stale
+    // .selected class on whichever row was selected before.
+    //   - showRunningOnly drops idle sessions from filtered (line 220
+    //     in the filtered useMemo). A pane with an idle Claude/Copilot
+    //     session would otherwise vanish from the list.
+    //   - query (search box) narrows filtered by substring; if the user
+    //     had a search active that excludes this session, clear it.
+    //   - filterTab restricts to one provider; switch back to 'all' if
+    //     it would exclude this session.
+    //   - collapsedGroups hides items via {!isCollapsed && ...} in the
+    //     render. Expand the target session's group.
+    if (showRunningOnly && session.status === 'idle') setShowRunningOnly(false);
+    if (query) {
+      const text = `${session.summary} ${session.cwd} ${session.branch}`.toLowerCase();
+      if (!text.includes(query.toLowerCase())) setQuery('');
+    }
+    if (filterTab !== 'all' && session.provider !== filterTab) setFilterTab('all');
     const targetGroup = effectiveRepoKey(session);
     setCollapsedGroups((prev) => {
       if (!prev.has(targetGroup)) return prev;
@@ -370,9 +388,15 @@ const CopilotPanel: React.FC = () => {
       if (idx >= 0) {
         scrollOnSelectChange.current = true;
         setSelectedIndex(idx);
+      } else {
+        // After clearing filters above, filtered hasn't recomputed yet
+        // (state updates are batched). Defer the index lookup to the
+        // next render via the pending ref - the resolve effect runs on
+        // [filtered] change.
+        pendingHighlightRef.current = aiSessionId;
       }
     }
-  }, [focusedTerminalId, show, lifecycleTab, filtered, getSessionLifecycle]);
+  }, [focusedTerminalId, aiSessionHighlightRequest, show, lifecycleTab, filtered, getSessionLifecycle, showRunningOnly, query, filterTab]);
 
   // Resolve a pending highlight after a tab switch has re-rendered `filtered`.
   useEffect(() => {

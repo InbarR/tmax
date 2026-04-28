@@ -1492,6 +1492,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
                 useTerminalStore.getState().showSessionSummary(aiSessionId);
               }}>📖 Session summary</button>
             )}
+            {aiSessionId && (
+              <button className="context-menu-item" onClick={() => {
+                setPaneMenuPos(null);
+                useTerminalStore.getState().showAiSessionsForPane(terminalId);
+              }}>✨ Show in AI sessions</button>
+            )}
             <div className="context-menu-separator" />
             <button className="context-menu-item" onClick={() => {
               setPaneMenuPos(null);

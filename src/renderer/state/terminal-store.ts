@@ -7,6 +7,7 @@ import type {
   LayoutLeafNode,
   LayoutState,
   FloatingPanelState,
+  PreFloatAnchor,
   TerminalInstance,
   AppConfig,
   SplitDirection,
@@ -331,6 +332,60 @@ export function getLeafOrder(root: LayoutNode): TerminalId[] {
 }
 
 /**
+ * Replace whatever subtree currently sits at `path` with `replacement`. Used
+ * when restoring a floated leaf back to its parent's former position - the
+ * "sibling subtree" may have been edited during the float, so we wrap
+ * whatever's there now rather than the snapshot.
+ */
+function setSubtreeAtPath(
+  root: LayoutNode,
+  path: ('first' | 'second')[],
+  replacement: LayoutNode,
+): LayoutNode | null {
+  if (path.length === 0) return replacement;
+  if (root.kind !== 'split') return null; // path runs off the end
+  const [step, ...rest] = path;
+  const child = root[step];
+  const newChild = setSubtreeAtPath(child, rest, replacement);
+  if (newChild === null) return null;
+  return { ...root, [step]: newChild };
+}
+
+/**
+ * Re-insert a leaf at the position captured by its preFloatAnchor. Returns
+ * null when the saved path is no longer reachable in the current tree (e.g.
+ * the user closed/restructured tiles during the float), letting callers fall
+ * back to the heuristic insert.
+ */
+export function restoreFromPreFloatAnchor(
+  root: LayoutNode | null,
+  leafId: TerminalId,
+  anchor: PreFloatAnchor,
+): LayoutNode | null {
+  const newLeaf: LayoutLeafNode = { kind: 'leaf', terminalId: leafId };
+  if (root === null) return newLeaf;
+  // Walk parentPath in the current tree.
+  let target: LayoutNode = root;
+  for (const step of anchor.parentPath) {
+    if (target.kind !== 'split') return null;
+    target = target[step];
+  }
+  // `target` is whatever sits at the parent's former position now (a single
+  // leaf that was the lone surviving sibling, or a subtree the user added to
+  // during the float). Wrap it with the floated leaf in the saved direction
+  // and ratio.
+  const wrappedSplit: LayoutSplitNode = {
+    kind: 'split',
+    id: uuidv4(),
+    direction: anchor.parentDirection,
+    splitRatio: anchor.parentRatio,
+    first: anchor.position === 'first' ? newLeaf : target,
+    second: anchor.position === 'first' ? target : newLeaf,
+  };
+  return setSubtreeAtPath(root, anchor.parentPath, wrappedSplit);
+}
+
+/**
  * Find the path from the root to a specific leaf node. Returns an array of
  * 'first'|'second' steps, or null if not found.
  */
@@ -536,6 +591,11 @@ interface TerminalStore {
   tabMenuTerminalId: TerminalId | null;
   autoColorTabs: boolean;
   showCopilotPanel: boolean;
+  // Counter that bumps when something explicitly asks the AI Sessions
+  // panel to re-evaluate its highlighted session - lets the panel re-run
+  // its auto-highlight effect even when focusedTerminalId hasn't changed
+  // (which would otherwise short-circuit the edge-trigger).
+  aiSessionHighlightRequest: number;
   copilotSessions: CopilotSessionSummary[];
   claudeCodeSessions: CopilotSessionSummary[];
   sessionNameOverrides: Record<string, string>;
@@ -631,6 +691,10 @@ interface TerminalStore {
   loadDirs: () => Promise<void>;
   saveDirs: () => Promise<void>;
   toggleCopilotPanel: () => void;
+  // Open the AI Sessions panel and ask it to highlight the session
+  // linked to this pane. Sets focus to the pane (so the panel reads the
+  // right aiSessionId) and bumps aiSessionHighlightRequest.
+  showAiSessionsForPane: (terminalId: TerminalId) => void;
   loadCopilotSessions: () => Promise<void>;
   searchCopilotSessions: (query: string) => Promise<void>;
   openCopilotSession: (sessionId: string) => Promise<void>;
@@ -710,6 +774,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   worktreeLoading: false,
   autoColorTabs: true,
   showCopilotPanel: false,
+  aiSessionHighlightRequest: 0,
   promptsDialogRequest: null,
   sessionSummaryRequest: null,
   copilotSessions: [],
@@ -1089,6 +1154,32 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const instance = terminals.get(id);
     if (!instance || instance.mode === 'floating') return;
 
+    // Snapshot the floated leaf's position in the tree so moveToTiling can
+    // restore the exact split direction / ratio / side on round-trip,
+    // instead of always re-inserting via the tab-neighbour heuristic
+    // (which uses horizontal splits and flattens grids into rows).
+    let preFloatAnchor: PreFloatAnchor | undefined;
+    if (layout.tilingRoot) {
+      const path = findLeafPath(layout.tilingRoot, id);
+      if (path && path.length > 0) {
+        const position = path[path.length - 1];
+        const parentPath = path.slice(0, -1);
+        let parent: LayoutNode | null = layout.tilingRoot;
+        for (const step of parentPath) {
+          if (parent === null || parent.kind !== 'split') { parent = null; break; }
+          parent = parent[step];
+        }
+        if (parent && parent.kind === 'split') {
+          preFloatAnchor = {
+            parentPath,
+            parentDirection: parent.direction,
+            parentRatio: parent.splitRatio,
+            position,
+          };
+        }
+      }
+    }
+
     // Remove from tiling tree
     let newRoot = layout.tilingRoot;
     if (newRoot) {
@@ -1104,6 +1195,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       height: window.innerHeight - 60,
       zIndex: nextZIndex,
       maximized: true,
+      preFloatAnchor,
     };
 
     const updatedInstance: TerminalInstance = { ...instance, mode: 'floating' };
@@ -1130,6 +1222,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const instance = terminals.get(id);
     if (!instance || instance.mode === 'tiled') return;
 
+    const floatedPanel = layout.floatingPanels.find((p) => p.terminalId === id);
+
     // Remove from floating panels
     const newFloating = layout.floatingPanels.filter(
       (p) => p.terminalId !== id,
@@ -1142,29 +1236,39 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     } else if (targetId && side) {
       newRoot = insertLeaf(layout.tilingRoot, targetId, id, side);
     } else {
-      // No explicit target: insert at the position implied by tab order.
-      // Match wakeFromDormant's logic so "Restore" lands the pane next to
-      // its tab-bar neighbours instead of always at the end.
-      const tabOrder = Array.from(terminals.keys());
-      const myIdx = tabOrder.indexOf(id);
-      const tiledLeaves = new Set(getLeafOrder(layout.tilingRoot));
-
-      let insertAfterId: TerminalId | null = null;
-      for (let i = myIdx - 1; i >= 0; i--) {
-        if (tiledLeaves.has(tabOrder[i])) { insertAfterId = tabOrder[i]; break; }
-      }
-      if (insertAfterId) {
-        newRoot = insertLeaf(layout.tilingRoot, insertAfterId, id, 'right');
+      // No explicit target. If we captured a preFloatAnchor on float and it
+      // still applies to the current tree, restore the leaf to its exact
+      // former position so a Ctrl+Shift+U round-trip preserves the tile
+      // layout. Otherwise fall back to the tab-neighbour heuristic.
+      const restored = floatedPanel?.preFloatAnchor
+        ? restoreFromPreFloatAnchor(layout.tilingRoot, id, floatedPanel.preFloatAnchor)
+        : null;
+      if (restored) {
+        newRoot = restored;
       } else {
-        let insertBeforeId: TerminalId | null = null;
-        for (let i = myIdx + 1; i < tabOrder.length; i++) {
-          if (tiledLeaves.has(tabOrder[i])) { insertBeforeId = tabOrder[i]; break; }
+        // Match wakeFromDormant's logic so "Restore" lands the pane next to
+        // its tab-bar neighbours instead of always at the end.
+        const tabOrder = Array.from(terminals.keys());
+        const myIdx = tabOrder.indexOf(id);
+        const tiledLeaves = new Set(getLeafOrder(layout.tilingRoot));
+
+        let insertAfterId: TerminalId | null = null;
+        for (let i = myIdx - 1; i >= 0; i--) {
+          if (tiledLeaves.has(tabOrder[i])) { insertAfterId = tabOrder[i]; break; }
         }
-        if (insertBeforeId) {
-          newRoot = insertLeaf(layout.tilingRoot, insertBeforeId, id, 'left');
+        if (insertAfterId) {
+          newRoot = insertLeaf(layout.tilingRoot, insertAfterId, id, 'right');
         } else {
-          const order = getLeafOrder(layout.tilingRoot);
-          newRoot = insertLeaf(layout.tilingRoot, order[order.length - 1], id, 'right');
+          let insertBeforeId: TerminalId | null = null;
+          for (let i = myIdx + 1; i < tabOrder.length; i++) {
+            if (tiledLeaves.has(tabOrder[i])) { insertBeforeId = tabOrder[i]; break; }
+          }
+          if (insertBeforeId) {
+            newRoot = insertLeaf(layout.tilingRoot, insertBeforeId, id, 'left');
+          } else {
+            const order = getLeafOrder(layout.tilingRoot);
+            newRoot = insertLeaf(layout.tilingRoot, order[order.length - 1], id, 'right');
+          }
         }
       }
     }
@@ -2310,6 +2414,16 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   // ── Copilot panel actions ──────────────────────────────────────────
+  showAiSessionsForPane: (terminalId: TerminalId) => {
+    const { terminals } = get();
+    if (!terminals.has(terminalId)) return;
+    set((s) => ({
+      showCopilotPanel: true,
+      focusedTerminalId: terminalId,
+      aiSessionHighlightRequest: s.aiSessionHighlightRequest + 1,
+    }));
+  },
+
   toggleCopilotPanel: () => {
     set((s) => ({ showCopilotPanel: !s.showCopilotPanel }));
   },
