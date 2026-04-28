@@ -12,8 +12,8 @@ dist/
 
 # Claude Code local settings
 .claude/
-CLAUDE.md
-AGENTS.md
+CLAUDE.local.md
+AGENTS.local.md
 
 # Build/swap helpers
 _swap.cmd
