@@ -658,10 +658,14 @@ async function fetchGcCounter(path) {
 // Platform download paths tracked via data-goatcounter-click in index.html.
 // Primary download is recommended per-visitor (detected OS); "other" links
 // cover cross-platform downloads. We aggregate both into a single per-OS tile.
+// Keys here MUST match the strings emitted by index.html's
+// data-goatcounter-click attributes (e.g. `dl-primary-Windows-x64`,
+// `dl-other-Linux-x64-rpm`). Those come from ALL_DOWNLOADS' .os/.arch fields,
+// not from process.platform / uname, so they are capitalized OS names.
 const PLATFORMS = [
-  { key: 'win32',  label: 'Windows', archs: ['x64', 'arm64'] },
-  { key: 'darwin', label: 'macOS',   archs: ['x64', 'arm64'] },
-  { key: 'linux',  label: 'Linux',   archs: ['x64'] },
+  { key: 'Windows', label: 'Windows', archs: ['x64', 'arm64'] },
+  { key: 'macOS',   label: 'macOS',   archs: ['x64', 'arm64'] },
+  { key: 'Linux',   label: 'Linux',   archs: ['x64', 'x64-rpm'] },
 ];
 
 (async function loadGoatCounter() {
