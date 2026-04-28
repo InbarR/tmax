@@ -707,7 +707,6 @@ const CopilotPanel: React.FC = () => {
           >
             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/></svg>
           </button>
-          <button className="dir-panel-close" onClick={handleRefresh} data-tooltip="Refresh"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 1v5h5"/><path d="M3.5 10a5.5 5.5 0 1 0 1.1-5.5L1 8"/></svg></button>
           <button className="dir-panel-close" onClick={() => useTerminalStore.getState().toggleCopilotPanel()} data-tooltip="Close">&#10005;</button>
           {headerMenuOpen && (
             <>
@@ -750,6 +749,13 @@ const CopilotPanel: React.FC = () => {
                 >
                   <span style={{ display: 'inline-block', width: 16 }}>🧹</span>
                   Cleanup by prompt count…
+                </button>
+                <button
+                  className="context-menu-item"
+                  onClick={() => { handleRefresh(); setHeaderMenuOpen(false); }}
+                >
+                  <span style={{ display: 'inline-block', width: 16 }}>⟲</span>
+                  Refresh
                 </button>
               </div>
             </>
