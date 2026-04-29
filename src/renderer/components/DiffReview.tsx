@@ -322,12 +322,13 @@ const FileViewer: React.FC<FileViewerProps> = ({ filePath, annotatedFile, loadin
 
 interface CommentsPanelProps {
   comments: DiffComment[];
+  agentLabel: string;
   onRemoveComment: (id: string) => void;
   onClearComments: () => void;
   onSendComments: () => void;
 }
 
-const CommentsPanel: React.FC<CommentsPanelProps> = ({ comments, onRemoveComment, onClearComments, onSendComments }) => {
+const CommentsPanel: React.FC<CommentsPanelProps> = ({ comments, agentLabel, onRemoveComment, onClearComments, onSendComments }) => {
   const [collapsed, setCollapsed] = useState(false);
 
   if (comments.length === 0) return null;
@@ -352,7 +353,7 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({ comments, onRemoveComment
             &#128465; Clear
           </button>
           <button className="diff-comments-send-btn" onClick={(e) => { e.stopPropagation(); onSendComments(); }} disabled={comments.length === 0}>
-            &#9992; Send {comments.length} to Claude
+            &#9992; Send {comments.length} to {agentLabel}
           </button>
         </div>
       </div>
@@ -402,6 +403,22 @@ const DiffReview: React.FC = () => {
   const terminalCwd = useTerminalStore(s =>
     diffReviewTerminalId ? s.terminals.get(diffReviewTerminalId)?.cwd ?? '' : ''
   );
+  const agentLabel = useTerminalStore(s => {
+    if (!diffReviewTerminalId) return 'Agent';
+    const t = s.terminals.get(diffReviewTerminalId);
+    if (!t) return 'Agent';
+    // Primary: check session lists via aiSessionId (authoritative)
+    if (t.aiSessionId) {
+      if (s.copilotSessions.some(x => x.id === t.aiSessionId)) return 'Copilot';
+      if (s.claudeCodeSessions.some(x => x.id === t.aiSessionId)) return 'Claude';
+    }
+    // Fallback: process/title heuristic (before session linking completes)
+    const proc = (t.lastProcess ?? '').toLowerCase();
+    const title = (t.title ?? '').toLowerCase();
+    if (proc.includes('copilot') || title.includes('copilot')) return 'Copilot';
+    if (proc.includes('claude') || proc === 'cc' || title.includes('claude')) return 'Claude';
+    return 'Agent';
+  });
 
   const [diffResult, setDiffResult] = useState<DiffResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -568,6 +585,7 @@ const DiffReview: React.FC = () => {
             </div>
             <CommentsPanel
               comments={comments}
+              agentLabel={agentLabel}
               onRemoveComment={removeComment}
               onClearComments={clearComments}
               onSendComments={sendComments}
