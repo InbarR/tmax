@@ -244,7 +244,15 @@ const TabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }> = ({ ver
     []
   );
 
-  const terminalEntries = Array.from(terminals.entries());
+  // In flat tab mode, filter terminals to the active workspace so users
+  // who opted into workspaces and then back to flat don't see ghost
+  // tabs from other workspaces. In a single-workspace install this is a
+  // no-op. (TASK-40)
+  const activeWorkspaceId = useTerminalStore((s) => s.activeWorkspaceId);
+  const allEntries = Array.from(terminals.entries());
+  const terminalEntries = allEntries.filter(([, t]) =>
+    (t.workspaceId ?? activeWorkspaceId) === activeWorkspaceId,
+  );
   const terminalIds = useMemo(() => terminalEntries.map(([id]) => id), [terminalEntries]);
   const sortStrategy = vertical ? verticalListSortingStrategy : horizontalListSortingStrategy;
 

@@ -4456,3 +4456,112 @@ select.settings-input {
   margin-top: 4px;
 }
 
+
+/* Workspace tab bar (TASK-40, tabMode === 'workspaces') ─────────────── */
+.workspace-tab-bar {
+  display: flex;
+  flex-direction: row;
+  height: 38px;
+  min-height: 38px;
+  background: var(--bg-secondary);
+  overflow-x: auto;
+  overflow-y: hidden;
+  align-items: center;
+  padding: 0 6px;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-color);
+  -webkit-app-region: no-drag;
+}
+.workspace-tab-bar.vertical {
+  flex-direction: column;
+  width: 180px;
+  min-width: 180px;
+  height: auto;
+  align-items: stretch;
+  border-right: 1px solid var(--border-color);
+  border-bottom: none;
+}
+.workspace-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px 0 12px;
+  height: 28px;
+  cursor: pointer;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  user-select: none;
+  transition: background 0.12s ease, color 0.12s ease;
+  flex-shrink: 0;
+  max-width: 220px;
+  min-width: 60px;
+}
+.workspace-tab:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+.workspace-tab.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-weight: 600;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.workspace-tab-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.workspace-tab-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  opacity: 0.5;
+}
+.workspace-tab:hover .workspace-tab-close,
+.workspace-tab.active .workspace-tab-close {
+  opacity: 1;
+}
+.workspace-tab-close:hover {
+  background: rgba(243, 139, 168, 0.18);
+  color: #f38ba8;
+}
+.workspace-tab-rename {
+  background: var(--bg);
+  border: 1px solid var(--focus-border, #89b4fa);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  padding: 2px 6px;
+  outline: none;
+  width: 140px;
+}
+.workspace-tab-new {
+  background: transparent;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.workspace-tab-new:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.3);
+}

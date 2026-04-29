@@ -361,6 +361,19 @@ const KEYBINDING_ACTIONS = [
   'zoomIn',
   'zoomOut',
   'zoomReset',
+  // Workspaces (TASK-40)
+  'newWorkspace',
+  'nextWorkspace',
+  'prevWorkspace',
+  'goToWorkspace1',
+  'goToWorkspace2',
+  'goToWorkspace3',
+  'goToWorkspace4',
+  'goToWorkspace5',
+  'goToWorkspace6',
+  'goToWorkspace7',
+  'goToWorkspace8',
+  'goToWorkspace9',
 ];
 
 function setupKeybindingsFile(): void {

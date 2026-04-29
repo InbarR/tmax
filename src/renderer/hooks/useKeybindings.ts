@@ -67,6 +67,21 @@ const DEFAULT_BINDINGS: Record<string, string> = {
   // Ctrl+Shift+W only. (TASK-38)
   'Ctrl+Shift+N': 'createTerminal',
   'Ctrl+Shift+W': 'closeTerminal',
+  // Workspaces (TASK-40). No-op when only one workspace exists.
+  // Ctrl+Tab / Ctrl+Shift+Tab are intentionally NOT bound here — they
+  // already drive focusNext/focusPrev across panes (see below) and that
+  // pane-cycling behavior is the more frequent operation.
+  'Ctrl+Shift+]': 'nextWorkspace',
+  'Ctrl+Shift+[': 'prevWorkspace',
+  'Ctrl+1': 'goToWorkspace1',
+  'Ctrl+2': 'goToWorkspace2',
+  'Ctrl+3': 'goToWorkspace3',
+  'Ctrl+4': 'goToWorkspace4',
+  'Ctrl+5': 'goToWorkspace5',
+  'Ctrl+6': 'goToWorkspace6',
+  'Ctrl+7': 'goToWorkspace7',
+  'Ctrl+8': 'goToWorkspace8',
+  'Ctrl+9': 'goToWorkspace9',
   'Shift+ArrowUp': 'focusUp',
   'Shift+ArrowDown': 'focusDown',
   'Shift+ArrowLeft': 'focusLeft',
@@ -318,6 +333,37 @@ function dispatchAction(action: string): void {
       const direction = action.replace('resize', '').toLowerCase() as 'up' | 'down' | 'left' | 'right';
       const delta = direction === 'up' || direction === 'left' ? -5 : 5;
       adjustFocusedSplitRatio(store, focusedId, direction, delta);
+      break;
+    }
+    // Workspaces (TASK-40). No-op when only one workspace exists.
+    case 'nextWorkspace': {
+      const ids = [...store.workspaces.keys()];
+      if (ids.length < 2) break;
+      const i = ids.indexOf(store.activeWorkspaceId);
+      store.setActiveWorkspace(ids[(i + 1) % ids.length]);
+      break;
+    }
+    case 'prevWorkspace': {
+      const ids = [...store.workspaces.keys()];
+      if (ids.length < 2) break;
+      const i = ids.indexOf(store.activeWorkspaceId);
+      store.setActiveWorkspace(ids[(i - 1 + ids.length) % ids.length]);
+      break;
+    }
+    case 'newWorkspace': {
+      store.createWorkspace();
+      store.createTerminal();
+      break;
+    }
+    default: {
+      // Ctrl+1..9 → goToWorkspaceN. Only meaningful in workspaces mode.
+      const m = /^goToWorkspace([1-9])$/.exec(action);
+      if (m) {
+        if (store.config?.tabMode !== 'workspaces') break;
+        const idx = parseInt(m[1], 10) - 1;
+        const ids = [...store.workspaces.keys()];
+        if (idx < ids.length) store.setActiveWorkspace(ids[idx]);
+      }
       break;
     }
   }

@@ -81,6 +81,30 @@ const CommandPalette: React.FC = () => {
       { id: 'searchPrompts', label: 'Search Prompts Across All Panes', shortcut: 'Ctrl+Shift+Y', action: () => store().togglePromptSearch() },
       { id: 'shortcuts', label: 'Show Keyboard Shortcuts', shortcut: 'Ctrl+Shift+?', action: () => store().toggleShortcuts() },
       { id: 'settings', label: 'Open Settings', shortcut: 'Ctrl+,', action: () => store().toggleSettings() },
+      { id: 'tabsFlatMode', label: 'Tabs: Use flat mode (one tab per terminal)', action: () => {
+        store().updateConfig({ tabMode: 'flat' });
+      }},
+      { id: 'tabsWorkspacesMode', label: 'Tabs: Use workspaces mode (each tab = a collection of panes)', action: () => {
+        store().updateConfig({ tabMode: 'workspaces' });
+      }},
+      { id: 'newWorkspace', label: 'Workspace: New', action: async () => {
+        store().createWorkspace();
+        await store().createTerminal();
+      }},
+      { id: 'nextWorkspace', label: 'Workspace: Next', shortcut: 'Ctrl+Shift+]', action: () => {
+        const s = store();
+        const ids = [...s.workspaces.keys()];
+        if (ids.length < 2) return;
+        const i = ids.indexOf(s.activeWorkspaceId);
+        s.setActiveWorkspace(ids[(i + 1) % ids.length]);
+      }},
+      { id: 'prevWorkspace', label: 'Workspace: Previous', shortcut: 'Ctrl+Shift+[', action: () => {
+        const s = store();
+        const ids = [...s.workspaces.keys()];
+        if (ids.length < 2) return;
+        const i = ids.indexOf(s.activeWorkspaceId);
+        s.setActiveWorkspace(ids[(i - 1 + ids.length) % ids.length]);
+      }},
       { id: 'openKeybindings', label: 'Keybindings: Open File', action: () => {
         (window.terminalAPI as any).openKeybindingsFile?.();
       }},
