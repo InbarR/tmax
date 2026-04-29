@@ -1,10 +1,54 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { marked } from 'marked';
 import mermaid from 'mermaid';
+import DOMPurify from 'dompurify';
 import { useZoom } from '../hooks/useZoom';
 import ZoomControls from './ZoomControls';
 
-// Initialize mermaid with dark theme matching the app
+// Restrict link/image URI schemes to safe ones. Markdown files can be untrusted
+// (cloned repos, downloaded notes), and a renderer XSS in this Electron app would
+// have access to the privileged window.terminalAPI bridge — i.e. arbitrary shell
+// command execution. DOMPurify strips raw <script>, event handlers, javascript:
+// URIs, etc. We additionally enforce an href/src scheme allowlist below.
+const SAFE_URI_REGEX = /^(?:https?:|mailto:|tel:|#|\/|\.\/|\.\.\/)/i;
+const SAFE_IMG_URI_REGEX = /^(?:https?:|data:image\/(?:png|jpeg|jpg|gif|webp|svg\+xml);|\/|\.\/|\.\.\/)/i;
+
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A') {
+    const href = node.getAttribute('href');
+    if (href && !SAFE_URI_REGEX.test(href.trim())) {
+      node.removeAttribute('href');
+    }
+    // Force safe link behavior for any remaining anchors.
+    if (node.hasAttribute('href')) {
+      node.setAttribute('target', '_blank');
+      node.setAttribute('rel', 'noopener noreferrer');
+    }
+  }
+  if (node.tagName === 'IMG') {
+    const src = node.getAttribute('src');
+    if (src && !SAFE_IMG_URI_REGEX.test(src.trim())) {
+      node.removeAttribute('src');
+    }
+  }
+});
+
+function sanitizeHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select', 'option'],
+    FORBID_ATTR: ['style'],
+  });
+}
+
+function sanitizeSvg(svg: string): string {
+  return DOMPurify.sanitize(svg, {
+    USE_PROFILES: { svg: true, svgFilters: true },
+    FORBID_TAGS: ['script', 'foreignObject'],
+    FORBID_ATTR: ['onload', 'onerror', 'onclick'],
+  });
+}
+
 mermaid.initialize({
   startOnLoad: false,
   theme: 'dark',
@@ -56,7 +100,8 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
 
   const compiledHtml = useMemo(() => {
     if (!isMd || viewMode !== 'friendly') return '';
-    return marked(content, { breaks: true, gfm: true }) as string;
+    const rawHtml = marked(content, { breaks: true, gfm: true }) as string;
+    return sanitizeHtml(rawHtml);
   }, [content, isMd, viewMode]);
 
   // Render mermaid diagrams after HTML is injected
@@ -71,7 +116,7 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
         const { svg } = await mermaid.render(`mermaid-diagram-${idx}-${Date.now()}`, source);
         const wrapper = document.createElement('div');
         wrapper.className = 'mermaid-diagram';
-        wrapper.innerHTML = svg;
+        wrapper.innerHTML = sanitizeSvg(svg);
         pre.replaceWith(wrapper);
       } catch {
         // If mermaid fails to parse, leave as code block
