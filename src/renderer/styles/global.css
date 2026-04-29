@@ -3136,6 +3136,7 @@ select.settings-input {
   z-index: 500;
   display: flex;
   outline: none;
+  overflow: hidden;
 }
 
 .file-preview-overlay.right {
@@ -3163,10 +3164,12 @@ select.settings-input {
 
 .file-preview-sidebar {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg-primary);
   border-left: 1px solid var(--border-color);
+  overflow: hidden;
 }
 
 .file-preview-header {
@@ -3181,6 +3184,11 @@ select.settings-input {
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
   min-height: 32px;
+  position: relative;
+  z-index: 2;
+  overflow: visible;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .file-preview-name {
@@ -3225,6 +3233,10 @@ select.settings-input {
   white-space: pre-wrap;
   word-break: break-word;
   tab-size: 2;
+  min-height: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .file-preview-content::-webkit-scrollbar {
@@ -3247,6 +3259,220 @@ select.settings-input {
 
 .file-preview-content::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* ===== Markdown Preview Toggle ===== */
+.md-view-toggle {
+  display: flex;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.md-view-toggle-btn {
+  padding: 2px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.md-view-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.md-view-toggle-btn.active {
+  background: var(--focus-border);
+  color: #1e1e2e;
+  font-weight: 600;
+}
+
+/* ===== Rendered Markdown Content ===== */
+/* ===== Markdown Zoom Controls ===== */
+.md-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 2px;
+}
+
+.md-zoom-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 36px;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.md-zoom-label:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.md-rendered-content {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 24px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.md-rendered-content h1,
+.md-rendered-content h2,
+.md-rendered-content h3,
+.md-rendered-content h4,
+.md-rendered-content h5,
+.md-rendered-content h6 {
+  color: var(--text-primary);
+  margin-top: 1.4em;
+  margin-bottom: 0.6em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.md-rendered-content h1 { font-size: 1.8em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
+.md-rendered-content h2 { font-size: 1.4em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.2em; }
+.md-rendered-content h3 { font-size: 1.2em; }
+.md-rendered-content h4 { font-size: 1.05em; }
+
+.md-rendered-content p {
+  margin: 0.8em 0;
+}
+
+.md-rendered-content a {
+  color: var(--focus-border);
+  text-decoration: underline;
+}
+
+.md-rendered-content code {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  padding: 2px 5px;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.9em;
+}
+
+.md-rendered-content pre {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.md-rendered-content pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.md-rendered-content ul,
+.md-rendered-content ol {
+  padding-left: 1.8em;
+  margin: 0.6em 0;
+}
+
+.md-rendered-content li {
+  margin: 0.3em 0;
+}
+
+.md-rendered-content blockquote {
+  border-left: 3px solid var(--focus-border);
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  color: var(--text-secondary);
+  background: rgba(137, 180, 250, 0.05);
+}
+
+.md-rendered-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+
+.md-rendered-content th,
+.md-rendered-content td {
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  text-align: left;
+}
+
+.md-rendered-content th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+}
+
+.md-rendered-content hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 1.5em 0;
+}
+
+.md-rendered-content img {
+  max-width: 100%;
+  border-radius: 4px;
+}
+
+.md-rendered-content input[type="checkbox"] {
+  margin-right: 6px;
+}
+
+.md-rendered-content::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.md-rendered-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+}
+
+.md-rendered-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.md-rendered-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ===== .md Link Hover Effects (Copilot Panel) ===== */
+.md-file-link {
+  color: var(--text-primary);
+  cursor: default;
+  transition: color 0.15s, text-decoration 0.15s;
+}
+
+.md-file-link:hover {
+  color: var(--focus-border);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ===== Mermaid Diagrams ===== */
+.mermaid-diagram {
+  margin: 1em 0;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
 }
 
 /* ===== Input Dialog ===== */

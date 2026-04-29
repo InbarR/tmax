@@ -502,6 +502,49 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       },
     });
 
+    // Register link provider for .md file paths (Ctrl+Click to preview)
+    term.registerLinkProvider({
+      provideLinks(bufferLineNumber, callback) {
+        const line = term.buffer.active.getLine(bufferLineNumber - 1);
+        if (!line) { callback(undefined); return; }
+        const text = line.translateToString();
+        // Match file paths ending in .md (absolute or relative)
+        const mdPathRegex = /(?:[a-zA-Z]:[\\/]|[\/~.])?[^\s"'`<>|:*?]*\.md\b/gi;
+        const links: Array<{ range: { start: { x: number; y: number }; end: { x: number; y: number } }; text: string; activate: () => void; tooltip: string }> = [];
+        let match: RegExpExecArray | null;
+        while ((match = mdPathRegex.exec(text)) !== null) {
+          const startX = match.index + 1;
+          const endX = match.index + match[0].length;
+          const matchedPath = match[0];
+          links.push({
+            range: {
+              start: { x: startX, y: bufferLineNumber },
+              end: { x: endX, y: bufferLineNumber },
+            },
+            text: matchedPath,
+            tooltip: `Ctrl+Click to preview: ${matchedPath}`,
+            activate() {
+              const termInst = useTerminalStore.getState().terminals.get(terminalId);
+              const cwd = termInst?.cwd || '';
+              // Resolve relative paths against terminal cwd
+              let fullPath = matchedPath;
+              if (!/^[a-zA-Z]:/.test(matchedPath) && !matchedPath.startsWith('/') && !matchedPath.startsWith('~')) {
+                const sep = cwd.includes('\\') ? '\\' : '/';
+                fullPath = cwd + sep + matchedPath;
+              }
+              (window.terminalAPI as any).fileRead(fullPath).then((content: string | null) => {
+                if (content !== null) {
+                  const fileName = fullPath.split(/[/\\]/).pop() || fullPath;
+                  useTerminalStore.setState({ markdownPreview: { filePath: fullPath, content, fileName } });
+                }
+              });
+            },
+          });
+        }
+        callback(links.length > 0 ? links : undefined);
+      },
+    });
+
     searchAddonRef.current = searchAddon;
     registerTerminal(terminalId, term, searchAddon, (value: boolean) => {
       cursorHideSignalsRef.current.bracketedPaste = value;
