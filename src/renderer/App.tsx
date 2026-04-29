@@ -10,6 +10,7 @@ import type { CopilotSessionSummary } from '../shared/copilot-types';
 import { useKeybindings } from './hooks/useKeybindings';
 import { useDragTerminal } from './hooks/useDragTerminal';
 import TabBar from './components/TabBar';
+import WorkspaceTabBar from './components/WorkspaceTabBar';
 import TilingLayout from './components/TilingLayout';
 import FloatingLayer from './components/FloatingLayer';
 import DropZoneOverlay from './components/DropZoneOverlay';
@@ -54,6 +55,9 @@ const App: React.FC = () => {
   const showCommandPalette = useTerminalStore((s) => s.showCommandPalette);
   const tabBarPosition = useTerminalStore((s) => s.tabBarPosition);
   const hideTabBar = useTerminalStore((s) => s.hideTabTitles);
+  // Pick the tab-bar variant based on config.tabMode (TASK-40).
+  const tabMode = useTerminalStore((s) => s.config?.tabMode) ?? 'flat';
+  const TopBar = tabMode === 'workspaces' ? WorkspaceTabBar : TabBar;
 
   useKeybindings();
 
@@ -207,7 +211,7 @@ const App: React.FC = () => {
     // patch the in-memory config directly (NOT updateConfig - that would
     // round-trip back to disk and re-fire the watcher in a loop).
     // useKeybindings reads config.keybindings on its next render. (TASK-39)
-    const unsubKeybindings = api.onKeybindingsChanged?.((bindings) => {
+    const unsubKeybindings = api.onKeybindingsChanged?.((bindings: { key: string; action: string }[]) => {
       const current = store().config;
       if (!current) return;
       useTerminalStore.setState({ config: { ...current, keybindings: bindings } });
@@ -241,9 +245,9 @@ const App: React.FC = () => {
       onDragCancel={handleDragCancel}
     >
       <div className={`app-shell tab-bar-${tabBarPosition}`}>
-        {!hideTabBar && tabBarPosition === 'top' && <TabBar />}
+        {!hideTabBar && tabBarPosition === 'top' && <TopBar />}
         <div className="content-row">
-          {!hideTabBar && tabBarPosition === 'left' && <TabBar vertical />}
+          {!hideTabBar && tabBarPosition === 'left' && <TopBar vertical />}
           <div className="main-area">
             <DirPanel />
             <CopilotPanel />
@@ -262,9 +266,9 @@ const App: React.FC = () => {
               <DropZoneOverlay />
             </div>
           </div>
-          {!hideTabBar && tabBarPosition === 'right' && <TabBar vertical side="right" />}
+          {!hideTabBar && tabBarPosition === 'right' && <TopBar vertical side="right" />}
         </div>
-        {!hideTabBar && tabBarPosition === 'bottom' && <TabBar />}
+        {!hideTabBar && tabBarPosition === 'bottom' && <TopBar />}
         <StatusBar />
         <TerminalSwitcher />
         <PromptSearchDialog />

@@ -54,6 +54,12 @@ export interface AppConfig {
   copilotCommand?: string;
   claudeCodeCommand?: string;
   tabBarPosition?: 'top' | 'bottom' | 'left' | 'right';
+  /**
+   * Tab semantics: "flat" (default) keeps today's behavior - one tab per
+   * terminal. "workspaces" makes each tab a named collection of panes
+   * with its own grid; clicking a chip swaps the entire layout. (TASK-40)
+   */
+  tabMode?: 'flat' | 'workspaces';
   backgroundMaterial?: BackgroundMaterial;
   backgroundOpacity?: number; // 0.0–1.0, default 0.8
 }
@@ -142,6 +148,19 @@ export const defaultConfig: AppConfig = {
     // Ctrl+Shift+W only. (TASK-38)
     { action: 'createTerminal', key: 'Ctrl+Shift+N' },
     { action: 'closeTerminal', key: 'Ctrl+Shift+W' },
+    // Workspaces (TASK-40). Only meaningful in workspaces tab mode.
+    // Ctrl+Tab / Ctrl+Shift+Tab are reserved for focusNext/focusPrev.
+    { action: 'nextWorkspace', key: 'Ctrl+Shift+]' },
+    { action: 'prevWorkspace', key: 'Ctrl+Shift+[' },
+    { action: 'goToWorkspace1', key: 'Ctrl+1' },
+    { action: 'goToWorkspace2', key: 'Ctrl+2' },
+    { action: 'goToWorkspace3', key: 'Ctrl+3' },
+    { action: 'goToWorkspace4', key: 'Ctrl+4' },
+    { action: 'goToWorkspace5', key: 'Ctrl+5' },
+    { action: 'goToWorkspace6', key: 'Ctrl+6' },
+    { action: 'goToWorkspace7', key: 'Ctrl+7' },
+    { action: 'goToWorkspace8', key: 'Ctrl+8' },
+    { action: 'goToWorkspace9', key: 'Ctrl+9' },
     { action: 'focusUp', key: 'Shift+ArrowUp' },
     { action: 'focusDown', key: 'Shift+ArrowDown' },
     { action: 'focusLeft', key: 'Shift+ArrowLeft' },

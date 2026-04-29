@@ -53,6 +53,26 @@ export interface LayoutState {
   floatingPanels: FloatingPanelState[];
 }
 
+// ── Workspaces (TASK-40) ─────────────────────────────────────────────
+// A workspace is a named collection of panes with its own grid.
+// Today's "flat" tab mode: one default workspace holds all terminals
+// (UI hides the workspace bar entirely).
+// "Workspaces" tab mode: each tab in the bar represents a workspace;
+// clicking a chip swaps the active workspace and remounts its grid.
+
+export type WorkspaceId = string;
+
+export interface Workspace {
+  id: WorkspaceId;
+  name: string;
+  /** Color hint for the workspace chip. Optional. */
+  color?: string;
+  layout: LayoutState;
+}
+
+export const DEFAULT_WORKSPACE_ID = 'workspace-default';
+export const DEFAULT_WORKSPACE_NAME = 'Workspace';
+
 // ── Terminal instances ───────────────────────────────────────────────
 
 export interface TerminalInstance {
@@ -70,6 +90,8 @@ export interface TerminalInstance {
   aiSessionId?: string;
   aiAutoTitle?: boolean;
   groupId?: string;
+  /** Which workspace this terminal belongs to. (TASK-40) */
+  workspaceId?: WorkspaceId;
   wsl?: boolean;
   wslDistro?: string;
 }
@@ -124,6 +146,10 @@ export interface AppConfig {
   copilotCommand?: string;
   claudeCodeCommand?: string;
   tabBarPosition?: 'top' | 'bottom' | 'left' | 'right';
+  // Tab semantics. "flat" (default): one tab per terminal (today's
+  // behavior). "workspaces": each tab is a named collection of panes
+  // with its own grid. (TASK-40)
+  tabMode?: 'flat' | 'workspaces';
   hideTabCloseButtons?: boolean;
   backgroundMaterial?: BackgroundMaterial;
   backgroundOpacity?: number; // 0.0–1.0, default 0.8

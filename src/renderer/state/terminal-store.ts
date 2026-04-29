@@ -12,7 +12,10 @@ import type {
   AppConfig,
   SplitDirection,
   TabGroup,
+  Workspace,
+  WorkspaceId,
 } from './types';
+import { DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from './types';
 import type { CopilotSessionSummary } from '../../shared/copilot-types';
 import type { DiffMode } from '../../shared/diff-types';
 import type { RepoWorktrees } from '../../shared/worktree-types';
@@ -129,6 +132,7 @@ async function openAiSession(
     aiSessionId: sessionId,
     wsl: isWsl || undefined,
     wslDistro: wslDistro || undefined,
+    workspaceId: get().activeWorkspaceId,
   };
 
   const { terminals, layout } = get();
@@ -555,7 +559,17 @@ function buildGridTree(terminalIds: TerminalId[], forceCols?: number): LayoutNod
 interface TerminalStore {
   // State
   terminals: Map<TerminalId, TerminalInstance>;
+  /**
+   * Active workspace's layout. In flat tab-mode (today's default) there
+   * is exactly one workspace and this is the canonical grid. In
+   * workspaces tab-mode, this mirrors `workspaces.get(activeWorkspaceId)
+   * .layout` and gets swapped on workspace switch. (TASK-40)
+   */
   layout: LayoutState;
+  /** All workspaces by id. (TASK-40) */
+  workspaces: Map<WorkspaceId, Workspace>;
+  /** Which workspace is currently rendered in the grid. (TASK-40) */
+  activeWorkspaceId: WorkspaceId;
   focusedTerminalId: TerminalId | null;
   config: AppConfig | null;
   isDragging: boolean;
@@ -690,6 +704,24 @@ interface TerminalStore {
   openTabMenu: (id?: TerminalId) => void;
   loadDirs: () => Promise<void>;
   saveDirs: () => Promise<void>;
+  // ── Workspaces (TASK-40) ─────────────────────────────────────────
+  /**
+   * Create a new workspace and switch to it. Optional initialName uses the
+   * given string; otherwise auto-numbered ("Workspace 2", "Workspace 3"...).
+   * Caller is responsible for spawning a terminal into the new workspace
+   * if they want one (UI's "+ New tab" handler does this in workspaces mode).
+   */
+  createWorkspace: (initialName?: string) => WorkspaceId;
+  /** Switch which workspace is rendered in the grid. */
+  setActiveWorkspace: (id: WorkspaceId) => void;
+  /** Rename a workspace. */
+  renameWorkspace: (id: WorkspaceId, name: string) => void;
+  /**
+   * Close a workspace and all of its terminals. If the closed workspace
+   * was active, switches to the next remaining workspace (or creates a
+   * fresh default if it was the last one).
+   */
+  closeWorkspace: (id: WorkspaceId) => void;
   toggleCopilotPanel: () => void;
   // Open the AI Sessions panel and ask it to highlight the session
   // linked to this pane. Sets focus to the pane (so the panel reads the
@@ -765,10 +797,20 @@ let _loadWorktreesSeq = 0;
 
 // ── Store implementation ─────────────────────────────────────────────
 
+function makeDefaultWorkspace(): Workspace {
+  return {
+    id: DEFAULT_WORKSPACE_ID,
+    name: DEFAULT_WORKSPACE_NAME,
+    layout: { tilingRoot: null, floatingPanels: [] },
+  };
+}
+
 export const useTerminalStore = create<TerminalStore>((set, get) => ({
   // ── Initial state ────────────────────────────────────────────────
   terminals: new Map(),
   layout: { tilingRoot: null, floatingPanels: [] },
+  workspaces: new Map<WorkspaceId, Workspace>([[DEFAULT_WORKSPACE_ID, makeDefaultWorkspace()]]),
+  activeWorkspaceId: DEFAULT_WORKSPACE_ID,
   focusedTerminalId: null,
   config: null,
   isDragging: false,
@@ -888,6 +930,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       pid,
       lastProcess: '',
       startupCommand: '',
+      workspaceId: get().activeWorkspaceId,
     };
 
     const newTerminals = new Map(terminals);
@@ -1079,6 +1122,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       pid,
       lastProcess: '',
       startupCommand: '',
+      // Splits land in the same workspace as their target pane.
+      workspaceId: targetInstance.workspaceId ?? get().activeWorkspaceId,
     };
 
     const side = insertSide ?? (direction === 'horizontal' ? 'right' : 'bottom');
@@ -1528,14 +1573,21 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   reconcileGridLayout: () => {
-    const { viewMode, terminals, layout, gridColumns, gridTabIds } = get();
+    const { viewMode, terminals, layout, gridColumns, gridTabIds, activeWorkspaceId } = get();
     if (viewMode !== 'grid') return;
 
     // If the user explicitly gridded a subset via gridSelectedTabs, respect
-    // that scope - only reconcile within the selected set.
+    // that scope - only reconcile within the selected set. Also restrict
+    // to terminals belonging to the active workspace (TASK-40) so a grid
+    // rebuild after a workspace switch doesn't drag terminals from other
+    // workspaces back into the visible grid.
     const hasSubsetScope = Object.keys(gridTabIds).length > 0;
     const eligibleIds = Array.from(terminals.entries())
-      .filter(([id, t]) => t.mode === 'tiled' && (!hasSubsetScope || gridTabIds[id]))
+      .filter(([id, t]) =>
+        t.mode === 'tiled'
+        && (t.workspaceId ?? activeWorkspaceId) === activeWorkspaceId
+        && (!hasSubsetScope || gridTabIds[id]),
+      )
       .map(([id]) => id);
 
     const treeIds = layout.tilingRoot ? getLeafOrder(layout.tilingRoot) : [];
@@ -2243,7 +2295,14 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     // Skip until the store has been hydrated from disk — otherwise an early
     // save would overwrite persisted overrides with empty defaults.
     if (!_sessionHydrated) return;
-    const { terminals, layout, favoriteDirs, recentDirs, config, copilotSessions, claudeCodeSessions } = get();
+    const { terminals, layout, favoriteDirs, recentDirs, config, copilotSessions, claudeCodeSessions, workspaces, activeWorkspaceId } = get();
+    // Snapshot the active workspace's layout from the canonical top-level
+    // before serialization (TASK-40) - the workspaces map only mirrors on
+    // workspace switch, so the live edits since the last switch live in
+    // top-level `layout`.
+    const liveWorkspaces = new Map(workspaces);
+    const active = liveWorkspaces.get(activeWorkspaceId);
+    if (active) liveWorkspaces.set(activeWorkspaceId, { ...active, layout });
 
     // For AI sessions, always derive the command from session type to avoid stale
     // startupCommand (e.g. user opened copilot, exited, then started claude manually).
@@ -2267,6 +2326,26 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       return { kind: 'split', direction: node.direction, splitRatio: node.splitRatio, first: serializeNode(node.first), second: serializeNode(node.second) };
     }
 
+    // Serialize floating panels for any workspace.
+    function serializeFloating(panels: FloatingPanelState[]) {
+      return panels.map((p) => {
+        const t = terminals.get(p.terminalId);
+        return { terminal: { title: t?.title ?? 'Terminal', shellProfileId: t?.shellProfileId ?? '', cwd: t?.cwd ?? 'C:\\Users', startupCommand: getStartupCommand(t), aiSessionId: t?.aiSessionId, aiAutoTitle: t?.aiAutoTitle, tabColor: t?.tabColor, customTitle: t?.customTitle, wsl: t?.wsl, wslDistro: t?.wslDistro }, x: p.x, y: p.y, width: p.width, height: p.height };
+      });
+    }
+
+    // Workspaces array (TASK-40). Each workspace serializes its own
+    // tree + floating. The legacy top-level `tree` / `floating` fields
+    // stay populated with the ACTIVE workspace's content so older code
+    // paths (and any external readers) keep working.
+    const workspacesPayload = [...liveWorkspaces.values()].map((w) => ({
+      id: w.id,
+      name: w.name,
+      color: w.color,
+      tree: w.layout.tilingRoot ? serializeNode(w.layout.tilingRoot) : null,
+      floating: serializeFloating(w.layout.floatingPanels),
+    }));
+
     // Merge with cached extras (saved layouts, etc.) — no async load needed
     const data = {
       ..._sessionExtras,
@@ -2277,10 +2356,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       sessionLifecycleOverrides: get().sessionLifecycleOverrides,
       sessionPinned: get().sessionPinned,
       tree: layout.tilingRoot ? serializeNode(layout.tilingRoot) : null,
-      floating: layout.floatingPanels.map((p) => {
-        const t = terminals.get(p.terminalId);
-        return { terminal: { title: t?.title ?? 'Terminal', shellProfileId: t?.shellProfileId ?? '', cwd: t?.cwd ?? 'C:\\Users', startupCommand: getStartupCommand(t), aiSessionId: t?.aiSessionId, aiAutoTitle: t?.aiAutoTitle, tabColor: t?.tabColor, customTitle: t?.customTitle, wsl: t?.wsl, wslDistro: t?.wslDistro }, x: p.x, y: p.y, width: p.width, height: p.height };
-      }),
+      floating: serializeFloating(layout.floatingPanels),
+      workspaces: workspacesPayload,
+      activeWorkspaceId,
     };
     _sessionExtras = data;
     await window.terminalAPI.saveSession(data);
@@ -2315,8 +2393,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     if (!config) return false;
 
     // New tree format
-    if (session.tree || session.floating) {
-      async function createTerm(info: { title: string; shellProfileId: string; cwd: string; startupCommand?: string; aiSessionId?: string; aiAutoTitle?: boolean; tabColor?: string; customTitle?: boolean; wsl?: boolean; wslDistro?: string }): Promise<{ id: TerminalId; instance: TerminalInstance } | null> {
+    if (session.tree || session.floating || Array.isArray((session as any).workspaces)) {
+      async function createTerm(info: { title: string; shellProfileId: string; cwd: string; startupCommand?: string; aiSessionId?: string; aiAutoTitle?: boolean; tabColor?: string; customTitle?: boolean; wsl?: boolean; wslDistro?: string; workspaceId?: string }): Promise<{ id: TerminalId; instance: TerminalInstance } | null> {
         const profile = config!.shells.find((s) => s.id === info.shellProfileId) ?? config!.shells[0];
         if (!profile) return null;
         const id = uuidv4();
@@ -2330,16 +2408,21 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
             id, shellPath: profile.path, args: profile.args, cwd, env: profile.env, cols: 80, rows: 24,
             wslDistro: info.wsl ? info.wslDistro : undefined,
           });
-          return { id, instance: { id, title: info.title || profile.name, customTitle: info.customTitle ?? !!info.title, shellProfileId: profile.id, cwd, mode: 'tiled' as const, pid, lastProcess: '', startupCommand: info.startupCommand || '', aiSessionId: info.aiSessionId, aiAutoTitle: info.aiAutoTitle, tabColor: info.tabColor, wsl: info.wsl, wslDistro: info.wslDistro } };
+          return { id, instance: { id, title: info.title || profile.name, customTitle: info.customTitle ?? !!info.title, shellProfileId: profile.id, cwd, mode: 'tiled' as const, pid, lastProcess: '', startupCommand: info.startupCommand || '', aiSessionId: info.aiSessionId, aiAutoTitle: info.aiAutoTitle, tabColor: info.tabColor, wsl: info.wsl, wslDistro: info.wslDistro, workspaceId: info.workspaceId } };
         } catch { return null; }
       }
 
       const newTerminals = new Map<TerminalId, TerminalInstance>();
       let firstId: TerminalId | null = null;
+      // Workspaces array survives across rebuilds; populated either
+      // directly from session.workspaces or fabricated for the legacy
+      // single-tree case (TASK-40).
+      const restoredWorkspaces = new Map<WorkspaceId, Workspace>();
+      let workspaceContext: WorkspaceId = DEFAULT_WORKSPACE_ID;
 
       async function rebuildNode(node: any): Promise<LayoutNode | null> {
         if (node.kind === 'leaf') {
-          const result = await createTerm(node.terminal);
+          const result = await createTerm({ ...node.terminal, workspaceId: workspaceContext });
           if (!result) return null;
           newTerminals.set(result.id, result.instance);
           if (!firstId) firstId = result.id;
@@ -2356,24 +2439,79 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         return null;
       }
 
+      // Workspaces-aware restore: if session has a workspaces array, walk
+      // each workspace's tree+floating with workspaceContext set to that
+      // workspace's id. Otherwise fall back to wrapping the legacy
+      // session.tree/.floating into a single default workspace.
       let newRoot: LayoutNode | null = null;
-      if (session.tree) newRoot = await rebuildNode(session.tree);
-
       const newFloating: FloatingPanelState[] = [];
-      if (Array.isArray(session.floating)) {
-        for (const f of session.floating as any[]) {
-          const result = await createTerm(f.terminal);
-          if (result) {
-            result.instance.mode = 'floating';
-            newTerminals.set(result.id, result.instance);
-            newFloating.push({ terminalId: result.id, x: f.x ?? 200, y: f.y ?? 150, width: f.width ?? 600, height: f.height ?? 400, zIndex: 100 });
-            if (!firstId) firstId = result.id;
+      let activeIdAfter: WorkspaceId = DEFAULT_WORKSPACE_ID;
+
+      if (Array.isArray((session as any).workspaces) && (session as any).workspaces.length > 0) {
+        for (const ws of (session as any).workspaces as any[]) {
+          if (!ws || typeof ws !== 'object') continue;
+          const wsId = (typeof ws.id === 'string' && ws.id) ? ws.id : uuidv4();
+          workspaceContext = wsId;
+          const wsRoot: LayoutNode | null = ws.tree ? await rebuildNode(ws.tree) : null;
+          const wsFloating: FloatingPanelState[] = [];
+          if (Array.isArray(ws.floating)) {
+            for (const f of ws.floating as any[]) {
+              const result = await createTerm({ ...f.terminal, workspaceId: wsId });
+              if (result) {
+                result.instance.mode = 'floating';
+                newTerminals.set(result.id, result.instance);
+                wsFloating.push({ terminalId: result.id, x: f.x ?? 200, y: f.y ?? 150, width: f.width ?? 600, height: f.height ?? 400, zIndex: 100 });
+                if (!firstId) firstId = result.id;
+              }
+            }
+          }
+          restoredWorkspaces.set(wsId, {
+            id: wsId,
+            name: typeof ws.name === 'string' ? ws.name : DEFAULT_WORKSPACE_NAME,
+            color: typeof ws.color === 'string' ? ws.color : undefined,
+            layout: { tilingRoot: wsRoot, floatingPanels: wsFloating },
+          });
+        }
+        const savedActive = (session as any).activeWorkspaceId;
+        if (typeof savedActive === 'string' && restoredWorkspaces.has(savedActive)) {
+          activeIdAfter = savedActive;
+        } else {
+          activeIdAfter = restoredWorkspaces.keys().next().value as WorkspaceId;
+        }
+        const activeWs = restoredWorkspaces.get(activeIdAfter)!;
+        newRoot = activeWs.layout.tilingRoot;
+        newFloating.push(...activeWs.layout.floatingPanels);
+      } else {
+        // Legacy single-layout session - wrap in one default workspace.
+        workspaceContext = DEFAULT_WORKSPACE_ID;
+        if (session.tree) newRoot = await rebuildNode(session.tree);
+        if (Array.isArray(session.floating)) {
+          for (const f of session.floating as any[]) {
+            const result = await createTerm({ ...f.terminal, workspaceId: DEFAULT_WORKSPACE_ID });
+            if (result) {
+              result.instance.mode = 'floating';
+              newTerminals.set(result.id, result.instance);
+              newFloating.push({ terminalId: result.id, x: f.x ?? 200, y: f.y ?? 150, width: f.width ?? 600, height: f.height ?? 400, zIndex: 100 });
+              if (!firstId) firstId = result.id;
+            }
           }
         }
+        restoredWorkspaces.set(DEFAULT_WORKSPACE_ID, {
+          id: DEFAULT_WORKSPACE_ID,
+          name: DEFAULT_WORKSPACE_NAME,
+          layout: { tilingRoot: newRoot, floatingPanels: [...newFloating] },
+        });
+        activeIdAfter = DEFAULT_WORKSPACE_ID;
       }
 
       if (newTerminals.size === 0) return false;
-      set({ terminals: newTerminals, layout: { tilingRoot: newRoot, floatingPanels: newFloating }, focusedTerminalId: firstId });
+      set({
+        terminals: newTerminals,
+        layout: { tilingRoot: newRoot, floatingPanels: newFloating },
+        workspaces: restoredWorkspaces,
+        activeWorkspaceId: activeIdAfter,
+        focusedTerminalId: firstId,
+      });
       return true;
     }
 
@@ -2425,6 +2563,126 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
   clearSessionSummary: () => {
     set({ sessionSummaryRequest: null });
+  },
+
+  // ── Workspaces (TASK-40) ─────────────────────────────────────────
+  // Phase 1 keeps the top-level `layout` as the canonical mutable
+  // source for the active workspace. Workspaces map mirrors it; on
+  // setActiveWorkspace, current layout is snapshotted to the leaving
+  // workspace and the entering workspace's layout becomes top-level.
+  // This minimizes the diff against existing layout-mutating code.
+  createWorkspace: (initialName?: string) => {
+    const id = uuidv4();
+    const existingNames = new Set([...get().workspaces.values()].map((w) => w.name));
+    let name = initialName;
+    if (!name) {
+      // Auto-number: "Workspace 2", "Workspace 3", ...
+      let n = get().workspaces.size + 1;
+      while (existingNames.has(`Workspace ${n}`)) n++;
+      name = `Workspace ${n}`;
+    }
+    // Snapshot current top-level layout to the leaving workspace before
+    // we swap top-level to the new (empty) one.
+    set((state) => {
+      const next = new Map(state.workspaces);
+      const leaving = next.get(state.activeWorkspaceId);
+      if (leaving) next.set(state.activeWorkspaceId, { ...leaving, layout: state.layout });
+      next.set(id, { id, name: name!, layout: { tilingRoot: null, floatingPanels: [] } });
+      return {
+        workspaces: next,
+        activeWorkspaceId: id,
+        layout: { tilingRoot: null, floatingPanels: [] },
+        focusedTerminalId: null,
+      };
+    });
+    get().saveSession();
+    return id;
+  },
+
+  setActiveWorkspace: (id: WorkspaceId) => {
+    const { activeWorkspaceId, workspaces, layout } = get();
+    if (id === activeWorkspaceId) return;
+    const target = workspaces.get(id);
+    if (!target) return;
+    // Snapshot the leaving workspace's layout, install the entering one.
+    const next = new Map(workspaces);
+    const leaving = next.get(activeWorkspaceId);
+    if (leaving) next.set(activeWorkspaceId, { ...leaving, layout });
+    // Pick a sensible focus target: first leaf terminal in the entering
+    // workspace's tiling tree, or the first floating panel, or null.
+    const firstLeaf = (function findFirst(node: LayoutNode | null): TerminalId | null {
+      if (!node) return null;
+      if (node.kind === 'leaf') return node.terminalId;
+      return findFirst(node.first) ?? findFirst(node.second);
+    })(target.layout.tilingRoot);
+    const newFocus =
+      firstLeaf ?? target.layout.floatingPanels[0]?.terminalId ?? null;
+    set({
+      workspaces: next,
+      activeWorkspaceId: id,
+      layout: target.layout,
+      focusedTerminalId: newFocus,
+    });
+  },
+
+  renameWorkspace: (id: WorkspaceId, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    set((state) => {
+      const next = new Map(state.workspaces);
+      const ws = next.get(id);
+      if (!ws) return state;
+      next.set(id, { ...ws, name: trimmed });
+      return { workspaces: next };
+    });
+    get().saveSession();
+  },
+
+  closeWorkspace: (id: WorkspaceId) => {
+    const { workspaces, activeWorkspaceId, terminals, layout } = get();
+    if (!workspaces.has(id)) return;
+    // Collect terminal ids to kill: all terminals belonging to this workspace.
+    const terminalIdsToClose: TerminalId[] = [];
+    for (const [tid, inst] of terminals) {
+      if ((inst.workspaceId ?? DEFAULT_WORKSPACE_ID) === id) terminalIdsToClose.push(tid);
+    }
+    // Drop the workspace.
+    const newWorkspaces = new Map(workspaces);
+    newWorkspaces.delete(id);
+    // If we closed the active workspace, pick a successor (or fresh default).
+    let newActive = activeWorkspaceId;
+    let newLayout = layout;
+    let newFocus: TerminalId | null = get().focusedTerminalId;
+    if (id === activeWorkspaceId) {
+      let successor = newWorkspaces.values().next().value as Workspace | undefined;
+      if (!successor) {
+        const fresh = makeDefaultWorkspace();
+        newWorkspaces.set(fresh.id, fresh);
+        successor = fresh;
+      }
+      newActive = successor.id;
+      newLayout = successor.layout;
+      newFocus = (function findFirst(node: LayoutNode | null): TerminalId | null {
+        if (!node) return null;
+        if (node.kind === 'leaf') return node.terminalId;
+        return findFirst(node.first) ?? findFirst(node.second);
+      })(successor.layout.tilingRoot) ?? successor.layout.floatingPanels[0]?.terminalId ?? null;
+    }
+    // Strip the terminals from the map.
+    const newTerminals = new Map(terminals);
+    for (const tid of terminalIdsToClose) newTerminals.delete(tid);
+    set({
+      workspaces: newWorkspaces,
+      activeWorkspaceId: newActive,
+      layout: newLayout,
+      terminals: newTerminals,
+      focusedTerminalId: newFocus,
+    });
+    // Tell the main process to kill those PTYs after state has settled.
+    for (const tid of terminalIdsToClose) {
+      try { window.terminalAPI.killPty(tid); } catch { /* ignore */ }
+    }
+    get().saveSession();
   },
 
   // ── Copilot panel actions ──────────────────────────────────────────

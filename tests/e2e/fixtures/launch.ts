@@ -10,8 +10,18 @@ export interface LaunchedApp {
   close: () => Promise<void>;
 }
 
-export async function launchTmax(): Promise<LaunchedApp> {
+export interface LaunchOptions {
+  /**
+   * Optional hook invoked after the temporary userDataDir is created but
+   * before tmax is launched. Useful for pre-seeding `tmax-session.json`
+   * to test session-restore / migration paths.
+   */
+  preSeed?: (userDataDir: string) => void;
+}
+
+export async function launchTmax(opts: LaunchOptions = {}): Promise<LaunchedApp> {
   const userDataDir = mkdtempSync(join(tmpdir(), 'tmax-e2e-'));
+  if (opts.preSeed) opts.preSeed(userDataDir);
   const outDir = process.env.TMAX_E2E_OUT_DIR || 'out-e2e';
   const exePath = join(process.cwd(), outDir, 'tmax-win32-x64', 'tmax.exe');
   if (!existsSync(exePath)) {
