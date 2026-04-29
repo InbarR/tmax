@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.6.1
+
+A focused polish release on top of v1.6.0 - lots of fixes around the AI Sessions sidebar, plus paste / float / pane-title edge cases.
+
+### New Features
+
+- **🧹 Cleanup sessions** - bulk-archive AI sessions below a prompt-count threshold from the AI Sessions overflow menu. Live "will archive N sessions" forecast as you type the threshold; pinned and already-archived sessions are skipped. Underlying transcript files are not deleted.
+- **Auto-archive stale AI sessions** - on app start, sessions that haven't been touched in 14 days (configurable via `aiAutoArchiveDays`) and one-shot abandoned sessions (`messageCount < 2` after 1 day) move to Archived automatically. Pinned and manually-archived sessions are never touched.
+- **Show in AI sessions** - new pane ⋯ menu item that opens the AI Sessions sidebar and reveals the session linked to that pane, expanding its repo group and clearing any blocking filter.
+- **Header overflow menu** - the AI Sessions panel header now has a single `⋯` menu for Refresh, Show running only, Collapse/Expand all groups, and Cleanup sessions. Less visual clutter; Group toggle stays inline.
+
+### Bug Fixes
+
+- **Multi-line paste** (#77): right-click paste in main and detached windows now wraps in bracketed-paste markers when the shell supports it - was silently dropping all but the last line in Claude Code / Copilot CLI / PSReadLine. Closes the gap left by the v1.6.0 Ctrl+V fix.
+- **Pane title respects session renames** (#75, thanks @omer91se): a fresh terminal that auto-binds to a session with a user-renamed title now picks up the override instead of the auto-generated summary.
+- **AI Sessions sidebar highlights the right session**: clicking a pane now reliably highlights its session in the sidebar. Fixed three independent causes - sticky auto-link bindings (terminal kept old session.id when a fresh AI process arrived in the same pane), session row hidden inside a collapsed group, and mouse-hover stomping the focused-pane highlight. The pane's session row now has a stable `pane-active` indicator independent of hover/select.
+- **Float toggle preserves grid layout**: floating a pane out of a 2x2 grid and toggling back no longer flattens the grid into a 1x4 row. The pane returns to its original split direction, ratio, and position.
+- **Cwd casing no longer duplicates group headers**: sessions with cwds that differ only in case (`C:\projects\ClawPilot` vs `...\clawpilot` - same Windows folder) now collapse into a single group instead of stacking two identical-looking headers.
+- **Garbage session summaries hidden**: rows whose summary was pure structural noise (e.g. lone `|-`) now fall back to the cwd / repo / id label. Root cause shipped too: the Copilot session parser now correctly handles YAML block scalars (`summary: |-` followed by indented content) that were previously truncated to `|-`.
+
+### Internals
+
+- New regression spec coverage for paste wrapping, sidebar highlight, float restore, cwd-case grouping, hover-vs-pane-active, soft-wrap copy, and session cleanup. Soft-wrap copy spec confirms xterm correctly joins visually-wrapped lines on copy (so when paste contains spurious newlines, the source - usually an AI tool's prose wrapping - is the culprit, not tmax).
+
+### Contributors
+
+- @omer91se
+- @yodobrin
+- @InbarR
+
 ## v1.6.0
 
 ### New Features
