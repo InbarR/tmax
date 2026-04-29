@@ -24,6 +24,8 @@
     "@xterm/xterm": "^5.5.0",
     "chokidar": "^3.6.0",
     "electron-store": "^8.2.0",
+    "marked": "^18.0.2",
+    "mermaid": "^11.14.0",
     "node-pty": "^1.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
