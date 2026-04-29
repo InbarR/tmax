@@ -2519,7 +2519,15 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         // host for the new session. Non-focused panes with an existing
         // link are off-limits so we never silently move a session away
         // from a background pane the user can't see (TASK-29).
+        // Extra guard: only steal from idle sessions to avoid yanking a
+        // pane away from an agent that's still actively running.
         if (t.aiSessionId && id !== focusedTerminalId) continue;
+        if (t.aiSessionId) {
+          const { copilotSessions: cs, claudeCodeSessions: ccs } = get();
+          const prevSession = cs.find((s) => s.id === t.aiSessionId)
+            || ccs.find((s) => s.id === t.aiSessionId);
+          if (prevSession && prevSession.status !== 'idle') continue;
+        }
         eligible.push(id);
       }
       if (eligible.length > 0) {
@@ -2536,12 +2544,16 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       let matched = current.aiSessionId === session.id;
 
       if (!matched && id === candidateId) {
+        const isRelink = !!current.aiSessionId;
         // If the user already renamed this pane before the AI session was
         // matched (typed `claude` / `copilot`, renamed the pane, waited for
         // the first summary), propagate the rename to sessionNameOverrides
         // now. The earlier renameTerminal call couldn't propagate because
         // aiSessionId was still undefined at that moment.
+        // Skip on re-link: the pane title was set by the previous session's
+        // auto-title, not by a deliberate user rename.
         if (
+          !isRelink &&
           current.customTitle &&
           current.title &&
           !get().sessionNameOverrides[session.id] &&
@@ -2549,7 +2561,15 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         ) {
           pendingOverride = { sessionId: session.id, name: current.title };
         }
-        current = { ...current, aiSessionId: session.id, aiAutoTitle: !current.customTitle, customTitle: true };
+        current = {
+          ...current,
+          aiSessionId: session.id,
+          // On re-link from a stale session, enable auto-title so the new
+          // session's summary replaces the old pane name. On fresh link,
+          // respect whether the user had a custom title.
+          aiAutoTitle: isRelink ? true : !current.customTitle,
+          customTitle: true,
+        };
         newTerminals.set(id, current);
         matched = true;
         changed = true;
