@@ -4,35 +4,8 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { isMac } from './utils/platform';
 import { prepareClipboardPaste } from './utils/paste';
+import { extractLinkFromHtml, unwrapSafelinks } from './utils/link-extract';
 import '@xterm/xterm/css/xterm.css';
-
-/**
- * Extract a URL from HTML clipboard content when the content is essentially
- * a single hyperlink (e.g. ADO "Copy to clipboard" for PR titles).
- * Returns the href if found, null otherwise.
- */
-function unwrapSafelinks(url: string): string {
-  try {
-    const u = new URL(url);
-    if (/(^|\.)safelinks\.protection\.outlook\.com$/i.test(u.hostname)) {
-      const real = u.searchParams.get('url');
-      if (real && /^https?:\/\//i.test(real)) return real;
-    }
-  } catch { /* not a valid URL */ }
-  return url;
-}
-
-function extractLinkFromHtml(html: string): string | null {
-  if (!html) return null;
-  const linkPattern = /<a\s[^>]*href=["']([^"']+)["'][^>]*>/gi;
-  const matches: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = linkPattern.exec(html)) !== null) {
-    matches.push(m[1]);
-  }
-  if (matches.length === 1 && /^https?:\/\//i.test(matches[0])) return unwrapSafelinks(matches[0]);
-  return null;
-}
 
 function hexToTerminalRgba(hex: string, alpha: number): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
