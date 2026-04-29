@@ -29,6 +29,7 @@ import FileExplorer from './components/FileExplorer';
 import FloatingRenameInput from './components/FloatingRenameInput';
 import Toast from './components/Toast';
 import SessionSummary from './components/SessionSummary';
+import MarkdownPreviewOverlay from './components/MarkdownPreviewOverlay';
 
 const App: React.FC = () => {
   const loadConfig = useTerminalStore((s) => s.loadConfig);
@@ -281,6 +282,7 @@ const App: React.FC = () => {
         <DiffReview />
         <FloatingRenameInput />
         <SessionSummary />
+        <MarkdownPreviewOverlay />
         <Toast />
       </div>
     </DndContext>

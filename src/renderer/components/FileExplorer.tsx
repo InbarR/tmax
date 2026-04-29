@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useTerminalStore } from '../state/terminal-store';
+import MarkdownPreview from './MarkdownPreview';
+import ZoomControls from './ZoomControls';
+import { useZoom } from '../hooks/useZoom';
 
 interface FileEntry {
   name: string;
@@ -34,12 +37,21 @@ const FileExplorer: React.FC = () => {
   const [preview, setPreview] = useState<{ name: string; path: string; content: string } | null>(null);
   const [previewWidth, setPreviewWidth] = useState(50); // percentage
   const [previewSide, setPreviewSide] = useState<'right' | 'left'>('right');
+  const previewOverlayRef = useRef<HTMLDivElement>(null);
+  const { zoomPercent: previewZoom, zoomIn: previewZoomIn, zoomOut: previewZoomOut, zoomReset: previewZoomReset, fontSize: previewFontSize } = useZoom({ containerRef: previewOverlayRef });
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [resizing, setResizing] = useState(false);
   const filterRef = useRef<HTMLInputElement>(null);
   const pathInputRef = useRef<HTMLInputElement>(null);
 
   const currentPath = browsePath || terminalCwd;
+
+  // Auto-focus the non-md preview panel when it opens
+  useEffect(() => {
+    if (preview && previewOverlayRef.current) {
+      previewOverlayRef.current.focus();
+    }
+  }, [preview]);
 
   // Sync browsePath when terminal CWD changes
   useEffect(() => {
@@ -271,14 +283,26 @@ const FileExplorer: React.FC = () => {
         {files.length === 0 && <div className="dir-panel-empty">No files</div>}
       </div>
       {preview && ReactDOM.createPortal(
+        /\.md$/i.test(preview.name) ? (
+          <MarkdownPreview
+            content={preview.content}
+            fileName={preview.name}
+            filePath={preview.path}
+            onClose={() => setPreview(null)}
+            onOpenExternally={openFileExternally}
+            side={previewSide}
+            onToggleSide={() => setPreviewSide((s) => s === 'right' ? 'left' : 'right')}
+            width={`${previewWidth}%`}
+          />
+        ) : (
         <div
+          ref={previewOverlayRef}
           className={`file-preview-overlay ${previewSide}`}
           style={{
             width: `${previewWidth}%`,
             ...(previewSide === 'left' ? { left: width + 1 } : {}),
           }}
           tabIndex={0}
-          ref={(el) => el?.focus()}
           onKeyDown={(e) => { if (e.key === 'Escape') setPreview(null); }}
         >
           <div
@@ -303,15 +327,17 @@ const FileExplorer: React.FC = () => {
           <div className="file-preview-sidebar">
             <div className="file-preview-header">
               <span className="file-preview-name">{preview.name}</span>
-              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+                <ZoomControls zoomPercent={previewZoom} onZoomIn={previewZoomIn} onZoomOut={previewZoomOut} onZoomReset={previewZoomReset} />
                 <button className="file-preview-btn" onClick={() => openFileExternally(preview.path)} title="Open externally">&#8599;</button>
                 <button className="file-preview-btn" onClick={() => setPreviewSide((s) => s === 'right' ? 'left' : 'right')} title="Move to other side">{previewSide === 'right' ? '\u25C0' : '\u25B6'}</button>
                 <button className="file-preview-btn close" onClick={() => setPreview(null)} title="Close (Esc)">&#10005;</button>
               </div>
             </div>
-            <pre className="file-preview-content">{preview.content}</pre>
+            <pre className="file-preview-content" style={{ fontSize: previewFontSize(12) }}>{preview.content}</pre>
           </div>
-        </div>,
+        </div>
+        ),
         document.body,
       )}
       {ctxMenu && (

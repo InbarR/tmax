@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { useTerminalStore } from '../state/terminal-store';
 import { getTerminalEntry } from '../terminal-registry';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
+import { renderWithMdLinks } from '../utils/md-link-parser';
 import type { CopilotSessionSummary, CopilotSessionStatus, SessionProvider, SessionLifecycle } from '../../shared/copilot-types';
 
 const MIN_WIDTH = 180;
@@ -951,7 +952,7 @@ const CopilotPanel: React.FC = () => {
                     />
                   ) : (
                     <span className="ai-session-name" title={title}>
-                      {title}
+                      {renderWithMdLinks(title, session.cwd)}
                       {dupTitles.has(title) && (
                         <span className="ai-session-iddup" title={session.id}> · {session.id.slice(0, 6)}</span>
                       )}
@@ -1230,7 +1231,7 @@ const PromptsDialog: React.FC<{
               onMouseEnter={() => setSelectedIndex(i)}
             >
               <span className="ai-prompt-index">{prompts.length - reversed.indexOf(p)}</span>
-              <span className="ai-prompt-text">{p}</span>
+              <span className="ai-prompt-text">{renderWithMdLinks(p, terminalId ? useTerminalStore.getState().terminals.get(terminalId)?.cwd : undefined)}</span>
             </div>
           ))}
           {filtered.length === 0 && (

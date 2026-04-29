@@ -624,6 +624,8 @@ interface TerminalStore {
   promptsDialogRequest: { terminalId?: TerminalId; sessionId?: string } | null;
   // AI session summary popover - holds the session ID that should be shown.
   sessionSummaryRequest: string | null;
+  // Markdown preview state
+  markdownPreview: { filePath: string; content: string; fileName: string } | null;
   // Diff review state
   diffReviewOpen: boolean;
   diffReviewTerminalId: TerminalId | null;
@@ -846,6 +848,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   copilotSearchQuery: '',
   selectedCopilotSessionId: null,
   tabGroups: new Map(),
+  markdownPreview: null,
   diffReviewOpen: false,
   diffReviewTerminalId: null,
   diffReviewMode: 'unstaged' as DiffMode,
