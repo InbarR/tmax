@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTerminalStore } from '../state/terminal-store';
+import { formatKeyForPlatform, hasPrimaryMod } from './platform';
 
 // Regex matching file paths ending in .md
 const MD_PATH_REGEX = /(?:[a-zA-Z]:[\\/]|[\/~.])?[^\s"'`<>|:*?]*\.md\b/g;
@@ -16,7 +17,7 @@ function resolveRelativePath(path: string, cwd: string): string {
 
 /**
  * Parse text and replace .md file paths with clickable elements.
- * On Ctrl+Click, reads the file and opens the markdown preview.
+ * On primary-modifier click, reads the file and opens the markdown preview.
  * @param cwd — optional working directory to resolve relative paths against
  */
 export function renderWithMdLinks(text: string, cwd?: string): React.ReactNode {
@@ -35,7 +36,7 @@ export function renderWithMdLinks(text: string, cwd?: string): React.ReactNode {
         key={match.index}
         className="md-file-link"
         onClick={(e) => {
-          if (e.ctrlKey || e.metaKey) {
+          if (hasPrimaryMod(e)) {
             e.preventDefault();
             e.stopPropagation();
             // Resolve relative paths using provided cwd, or fall back to focused terminal cwd
@@ -51,7 +52,7 @@ export function renderWithMdLinks(text: string, cwd?: string): React.ReactNode {
             });
           }
         }}
-        title="Ctrl+Click to preview"
+        title={formatKeyForPlatform('Ctrl+Click to preview')}
       >
         {rawPath}
       </span>

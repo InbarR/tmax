@@ -7,7 +7,7 @@ import { SerializeAddon } from '@xterm/addon-serialize';
 import { useTerminalStore } from '../state/terminal-store';
 import { registerTerminal, unregisterTerminal } from '../terminal-registry';
 import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache';
-import { isMac } from '../utils/platform';
+import { formatKeyForPlatform, hasPrimaryMod, isMac } from '../utils/platform';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { prepareClipboardPaste } from '../utils/paste';
 import type { AppConfig } from '../state/types';
@@ -502,7 +502,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       },
     });
 
-    // Register link provider for .md file paths (Ctrl+Click to preview)
+    // Register link provider for .md file paths (primary-modifier click to preview)
     term.registerLinkProvider({
       provideLinks(bufferLineNumber, callback) {
         const line = term.buffer.active.getLine(bufferLineNumber - 1);
@@ -522,8 +522,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               end: { x: endX, y: bufferLineNumber },
             },
             text: matchedPath,
-            tooltip: `Ctrl+Click to preview: ${matchedPath}`,
-            activate() {
+            tooltip: `${formatKeyForPlatform('Ctrl+Click to preview')}: ${matchedPath}`,
+            activate(event: MouseEvent) {
+              if (!hasPrimaryMod(event)) return;
               const termInst = useTerminalStore.getState().terminals.get(terminalId);
               const cwd = termInst?.cwd || '';
               // Resolve relative paths against terminal cwd
