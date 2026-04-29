@@ -10,6 +10,7 @@ import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache'
 import { isMac } from '../utils/platform';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { prepareClipboardPaste } from '../utils/paste';
+import { extractLinkFromHtml, unwrapSafelinks } from '../utils/link-extract';
 import type { AppConfig } from '../state/types';
 import '@xterm/xterm/css/xterm.css';
 
@@ -22,44 +23,7 @@ function relativeTime(ts: number): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-/**
- * Microsoft Outlook wraps every outgoing link in
- * https://<region>.safelinks.protection.outlook.com/?url=<encoded-real-url>&...
- * so a "copy link" out of an email pastes this ugly wrapper instead of the
- * real target. If we detect the wrapper, decode and return the real URL.
- */
-function unwrapSafelinks(url: string): string {
-  try {
-    const u = new URL(url);
-    if (/(^|\.)safelinks\.protection\.outlook\.com$/i.test(u.hostname)) {
-      const real = u.searchParams.get('url');
-      if (real && /^https?:\/\//i.test(real)) return real;
-    }
-  } catch { /* not a valid URL */ }
-  return url;
-}
-
-/**
- * Extract a URL from HTML clipboard content when the content is essentially
- * a single hyperlink (e.g. ADO "Copy to clipboard" for PR titles, Outlook
- * safelinks-wrapped URLs).
- * Returns the href if found, null otherwise.
- */
-function extractLinkFromHtml(html: string): string | null {
-  if (!html) return null;
-  // Match all <a href="..."> tags in the HTML
-  const linkPattern = /<a\s[^>]*href=["']([^"']+)["'][^>]*>/gi;
-  const matches: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = linkPattern.exec(html)) !== null) {
-    matches.push(m[1]);
-  }
-  // Only extract when the HTML contains exactly one link
-  if (matches.length === 1 && /^https?:\/\//i.test(matches[0])) {
-    return unwrapSafelinks(matches[0]);
-  }
-  return null;
-}
+// unwrapSafelinks and extractLinkFromHtml imported from utils/link-extract.ts
 
 function hexToTerminalRgba(hex: string, alpha: number): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
