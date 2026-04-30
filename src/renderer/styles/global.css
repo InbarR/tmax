@@ -323,6 +323,30 @@ html.transparency-active .input-dialog {
   color: var(--text-primary);
 }
 
+.tab-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  margin-left: auto;
+  margin-right: 6px;
+  padding: 0 10px;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 11px;
+  color: var(--text-secondary);
+  opacity: 0.65;
+  font-size: 11px;
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease, opacity 0.12s ease, border-color 0.12s ease;
+}
+.tab-mode-switch:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.25);
+  opacity: 1;
+}
+
 .tab-count {
   display: flex;
   align-items: center;
@@ -4564,4 +4588,27 @@ select.settings-input {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-primary);
   border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Inline "+" inside an active workspace chip — adds a pane to THIS workspace */
+.workspace-tab-add-pane-inline {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 5px;
+  margin-left: 2px;
+  border-radius: 3px;
+  opacity: 0.6;
+  transition: background 0.12s ease, opacity 0.12s ease, color 0.12s ease;
+}
+.workspace-tab.active .workspace-tab-add-pane-inline {
+  opacity: 0.85;
+}
+.workspace-tab-add-pane-inline:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  opacity: 1;
 }

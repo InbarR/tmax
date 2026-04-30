@@ -1255,7 +1255,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   const groupId = useTerminalStore((s) => s.terminals.get(terminalId)?.groupId);
   const groupColor = useTerminalStore((s) => groupId ? s.tabGroups.get(groupId)?.color : undefined);
   const defaultTabColor = useTerminalStore((s) => (s.config as any)?.defaultTabColor);
-  const bgTint = groupColor || tabColor || defaultTabColor;
+  // Workspace tint: only applies when in workspaces mode (TASK-40). Falls
+  // through tab/group color so per-tab overrides still win.
+  const workspaceColor = useTerminalStore((s) => {
+    if (s.config?.tabMode !== 'workspaces') return undefined;
+    const wsId = s.terminals.get(terminalId)?.workspaceId ?? s.activeWorkspaceId;
+    return s.workspaces.get(wsId)?.color;
+  });
+  const bgTint = groupColor || workspaceColor || tabColor || defaultTabColor;
 
   // Latest prompt from the AI session (if any) linked to this pane. Surfaces
   // the most recent user message so you don't have to scroll up through a

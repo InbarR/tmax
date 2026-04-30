@@ -326,6 +326,13 @@ const TabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }> = ({ ver
       <button className="tab-add" onClick={handleCreate} title="New Terminal">
         +
       </button>
+      <button
+        className="tab-mode-switch"
+        onClick={() => useTerminalStore.getState().updateConfig({ tabMode: 'workspaces' })}
+        title="Switch to workspaces (each tab = a grid of panes)"
+      >
+        Switch to workspaces
+      </button>
       {contextMenu && (
         <TabContextMenu
           position={contextMenu}

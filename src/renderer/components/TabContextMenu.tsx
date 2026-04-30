@@ -27,6 +27,8 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
   const tabGroups = useTerminalStore((s) => s.tabGroups);
   const config = useTerminalStore((s) => s.config);
   const [showGroupMenu, setShowGroupMenu] = useState(false);
+  const [showPositionMenu, setShowPositionMenu] = useState(false);
+  const [showNewTerminalMenu, setShowNewTerminalMenu] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const newGroupInputRef = useRef<HTMLInputElement>(null);
   const hasAnyColor = useTerminalStore((s) => s.autoColorTabs);
@@ -171,7 +173,7 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
       ) : (
         <>
           <button className="context-menu-item" onClick={handleRename}>
-            Rename <span className="shortcut">{formatKeyForPlatform('Ctrl+Shift+R')}</span>
+            Rename <span className="shortcut">Double-click / {formatKeyForPlatform('Ctrl+Shift+R')}</span>
           </button>
           <div className="context-menu-separator" />
           <button className="context-menu-item" onClick={handleSplitRight}>
@@ -355,15 +357,21 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
             </div>
             );
           })()}
-          <div className="context-menu-label">Tab Bar Position</div>
-          {(['top', 'bottom', 'left', 'right'] as const).map((pos) => (
-            <button key={pos} className={`context-menu-item sub${store().tabBarPosition === pos ? ' active-check' : ''}`} onClick={() => {
-              (store() as any).setTabBarPosition(pos);
-              onClose();
-            }}>
-              {pos.charAt(0).toUpperCase() + pos.slice(1)} {store().tabBarPosition === pos ? '\u2713' : ''}
-            </button>
-          ))}
+          <button className="context-menu-item" onClick={() => setShowPositionMenu((v) => !v)}>
+            Tab Bar Position &#9656;
+          </button>
+          {showPositionMenu && (
+            <div className="context-menu-sub">
+              {(['top', 'bottom', 'left', 'right'] as const).map((pos) => (
+                <button key={pos} className={`context-menu-item sub${store().tabBarPosition === pos ? ' active-check' : ''}`} onClick={() => {
+                  (store() as any).setTabBarPosition(pos);
+                  onClose();
+                }}>
+                  {pos.charAt(0).toUpperCase() + pos.slice(1)} {store().tabBarPosition === pos ? '\u2713' : ''}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="context-menu-separator" />
           <button className="context-menu-item" onClick={() => {
             // Force re-focus and resize-ping all PTYs to unfreeze
@@ -405,18 +413,30 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
             Settings <span className="shortcut">{formatKeyForPlatform('Ctrl+,')}</span>
           </button>
           <div className="context-menu-separator" />
-          {config && config.shells.length > 1 && (
+          {config && config.shells.length > 0 && (
             <>
-              <div className="context-menu-label">New Terminal</div>
-              {config.shells.map((shell) => (
-                <button
-                  key={shell.id}
-                  className="context-menu-item sub"
-                  onClick={() => handleNewTerminal(shell.id)}
-                >
-                  {shell.name}
-                </button>
-              ))}
+              <button className="context-menu-item" onClick={() => {
+                if (config.shells.length === 1) {
+                  handleNewTerminal(config.shells[0].id);
+                } else {
+                  setShowNewTerminalMenu((v) => !v);
+                }
+              }}>
+                New Terminal {config.shells.length > 1 ? '▸' : ''}
+              </button>
+              {showNewTerminalMenu && config.shells.length > 1 && (
+                <div className="context-menu-sub">
+                  {config.shells.map((shell) => (
+                    <button
+                      key={shell.id}
+                      className="context-menu-item sub"
+                      onClick={() => handleNewTerminal(shell.id)}
+                    >
+                      {shell.name}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="context-menu-separator" />
             </>
           )}

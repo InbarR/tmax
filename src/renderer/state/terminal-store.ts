@@ -716,6 +716,10 @@ interface TerminalStore {
   setActiveWorkspace: (id: WorkspaceId) => void;
   /** Rename a workspace. */
   renameWorkspace: (id: WorkspaceId, name: string) => void;
+  /** Set or clear the color hint for a workspace chip. Pass undefined to clear. */
+  setWorkspaceColor: (id: WorkspaceId, color: string | undefined) => void;
+  /** Strip color from every workspace. */
+  clearAllWorkspaceColors: () => void;
   /**
    * Close a workspace and all of its terminals. If the closed workspace
    * was active, switches to the next remaining workspace (or creates a
@@ -899,13 +903,17 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       rows: 24,
     });
 
-    // Auto-assign a color if colors mode is active — pick the least-used palette color
+    // Auto-assign a color if colors mode is active — pick the least-used palette color.
+    // Scope the count to the active workspace so each workspace colorizes from
+    // scratch (a new ws's first pane gets the first MS color, not "color #5").
     const hasColors = get().autoColorTabs;
+    const activeWsId = get().activeWorkspaceId;
     let tabColor: string | undefined;
     if (hasColors) {
       const colorCounts = new Map<string, number>();
       for (const c of TAB_COLORS) colorCounts.set(c.value, 0);
       for (const t of terminals.values()) {
+        if ((t.workspaceId ?? activeWsId) !== activeWsId) continue;
         if (t.tabColor && colorCounts.has(t.tabColor)) {
           colorCounts.set(t.tabColor, (colorCounts.get(t.tabColor) ?? 0) + 1);
         }
@@ -1707,7 +1715,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   colorizeAllTabs: () => {
-    const { terminals, autoColorTabs } = get();
+    const { terminals, autoColorTabs, activeWorkspaceId } = get();
     const newTerminals = new Map(terminals);
     if (autoColorTabs) {
       for (const [id, instance] of newTerminals) {
@@ -1715,14 +1723,25 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       }
       set({ terminals: newTerminals, autoColorTabs: false });
     } else {
-      // First 4 tabs get Microsoft logo colors (in order), rest are shuffled
+      // Group by workspace so each workspace colorizes from scratch:
+      // the first 4 panes per workspace get the MS logo colors in order,
+      // the rest cycle through a shuffled palette (re-shuffled per workspace
+      // so two workspaces don't always end up looking identical).
       const msColors = TAB_COLORS.slice(0, 4);
-      const rest = [...TAB_COLORS.slice(4)].sort(() => Math.random() - 0.5);
-      let i = 0;
+      const byWorkspace = new Map<string, TerminalId[]>();
       for (const [id, instance] of newTerminals) {
-        const color = i < 4 ? msColors[i].value : rest[(i - 4) % rest.length].value;
-        newTerminals.set(id, { ...instance, tabColor: color });
-        i++;
+        const wsId = instance.workspaceId ?? activeWorkspaceId;
+        if (!byWorkspace.has(wsId)) byWorkspace.set(wsId, []);
+        byWorkspace.get(wsId)!.push(id);
+      }
+      for (const ids of byWorkspace.values()) {
+        const rest = [...TAB_COLORS.slice(4)].sort(() => Math.random() - 0.5);
+        ids.forEach((id, i) => {
+          const inst = newTerminals.get(id);
+          if (!inst) return;
+          const color = i < 4 ? msColors[i].value : rest[(i - 4) % rest.length].value;
+          newTerminals.set(id, { ...inst, tabColor: color });
+        });
       }
       set({ terminals: newTerminals, autoColorTabs: true });
     }
@@ -2633,6 +2652,28 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       const ws = next.get(id);
       if (!ws) return state;
       next.set(id, { ...ws, name: trimmed });
+      return { workspaces: next };
+    });
+    get().saveSession();
+  },
+
+  setWorkspaceColor: (id: WorkspaceId, color: string | undefined) => {
+    set((state) => {
+      const next = new Map(state.workspaces);
+      const ws = next.get(id);
+      if (!ws) return state;
+      next.set(id, { ...ws, color });
+      return { workspaces: next };
+    });
+    get().saveSession();
+  },
+
+  clearAllWorkspaceColors: () => {
+    set((state) => {
+      const next = new Map(state.workspaces);
+      for (const [k, ws] of next) {
+        if (ws.color !== undefined) next.set(k, { ...ws, color: undefined });
+      }
       return { workspaces: next };
     });
     get().saveSession();

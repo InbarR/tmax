@@ -452,6 +452,13 @@ const AppearanceSettings: React.FC = () => {
           })()}
         </div>
       </SettingRow>
+      <SettingRow label="Tab Mode" description="Flat: one terminal per tab. Workspaces: each tab is a collection of panes with its own grid.">
+        <select className="settings-input" value={config.tabMode || 'flat'}
+          onChange={(e) => update({ tabMode: e.target.value as 'flat' | 'workspaces' })}>
+          <option value="flat">Flat</option>
+          <option value="workspaces">Workspaces</option>
+        </select>
+      </SettingRow>
       <SettingRow label="Hide Tab Close Buttons" description="Hide the ✕ button on tabs to avoid accidentally closing them">
         <label className="toggle-switch">
           <input type="checkbox" checked={(config as any).hideTabCloseButtons === true}
