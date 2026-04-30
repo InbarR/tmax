@@ -610,6 +610,24 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
 
     term.open(containerRef.current);
 
+    // Hide xterm's helper textarea from UI Automation. Without this, Windows
+    // Voice Access (and other UIA-based tools) discover the textarea, treat
+    // it as a real text field, and render their in-progress dictation overlay
+    // anchored to the textarea's caret rect. The textarea is a single-line,
+    // non-wrapping element, so its caret marches rightward off the visible
+    // pane as text is dictated, putting the overlay outside the terminal.
+    // Windows Terminal avoids this entirely by not exposing a UIA text field;
+    // doing the same here makes dictation type straight in with no misplaced
+    // floating preview. Keyboard input, paste, and IME composition all bypass
+    // ARIA and continue to work normally.
+    try {
+      const helperTextarea = containerRef.current.querySelector('textarea');
+      if (helperTextarea) {
+        helperTextarea.setAttribute('aria-hidden', 'true');
+        helperTextarea.setAttribute('role', 'presentation');
+      }
+    } catch { /* xterm internals changed; non-fatal */ }
+
     terminalRef.current = term;
     fitAddonRef.current = fitAddon;
     serializeAddonRef.current = serializeAddon;
