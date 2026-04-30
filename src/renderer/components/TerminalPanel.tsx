@@ -968,6 +968,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       // being visible (e.g. Copilot sidebar) doesn't mean it holds keyboard focus.
       requestAnimationFrame(() => {
         if (useTerminalStore.getState().focusedTerminalId !== terminalId) return;
+        // If the window itself lost OS focus (e.g. Windows Voice Access, a screen reader, or
+        // any other out-of-process overlay grabbed focus), don't fight it. Stealing focus
+        // back here causes a tug-of-war that breaks dictation and misplaces UIA-anchored
+        // overlays. The handleWindowFocus path below restores xterm focus when the user
+        // comes back to the window.
+        if (!document.hasFocus()) return;
         const active = document.activeElement;
         const somethingElseTookFocus = active && active !== document.body && !containerRef.current?.contains(active);
         if (!somethingElseTookFocus) {
