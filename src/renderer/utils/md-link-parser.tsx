@@ -2,15 +2,19 @@ import React from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 import { formatKeyForPlatform, hasPrimaryMod } from './platform';
 
-// Regex matching file paths ending in .md
-const MD_PATH_REGEX = /(?:[a-zA-Z]:[\\/]|[\/~.])?[^\s"'`<>|:*?]*\.md\b/g;
+// Regex matching file paths ending in .md, including Copilot-style @mentions.
+export const MD_PATH_REGEX = /(?<![^\s"'`<>|:*?@{}])(?<!\{)@?(?:[a-zA-Z]:[\\/]|[/~.])?[^\s"'`<>|:*?@{}]*\.md\b/g;
 
-function isAbsolutePath(p: string): boolean {
+export function isAbsoluteMdPath(p: string): boolean {
   return /^[a-zA-Z]:/.test(p) || p.startsWith('/') || p.startsWith('~');
 }
 
-function resolveRelativePath(path: string, cwd: string): string {
-  if (isAbsolutePath(path)) return path;
+export function normalizeMdMentionPath(path: string): string {
+  return path.startsWith('@') ? path.slice(1) : path;
+}
+
+export function resolveMdPath(path: string, cwd: string): string {
+  if (isAbsoluteMdPath(path)) return path;
   const sep = cwd.includes('\\') ? '\\' : '/';
   return cwd.replace(/[\\/]$/, '') + sep + path;
 }
@@ -31,6 +35,7 @@ export function renderWithMdLinks(text: string, cwd?: string): React.ReactNode {
       parts.push(text.slice(lastIndex, match.index));
     }
     const rawPath = match[0];
+    const pathToOpen = normalizeMdMentionPath(rawPath);
     parts.push(
       <span
         key={match.index}
@@ -43,7 +48,7 @@ export function renderWithMdLinks(text: string, cwd?: string): React.ReactNode {
             const resolveCwd = cwd
               || useTerminalStore.getState().terminals.get(useTerminalStore.getState().focusedTerminalId || '')?.cwd
               || '';
-            const fullPath = resolveRelativePath(rawPath, resolveCwd);
+            const fullPath = resolveMdPath(pathToOpen, resolveCwd);
             (window.terminalAPI as any).fileRead(fullPath).then((content: string | null) => {
               if (content !== null) {
                 const fileName = fullPath.split(/[/\\]/).pop() || fullPath;

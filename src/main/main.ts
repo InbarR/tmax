@@ -19,6 +19,25 @@ import { GitDiffService, resolveGitRoot } from './git-diff-service';
 import { listWorktrees, createWorktree, deleteWorktree, getBranches } from './git-worktree-service';
 import type { DiffMode } from '../shared/diff-types';
 
+const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
+  '.apng': 'image/apng',
+  '.avif': 'image/avif',
+  '.gif': 'image/gif',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+};
+
+function resolveFsPath(filePath: string, wslDistro?: string): string | null {
+  if (wslDistro && filePath.startsWith('/')) {
+    if (!/^[\w][\w.\-]*$/.test(wslDistro)) return null;
+    return `//wsl.localhost/${wslDistro}${filePath}`;
+  }
+  return filePath;
+}
+
 // Handle Squirrel.Windows lifecycle events (install, update, uninstall)
 // Must be at the top before any other initialization
 if (process.platform === 'win32') {
@@ -207,7 +226,7 @@ function createWindow(): void {
         ...details.responseHeaders,
         'Content-Security-Policy': [
           `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; ` +
-          `img-src 'self' data:; font-src 'self' data:; ${connectSrc}; ` +
+          `img-src 'self' data: https:; font-src 'self' data:; ${connectSrc}; ` +
           `object-src 'none'; base-uri 'none';`,
         ],
       },
@@ -748,11 +767,8 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.FILE_READ, async (_event, filePath: string, wslDistro?: string) => {
     try {
-      let fsPath = filePath;
-      if (wslDistro && filePath.startsWith('/')) {
-        if (!/^[\w][\w.\-]*$/.test(wslDistro)) return null;
-        fsPath = `//wsl.localhost/${wslDistro}${filePath}`;
-      }
+      const fsPath = resolveFsPath(filePath, wslDistro);
+      if (!fsPath) return null;
       const stat = fs.statSync(fsPath);
       // Only read text files under 1MB
       if (stat.size > 1024 * 1024) return null;
@@ -760,6 +776,21 @@ function registerIpcHandlers(): void {
       // Check if content looks like binary
       if (content.includes('\0')) return null;
       return content;
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle(IPC.FILE_READ_DATA_URL, async (_event, filePath: string, wslDistro?: string) => {
+    try {
+      const fsPath = resolveFsPath(filePath, wslDistro);
+      if (!fsPath) return null;
+      const mime = IMAGE_MIME_BY_EXTENSION[path.extname(fsPath).toLowerCase()];
+      if (!mime) return null;
+      const stat = fs.statSync(fsPath);
+      // Keep markdown image previews bounded; README assets are normally tiny.
+      if (stat.size > 5 * 1024 * 1024) return null;
+      return `data:${mime};base64,${fs.readFileSync(fsPath).toString('base64')}`;
     } catch {
       return null;
     }

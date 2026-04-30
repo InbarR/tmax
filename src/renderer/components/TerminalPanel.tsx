@@ -8,6 +8,7 @@ import { useTerminalStore } from '../state/terminal-store';
 import { registerTerminal, unregisterTerminal } from '../terminal-registry';
 import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache';
 import { formatKeyForPlatform, hasPrimaryMod, isMac } from '../utils/platform';
+import { MD_PATH_REGEX, normalizeMdMentionPath, resolveMdPath } from '../utils/md-link-parser';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { prepareClipboardPaste } from '../utils/paste';
 import type { AppConfig } from '../state/types';
@@ -509,13 +510,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         if (!line) { callback(undefined); return; }
         const text = line.translateToString();
         // Match file paths ending in .md (absolute or relative)
-        const mdPathRegex = /(?:[a-zA-Z]:[\\/]|[\/~.])?[^\s"'`<>|:*?]*\.md\b/gi;
-        const links: Array<{ range: { start: { x: number; y: number }; end: { x: number; y: number } }; text: string; activate: () => void; tooltip: string }> = [];
+        const mdPathRegex = new RegExp(MD_PATH_REGEX.source, 'gi');
+        const links: Array<{ range: { start: { x: number; y: number }; end: { x: number; y: number } }; text: string; activate: (event: MouseEvent) => void; tooltip: string }> = [];
         let match: RegExpExecArray | null;
         while ((match = mdPathRegex.exec(text)) !== null) {
           const startX = match.index + 1;
           const endX = match.index + match[0].length;
           const matchedPath = match[0];
+          const pathToOpen = normalizeMdMentionPath(matchedPath);
           links.push({
             range: {
               start: { x: startX, y: bufferLineNumber },
@@ -527,12 +529,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               if (!hasPrimaryMod(event)) return;
               const termInst = useTerminalStore.getState().terminals.get(terminalId);
               const cwd = termInst?.cwd || '';
-              // Resolve relative paths against terminal cwd
-              let fullPath = matchedPath;
-              if (!/^[a-zA-Z]:/.test(matchedPath) && !matchedPath.startsWith('/') && !matchedPath.startsWith('~')) {
-                const sep = cwd.includes('\\') ? '\\' : '/';
-                fullPath = cwd + sep + matchedPath;
-              }
+              const fullPath = resolveMdPath(pathToOpen, cwd);
               (window.terminalAPI as any).fileRead(fullPath).then((content: string | null) => {
                 if (content !== null) {
                   const fileName = fullPath.split(/[/\\]/).pop() || fullPath;

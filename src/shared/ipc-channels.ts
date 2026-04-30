@@ -55,6 +55,7 @@ export const IPC = {
   // ── File explorer ──────────────────────────────────────────────────
   FILE_LIST: 'file:list',
   FILE_READ: 'file:read',
+  FILE_READ_DATA_URL: 'file:readDataUrl',
   // ── Git worktree ────────────────────────────────────────────────────
   GIT_LIST_WORKTREES: 'git:listWorktrees',
   GIT_CREATE_WORKTREE: 'git:createWorktree',

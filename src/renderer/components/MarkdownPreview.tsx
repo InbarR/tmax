@@ -11,7 +11,9 @@ import ZoomControls from './ZoomControls';
 // command execution. DOMPurify strips raw <script>, event handlers, javascript:
 // URIs, etc. We additionally enforce an href/src scheme allowlist below.
 const SAFE_URI_REGEX = /^(?:https?:|mailto:|tel:|#|\/|\.\/|\.\.\/)/i;
-const SAFE_IMG_URI_REGEX = /^(?:https?:|data:image\/(?:png|jpeg|jpg|gif|webp|svg\+xml);|\/|\.\/|\.\.\/)/i;
+const SAFE_IMG_URI_REGEX = /^(?:https:|data:image\/(?:apng|avif|png|jpeg|jpg|gif|webp|svg\+xml);|\/|\.\/|\.\.\/)/i;
+const URI_SCHEME_REGEX = /^[a-z][a-z0-9+.-]*:/i;
+const TRANSPARENT_IMAGE_SRC = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'A') {
@@ -39,6 +41,51 @@ function sanitizeHtml(html: string): string {
     FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select', 'option'],
     FORBID_ATTR: ['style'],
   });
+}
+
+function encodePathSegments(pathValue: string): string {
+  return pathValue
+    .split('/')
+    .map((segment) => (/^[a-zA-Z]:$/.test(segment) ? segment : encodeURIComponent(segment)))
+    .join('/');
+}
+
+function pathToFileUrl(pathValue: string): string {
+  const normalized = pathValue.replace(/\\/g, '/');
+  if (normalized.startsWith('//')) return `file:${encodePathSegments(normalized)}`;
+  return `file://${encodePathSegments(normalized.startsWith('/') ? normalized : `/${normalized}`)}`;
+}
+
+function fileUrlToPath(fileUrl: string): string {
+  const url = new URL(fileUrl);
+  const decodedPath = decodeURIComponent(url.pathname);
+  if (url.host) return `//${url.host}${decodedPath}`;
+  if (/^\/[a-zA-Z]:\//.test(decodedPath)) return decodedPath.slice(1).replace(/\//g, '\\');
+  return decodedPath;
+}
+
+function resolveMarkdownImagePath(src: string, markdownFilePath: string): string | null {
+  const trimmed = src.trim();
+  if (!trimmed || URI_SCHEME_REGEX.test(trimmed) || trimmed.startsWith('//') || trimmed.startsWith('#')) {
+    return null;
+  }
+
+  const basePath = markdownFilePath.replace(/\\/g, '/').replace(/\/[^/]*$/, '/');
+  return fileUrlToPath(new URL(trimmed, pathToFileUrl(basePath)).toString());
+}
+
+function rewriteMarkdownImageSources(html: string, markdownFilePath: string): string {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  template.content.querySelectorAll('img[src]').forEach((img) => {
+    const src = img.getAttribute('src');
+    if (!src) return;
+    const localPath = resolveMarkdownImagePath(src, markdownFilePath);
+    if (!localPath) return;
+    img.setAttribute('data-md-local-src', localPath);
+    img.setAttribute('src', TRANSPARENT_IMAGE_SRC);
+  });
+  return template.innerHTML;
 }
 
 function sanitizeSvg(svg: string): string {
@@ -101,8 +148,30 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
   const compiledHtml = useMemo(() => {
     if (!isMd || viewMode !== 'friendly') return '';
     const rawHtml = marked(content, { breaks: true, gfm: true }) as string;
-    return sanitizeHtml(rawHtml);
-  }, [content, isMd, viewMode]);
+    return sanitizeHtml(rewriteMarkdownImageSources(rawHtml, filePath));
+  }, [content, filePath, isMd, viewMode]);
+
+  useEffect(() => {
+    if (!contentRef.current || !isMd || viewMode !== 'friendly') return;
+    let cancelled = false;
+    const images = Array.from(contentRef.current.querySelectorAll<HTMLImageElement>('img[data-md-local-src]'));
+    const fileReadDataUrl = (window.terminalAPI as any).fileReadDataUrl;
+    if (typeof fileReadDataUrl !== 'function') return undefined;
+    images.forEach(async (img) => {
+      const localPath = img.getAttribute('data-md-local-src');
+      if (!localPath) return;
+      try {
+        const dataUrl = await fileReadDataUrl(localPath);
+        if (!cancelled && dataUrl) {
+          img.src = dataUrl;
+          img.removeAttribute('data-md-local-src');
+        }
+      } catch (err) {
+        console.warn('Failed to load markdown image:', localPath, err);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [compiledHtml, isMd, viewMode]);
 
   // Render mermaid diagrams after HTML is injected
   useEffect(() => {

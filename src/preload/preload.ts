@@ -55,6 +55,7 @@ export interface TerminalAPI {
   // ── File explorer ────────────────────────────────────────────────
   fileList(dirPath: string, wslDistro?: string): Promise<{ name: string; isDirectory: boolean; path: string }[]>;
   fileRead(filePath: string, wslDistro?: string): Promise<string | null>;
+  fileReadDataUrl(filePath: string, wslDistro?: string): Promise<string | null>;
   // ── Git worktree ──────────────────────────────────────────────────
   listWorktrees(cwd: string): Promise<RepoWorktrees>;
   createWorktree(repoPath: string, branchName: string, baseBranch: string): Promise<{ success: boolean; worktreePath?: string; error?: string }>;
@@ -353,6 +354,10 @@ const terminalAPI: TerminalAPI = {
 
   fileRead(filePath: string, wslDistro?: string) {
     return ipcRenderer.invoke(IPC.FILE_READ, filePath, wslDistro);
+  },
+
+  fileReadDataUrl(filePath: string, wslDistro?: string) {
+    return ipcRenderer.invoke(IPC.FILE_READ_DATA_URL, filePath, wslDistro);
   },
 
   // ── Git worktree ──────────────────────────────────────────────────
