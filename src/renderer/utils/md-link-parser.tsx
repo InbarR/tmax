@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTerminalStore } from '../state/terminal-store';
+import { openMarkdownPreview } from './md-preview-opener';
 import { formatKeyForPlatform, hasPrimaryMod } from './platform';
 
 // Regex matching file paths ending in .md, including Copilot-style @mentions.
@@ -49,12 +50,7 @@ export function renderWithMdLinks(text: string, cwd?: string): React.ReactNode {
               || useTerminalStore.getState().terminals.get(useTerminalStore.getState().focusedTerminalId || '')?.cwd
               || '';
             const fullPath = resolveMdPath(pathToOpen, resolveCwd);
-            (window.terminalAPI as any).fileRead(fullPath).then((content: string | null) => {
-              if (content !== null) {
-                const fileName = fullPath.split(/[/\\]/).pop() || fullPath;
-                useTerminalStore.setState({ markdownPreview: { filePath: fullPath, content, fileName } });
-              }
-            });
+            openMarkdownPreview(fullPath);
           }
         }}
         title={formatKeyForPlatform('Ctrl+Click to preview')}

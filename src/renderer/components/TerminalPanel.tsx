@@ -9,6 +9,7 @@ import { registerTerminal, unregisterTerminal } from '../terminal-registry';
 import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache';
 import { formatKeyForPlatform, hasPrimaryMod, isMac } from '../utils/platform';
 import { MD_PATH_REGEX, normalizeMdMentionPath, resolveMdPath } from '../utils/md-link-parser';
+import { openMarkdownPreview } from '../utils/md-preview-opener';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { prepareClipboardPaste } from '../utils/paste';
 import type { AppConfig } from '../state/types';
@@ -530,12 +531,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               const termInst = useTerminalStore.getState().terminals.get(terminalId);
               const cwd = termInst?.cwd || '';
               const fullPath = resolveMdPath(pathToOpen, cwd);
-              (window.terminalAPI as any).fileRead(fullPath).then((content: string | null) => {
-                if (content !== null) {
-                  const fileName = fullPath.split(/[/\\]/).pop() || fullPath;
-                  useTerminalStore.setState({ markdownPreview: { filePath: fullPath, content, fileName } });
-                }
-              });
+              openMarkdownPreview(fullPath, termInst?.wslDistro);
             },
           });
         }

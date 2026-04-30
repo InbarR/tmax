@@ -787,10 +787,11 @@ function registerIpcHandlers(): void {
       if (!fsPath) return null;
       const mime = IMAGE_MIME_BY_EXTENSION[path.extname(fsPath).toLowerCase()];
       if (!mime) return null;
-      const stat = fs.statSync(fsPath);
+      const stat = await fs.promises.stat(fsPath);
       // Keep markdown image previews bounded; README assets are normally tiny.
       if (stat.size > 5 * 1024 * 1024) return null;
-      return `data:${mime};base64,${fs.readFileSync(fsPath).toString('base64')}`;
+      const image = await fs.promises.readFile(fsPath);
+      return `data:${mime};base64,${image.toString('base64')}`;
     } catch {
       return null;
     }

@@ -4,6 +4,7 @@ import { useTerminalStore } from '../state/terminal-store';
 import MarkdownPreview from './MarkdownPreview';
 import ZoomControls from './ZoomControls';
 import { useZoom } from '../hooks/useZoom';
+import { readMarkdownFile } from '../utils/md-preview-opener';
 
 interface FileEntry {
   name: string;
@@ -113,9 +114,9 @@ const FileExplorer: React.FC = () => {
 
   const handleFileClick = useCallback((filePath: string, fileName: string) => {
     // Try to preview any file — fileRead returns null for binary/large files
-    (window.terminalAPI as any).fileRead(filePath, wslDistro).then((content: string | null) => {
-      if (content !== null) {
-        setPreview({ name: fileName, path: filePath, content });
+    readMarkdownFile(filePath, wslDistro).then((previewFile) => {
+      if (previewFile !== null) {
+        setPreview({ name: fileName, path: previewFile.filePath, content: previewFile.content });
       } else {
         openFileExternally(filePath);
       }

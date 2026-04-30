@@ -121,7 +121,7 @@ interface MarkdownPreviewProps {
   width?: string;
 }
 
-type ViewMode = 'friendly' | 'raw';
+type ViewMode = 'preview' | 'raw';
 
 const DEFAULT_WIDTH_PERCENT = 50;
 const MIN_WIDTH_PX = 300;
@@ -137,65 +137,95 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
   width,
 }) => {
   const isMd = /\.md$/i.test(fileName);
-  const [viewMode, setViewMode] = useState<ViewMode>('friendly');
+  const [viewMode, setViewMode] = useState<ViewMode>('preview');
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
+  const resizeListenersRef = useRef<{ onMouseMove: (ev: MouseEvent) => void; onMouseUp: () => void } | null>(null);
 
   const { zoomPercent, zoomIn, zoomOut, zoomReset, fontSize } = useZoom({ containerRef: overlayRef });
 
   const compiledHtml = useMemo(() => {
-    if (!isMd || viewMode !== 'friendly') return '';
+    if (!isMd || viewMode !== 'preview') return '';
     const rawHtml = marked(content, { breaks: true, gfm: true }) as string;
     return sanitizeHtml(rewriteMarkdownImageSources(rawHtml, filePath));
   }, [content, filePath, isMd, viewMode]);
 
   useEffect(() => {
-    if (!contentRef.current || !isMd || viewMode !== 'friendly') return;
+    if (!contentRef.current || !isMd || viewMode !== 'preview') return;
     let cancelled = false;
-    const images = Array.from(contentRef.current.querySelectorAll<HTMLImageElement>('img[data-md-local-src]'));
-    const fileReadDataUrl = (window.terminalAPI as any).fileReadDataUrl;
-    if (typeof fileReadDataUrl !== 'function') return undefined;
-    images.forEach(async (img) => {
-      const localPath = img.getAttribute('data-md-local-src');
-      if (!localPath) return;
-      try {
-        const dataUrl = await fileReadDataUrl(localPath);
-        if (!cancelled && dataUrl) {
-          img.src = dataUrl;
-          img.removeAttribute('data-md-local-src');
+
+    const loadImages = async () => {
+      const images = Array.from(contentRef.current?.querySelectorAll<HTMLImageElement>('img[data-md-local-src]') || []);
+      const fileReadDataUrl = (window.terminalAPI as any).fileReadDataUrl;
+      if (typeof fileReadDataUrl !== 'function') return;
+
+      for (const img of images) {
+        const localPath = img.getAttribute('data-md-local-src');
+        if (!localPath || cancelled || !img.isConnected) continue;
+        try {
+          const dataUrl = await fileReadDataUrl(localPath);
+          if (!cancelled && img.isConnected && dataUrl) {
+            img.src = dataUrl;
+            img.removeAttribute('data-md-local-src');
+          }
+        } catch (err) {
+          console.warn('Failed to load markdown image:', localPath, err);
         }
-      } catch (err) {
-        console.warn('Failed to load markdown image:', localPath, err);
       }
-    });
+    };
+
+    void loadImages();
     return () => { cancelled = true; };
   }, [compiledHtml, isMd, viewMode]);
 
   // Render mermaid diagrams after HTML is injected
   useEffect(() => {
-    if (!contentRef.current || !isMd || viewMode !== 'friendly') return;
-    const codeBlocks = contentRef.current.querySelectorAll('code.language-mermaid');
-    codeBlocks.forEach(async (block, idx) => {
-      const pre = block.parentElement;
-      if (!pre || pre.tagName !== 'PRE') return;
-      const source = block.textContent || '';
-      try {
-        const { svg } = await mermaid.render(`mermaid-diagram-${idx}-${Date.now()}`, source);
-        const wrapper = document.createElement('div');
-        wrapper.className = 'mermaid-diagram';
-        wrapper.innerHTML = sanitizeSvg(svg);
-        pre.replaceWith(wrapper);
-      } catch {
-        // If mermaid fails to parse, leave as code block
+    if (!contentRef.current || !isMd || viewMode !== 'preview') return;
+    let cancelled = false;
+
+    const renderDiagrams = async () => {
+      const codeBlocks = Array.from(contentRef.current?.querySelectorAll('code.language-mermaid') || []);
+      for (const [idx, block] of codeBlocks.entries()) {
+        const pre = block.parentElement;
+        if (!pre || pre.tagName !== 'PRE') continue;
+        const source = block.textContent || '';
+        try {
+          const { svg } = await mermaid.render(`mermaid-diagram-${idx}-${Date.now()}`, source);
+          if (cancelled || !block.isConnected || !pre.isConnected) continue;
+          const wrapper = document.createElement('div');
+          wrapper.className = 'mermaid-diagram';
+          wrapper.innerHTML = sanitizeSvg(svg);
+          pre.replaceWith(wrapper);
+        } catch {
+          // If mermaid fails to parse, leave as code block
+        }
       }
-    });
+    };
+
+    void renderDiagrams();
+    return () => { cancelled = true; };
   }, [compiledHtml, isMd, viewMode]);
+
+  const cleanupResize = useCallback(() => {
+    const listeners = resizeListenersRef.current;
+    if (listeners) {
+      document.removeEventListener('mousemove', listeners.onMouseMove);
+      document.removeEventListener('mouseup', listeners.onMouseUp);
+      resizeListenersRef.current = null;
+    }
+    isDragging.current = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }, []);
+
+  useEffect(() => cleanupResize, [cleanupResize]);
 
   // Drag-to-resize handler
   const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    cleanupResize();
     isDragging.current = true;
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
@@ -213,17 +243,12 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
       setPanelWidth(newWidth);
     };
 
-    const onMouseUp = () => {
-      isDragging.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
+    const onMouseUp = () => cleanupResize();
 
+    resizeListenersRef.current = { onMouseMove, onMouseUp };
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
-  }, [side]);
+  }, [cleanupResize, side]);
 
   const resolvedWidth = panelWidth != null ? `${panelWidth}px` : (width || `${DEFAULT_WIDTH_PERCENT}%`);
 
@@ -244,11 +269,11 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
               <div className="md-view-toggle">
                 <button
                   type="button"
-                  className={`md-view-toggle-btn${viewMode === 'friendly' ? ' active' : ''}`}
-                  onClick={() => setViewMode('friendly')}
+                  className={`md-view-toggle-btn${viewMode === 'preview' ? ' active' : ''}`}
+                  onClick={() => setViewMode('preview')}
                   title="Rendered markdown"
                 >
-                  Friendly
+                  Preview
                 </button>
                 <button
                   type="button"
@@ -272,7 +297,7 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
             <button className="file-preview-btn close" onClick={onClose} title="Close (Esc)">&#10005;</button>
           </div>
         </div>
-        {isMd && viewMode === 'friendly' ? (
+        {isMd && viewMode === 'preview' ? (
           <div
             ref={contentRef}
             className="md-rendered-content"
