@@ -240,6 +240,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   const firstCmdBufferRef = useRef<string>('');
   const firstCmdSavedRef = useRef(false);
   const wslPromptCleanupRef = useRef<(() => void) | null>(null);
+  const textareaDiagCleanupRef = useRef<(() => void) | null>(null);
   // Tracks signals that mean "an app is drawing its own cursor"; either one
   // being on is enough to keep xterm's cursor hidden. See syncCursorVisibility.
   const cursorHideSignalsRef = useRef({ bracketedPaste: false, altScreen: false });
@@ -653,23 +654,88 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
 
     term.open(containerRef.current);
 
-    // Hide xterm's helper textarea from UI Automation. Without this, Windows
-    // Voice Access (and other UIA-based tools) discover the textarea, treat
-    // it as a real text field, and render their in-progress dictation overlay
-    // anchored to the textarea's caret rect. The textarea is a single-line,
-    // non-wrapping element, so its caret marches rightward off the visible
-    // pane as text is dictated, putting the overlay outside the terminal.
-    // Windows Terminal avoids this entirely by not exposing a UIA text field;
-    // doing the same here makes dictation type straight in with no misplaced
-    // floating preview. Keyboard input, paste, and IME composition all bypass
-    // ARIA and continue to work normally.
+    // Hide xterm's helper textarea from UI Automation as strongly as we can
+    // without breaking keyboard input. Windows Voice Access and other UIA-based
+    // dictation tools discover the textarea, treat it as a real text field,
+    // and split a single utterance across multiple IME compositions whose
+    // chunks reach the PTY out of order (see TASK-53: dictating
+    // "I'm testing this again" + "Testing speech." produced the spliced
+    // string "I'm teTesting speech.ing this again."). The data-corruption
+    // ordering is decided by Voice Access *before* xterm sees it, so no
+    // amount of textarea-state reset on our side fixes it - the only reliable
+    // mitigation is to convince Voice Access to ignore the field entirely.
+    // Windows Terminal achieves this by not exposing a UIA text field at all;
+    // we layer every standard-DOM hide we have so Voice Access skips us and
+    // dictation falls back to OS keystroke injection (or the user uses Win+H,
+    // which routes through TSF and types straight into the prompt).
     try {
-      const helperTextarea = containerRef.current.querySelector('textarea');
+      const helperTextarea = containerRef.current.querySelector('textarea') as HTMLTextAreaElement | null;
       if (helperTextarea) {
         helperTextarea.setAttribute('aria-hidden', 'true');
         helperTextarea.setAttribute('role', 'presentation');
+        // tabindex=-1 keeps programmatic focus working (xterm calls
+        // textarea.focus()) but removes the textarea from sequential focus
+        // navigation, which is one of the cues UIA-based dictation tools use
+        // to decide a control is a "real" input target.
+        helperTextarea.setAttribute('tabindex', '-1');
+        // Override xterm's aria-label ("Terminal input"). A blank label plus
+        // role=presentation makes the field look like a styling helper
+        // rather than a labelled input.
+        helperTextarea.setAttribute('aria-label', '');
+        // aria-readonly=true tells UIA TextPattern this field doesn't accept
+        // text input via the Insert pattern. Voice Access uses this to skip
+        // read-only fields. Real keyboard typing is unaffected (browsers don't
+        // honour aria-readonly for actual input gating).
+        helperTextarea.setAttribute('aria-readonly', 'true');
+      }
+      // Also hide the parent xterm-helpers container - some accessibility
+      // walkers stop at an aria-hidden ancestor.
+      const helperContainer = containerRef.current.querySelector('.xterm-helpers');
+      if (helperContainer) {
+        helperContainer.setAttribute('aria-hidden', 'true');
       }
     } catch { /* xterm internals changed; non-fatal */ }
+
+    // Diagnostic logging for STT/dictation drift (TASK-53). Captures every
+    // input/composition event that reaches the helper textarea so we can
+    // see exactly what Voice Access (or any other dictation engine) feeds
+    // us. Gated by the existing diag logger; logs are line-rate-limited
+    // per terminal, so dictating a sentence won't flood the file.
+    try {
+      const hta = containerRef.current.querySelector('textarea') as HTMLTextAreaElement | null;
+      if (hta) {
+        const snap = (label: string, ev?: Event) => {
+          const e = ev as InputEvent | CompositionEvent | undefined;
+          window.terminalAPI.diagLog(`renderer:textarea:${label}`, {
+            terminalId,
+            valueLen: hta.value.length,
+            valueTail: hta.value.slice(-32),
+            selStart: hta.selectionStart,
+            selEnd: hta.selectionEnd,
+            inputType: (e as InputEvent)?.inputType,
+            data: (e as InputEvent | CompositionEvent)?.data,
+            isComposing: (e as InputEvent)?.isComposing,
+          });
+        };
+        const onComposStart = (ev: Event) => snap('compositionstart', ev);
+        const onComposUpdate = (ev: Event) => snap('compositionupdate', ev);
+        const onComposEnd = (ev: Event) => snap('compositionend', ev);
+        const onBeforeInput = (ev: Event) => snap('beforeinput', ev);
+        const onInput = (ev: Event) => snap('input', ev);
+        hta.addEventListener('compositionstart', onComposStart, true);
+        hta.addEventListener('compositionupdate', onComposUpdate, true);
+        hta.addEventListener('compositionend', onComposEnd, true);
+        hta.addEventListener('beforeinput', onBeforeInput, true);
+        hta.addEventListener('input', onInput, true);
+        textareaDiagCleanupRef.current = () => {
+          hta.removeEventListener('compositionstart', onComposStart, true);
+          hta.removeEventListener('compositionupdate', onComposUpdate, true);
+          hta.removeEventListener('compositionend', onComposEnd, true);
+          hta.removeEventListener('beforeinput', onBeforeInput, true);
+          hta.removeEventListener('input', onInput, true);
+        };
+      }
+    } catch { /* non-fatal */ }
 
     terminalRef.current = term;
     fitAddonRef.current = fitAddon;
@@ -1115,6 +1181,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       unsubscribePtyData();
       unsubscribePtyExit();
       wslPromptCleanupRef.current?.();
+      textareaDiagCleanupRef.current?.();
+      textareaDiagCleanupRef.current = null;
       if (textareaEl) {
         textareaEl.removeEventListener('focus', handleFocus);
         textareaEl.removeEventListener('blur', handleBlur);
