@@ -133,6 +133,10 @@ export interface TerminalConfig {
   scrollback: number;
   cursorStyle?: 'block' | 'underline' | 'bar';
   cursorBlink?: boolean;
+  // TASK-52: when true (default), copy operations stitch CLI-rendered
+  // hard newlines + 1-2 space continuation indents back into single
+  // paragraphs. Disable if it ever clobbers code/structure.
+  smartUnwrapCopy?: boolean;
 }
 
 export type BackgroundMaterial = 'none' | 'auto' | 'mica' | 'acrylic' | 'tabbed';

@@ -105,6 +105,14 @@ const TerminalSettings: React.FC = () => {
         <input type="number" className="settings-input small" value={config.terminal.scrollback}
           onChange={(e) => update({ terminal: { ...config.terminal, scrollback: parseInt(e.target.value) || 5000 } })} />
       </SettingRow>
+      <SettingRow label="Smart unwrap on copy" description="Stitch CLI-rendered hard newlines + indent continuations back into single paragraphs when copying. Skips code blocks, bullets, and headings.">
+        <label className="toggle-switch">
+          <input type="checkbox"
+            checked={config.terminal.smartUnwrapCopy !== false}
+            onChange={(e) => update({ terminal: { ...config.terminal, smartUnwrapCopy: e.target.checked } })} />
+          <span className="toggle-track" />
+        </label>
+      </SettingRow>
       <SettingRow label="Default Shell" description="Shell used for new terminals">
         <select className="settings-input" value={config.defaultShellId}
           onChange={(e) => update({ defaultShellId: e.target.value })}>

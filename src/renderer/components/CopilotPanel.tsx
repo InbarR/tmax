@@ -925,7 +925,6 @@ const CopilotPanel: React.FC = () => {
                 }
               }}
               onDoubleClick={() => openSession(session)}
-              onMouseEnter={() => setSelectedIndex(index)}
               onContextMenu={(e) => handleContextMenu(e, session)}
               title={session.cwd || session.id}
             >

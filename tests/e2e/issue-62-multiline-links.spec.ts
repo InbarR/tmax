@@ -129,30 +129,22 @@ test('a URL wrapped across two rows is detected by the link provider on both row
       })) || []));
     }
 
-    // Find rows where the URL (startY) begins
-    const startRows = new Set<number>();
-    const endRows = new Set<number>();
+    // Find ALL rows that returned a link with the full URL text. Post TASK-47
+    // each row's link is clipped to that row (startY === endY) so we can no
+    // longer assert "endY > startY" — the user-visible contract is "every row
+    // the URL spans returns a clickable link with the full URL text", which
+    // we verify here.
+    const rowsThatDetect: number[] = [];
     for (const y of Object.keys(allRows)) {
       const results = allRows[+y].results || [];
-      for (const l of results) {
-        if (l.text === url) {
-          startRows.add(l.startY);
-          endRows.add(l.endY);
-        }
-      }
+      if (results.some((l: any) => l.text === url)) rowsThatDetect.push(+y);
     }
+    console.log('rows detecting full URL:', rowsThatDetect);
 
-    // The bug: link is only detected at the row where it starts, not on
-    // the wrapped continuation row. With a proper fix, querying ANY of
-    // the rows the URL visually occupies should return the full URL link.
-    const startY = [...startRows][0];
-    const endY = [...endRows][0];
-    console.log('URL visually spans rows', startY, 'to', endY);
-    expect(startY).toBeDefined();
-    expect(endY).toBeGreaterThan(startY!);
-
-    // Assert the URL is detected when probing the WRAPPED row, not just the start
-    for (let y = startY!; y <= endY!; y++) {
+    // The bug being regression-tested: pre-fix, only the starting row matched.
+    // Post-fix, every wrapped row returns the full URL.
+    expect(rowsThatDetect.length).toBeGreaterThanOrEqual(2);
+    for (const y of rowsThatDetect) {
       const results = allRows[y]?.results || [];
       const found = results.some((l: any) => l.text === url);
       console.log(`  row ${y} detects full URL: ${found}`);
@@ -194,6 +186,144 @@ test('URL wrapped across rows with ANSI color codes is detected on both rows (#6
     }
     console.log('rows detecting ANSI URL:', rowsFound);
     expect(rowsFound.length).toBeGreaterThan(1); // Must be detected on both wrap rows
+  } finally {
+    await close();
+  }
+});
+
+// TASK-47: pre-fix, every row that the URL touched returned a link with the
+// FULL multi-row range. xterm registered each as a separate link record, so a
+// single click hit N overlapping records and fired window.open N times. The
+// fix clips each row's link range to JUST that row.
+test('clicking a wrapped URL fires window.open exactly once per click (TASK-47)', async () => {
+  const { window, close } = await launchTmax();
+  try {
+    await window.waitForSelector('.terminal-panel', { timeout: 15_000 });
+    await window.waitForTimeout(800);
+    await installWindowOpenSpy(window);
+
+    const cols = await getTerminalCols(window);
+    expect(cols).toBeGreaterThan(40);
+
+    // URL guaranteed to wrap across 3+ rows so the bug would multiply ×3.
+    const urlTail = 'c'.repeat(cols * 2 + 10);
+    const url = `https://example.com/` + urlTail;
+    await writeToTerminal(window, '\r\n' + url);
+    await window.waitForTimeout(400);
+
+    // Probe every row in range to find which rows the URL spans.
+    const allRows: Record<number, any> = {};
+    for (let y = 1; y <= 10; y++) {
+      allRows[y] = await getLinksViaProvider(window, y);
+    }
+
+    const urlRows: number[] = [];
+    for (const yKey of Object.keys(allRows)) {
+      const y = +yKey;
+      const results = allRows[y].results || [];
+      if (results.some((l: any) => l.text === url)) urlRows.push(y);
+    }
+    console.log('URL detected on rows:', urlRows);
+    expect(urlRows.length).toBeGreaterThanOrEqual(2);
+
+    // Simulate "what happens when xterm dispatches a click at row Y": every
+    // link entry whose range contains the click position has its activate()
+    // fired. Pre-fix, all rows returned links with the same multi-row range,
+    // so a click at any row was contained by N entries → fired N times.
+    // Post-fix, each row's link is clipped to that row → click at row Y
+    // matches exactly 1 entry.
+    const clickRow = urlRows[Math.floor(urlRows.length / 2)];
+    const fireCount = await window.evaluate(async ({ clickY, expectedUrl }) => {
+      (window as any).__openCalls = [];
+      const id = (window as any).__terminalStore.getState().focusedTerminalId;
+      const entry = (window as any).__getTerminalEntry(id);
+      const term = entry.terminal;
+      const core = (term as any)._core;
+      const service = core?._linkProviderService;
+      const providers = service.linkProviders || service._linkProviders;
+
+      // Collect every link from every row whose range covers (clickY).
+      // This mirrors how xterm decides which links a click intersects: the
+      // link layer renders links from per-row provider results and a click at
+      // row Y fires every link whose range covers Y.
+      const matched: any[] = [];
+      for (let y = 1; y <= 10; y++) {
+        for (const p of providers) {
+          await new Promise<void>((resolve) => {
+            try {
+              p.provideLinks(y, (links: any) => {
+                if (links) {
+                  for (const l of links) {
+                    if (l.text !== expectedUrl) continue;
+                    const sy = l.range?.start?.y;
+                    const ey = l.range?.end?.y;
+                    if (sy <= clickY && clickY <= ey) matched.push(l);
+                  }
+                }
+                resolve();
+              });
+            } catch { resolve(); }
+          });
+        }
+      }
+      // Fire activate on every matching link entry, just like xterm would.
+      for (const l of matched) {
+        try { l.activate?.(new MouseEvent('click'), l.text); } catch { /* ignore */ }
+      }
+      return matched.length;
+    }, { clickY: clickRow, expectedUrl: url });
+
+    console.log(`click at row ${clickRow} matched ${fireCount} link entries`);
+    const openCalls = await getOpenCalls(window);
+    console.log('window.open calls:', openCalls.length);
+
+    // The actual regression assertion: ONE click → ONE window.open.
+    expect(openCalls.length).toBe(1);
+    expect(openCalls[0].url).toBe(url);
+  } finally {
+    await close();
+  }
+});
+
+// TASK-46: gh CLI and similar emit long URLs split across HARD newlines with
+// the continuation indented under the URL start. Pre-fix, the link provider
+// bailed at the seam check and only the first line was clickable; clicking
+// opened a truncated URL.
+test('URL split across hard newlines with indented continuation is stitched (TASK-46)', async () => {
+  const { window, close } = await launchTmax();
+  try {
+    await window.waitForSelector('.terminal-panel', { timeout: 15_000 });
+    await window.waitForTimeout(800);
+
+    const head = 'https://github.com/enterprises/microsoft/sso?authorization_request=A42LHL5Y3IDODQAD';
+    const cont1 = 'CONTINUATIONTOKENPART1XXYYZZ1234567890';
+    const cont2 = 'CONTINUATIONTOKENPART2AAABBBCCC';
+    const fullUrl = head + cont1 + cont2;
+    // Hard newlines + leading whitespace on continuations is the gh-CLI shape.
+    await writeToTerminal(window, '\r\n' + head + '\r\n   ' + cont1 + '\r\n   ' + cont2 + '\r\n');
+    await window.waitForTimeout(400);
+
+    // Probe rows: find which ones return a link, and assert the link text is
+    // the FULL stitched URL (head + cont1 + cont2), not just the head.
+    const stitchedRows: number[] = [];
+    let firstSeenText = '';
+    for (let y = 1; y <= 10; y++) {
+      const probe = await getLinksViaProvider(window, y);
+      const results = probe.results || [];
+      for (const l of results) {
+        if (typeof l.text === 'string' && l.text.startsWith('https://github.com/')) {
+          stitchedRows.push(y);
+          if (!firstSeenText) firstSeenText = l.text;
+        }
+      }
+    }
+
+    console.log('TASK-46 link rows:', stitchedRows, 'first text:', firstSeenText);
+
+    // At minimum: the head row plus both continuation rows should match.
+    expect(stitchedRows.length).toBeGreaterThanOrEqual(3);
+    // Critical assertion: the link text is the FULL stitched URL.
+    expect(firstSeenText).toBe(fullUrl);
   } finally {
     await close();
   }

@@ -33,6 +33,9 @@ const FileExplorer: React.FC = () => {
   const [editingPath, setEditingPath] = useState(false);
   const [pathInputValue, setPathInputValue] = useState('');
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; entry: FileEntry } | null>(null);
+  const [renamingPath, setRenamingPath] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const renameInputRef = useRef<HTMLInputElement>(null);
   const ctxRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<{ name: string; path: string; content: string } | null>(null);
   const [previewWidth, setPreviewWidth] = useState(50); // percentage
@@ -101,6 +104,74 @@ const FileExplorer: React.FC = () => {
       return next;
     });
   }, [children, wslDistro]);
+
+  // Re-fetch a directory's children, used after rename/delete to keep the
+  // tree in sync without a full reload.
+  const reloadDir = useCallback((dirPath: string) => {
+    return (window.terminalAPI as any).fileList(dirPath, wslDistro).then((entries: FileEntry[]) => {
+      const filtered = showHidden ? entries : entries.filter((e: FileEntry) => !e.name.startsWith('.'));
+      if (dirPath === currentPath) {
+        setFiles(filtered);
+      } else {
+        setChildren((c) => ({ ...c, [dirPath]: filtered }));
+      }
+    });
+  }, [wslDistro, showHidden, currentPath]);
+
+  const parentDirOf = useCallback((p: string): string => {
+    if (wslDistro && p.startsWith('/')) {
+      const i = p.lastIndexOf('/');
+      return i <= 0 ? '/' : p.slice(0, i);
+    }
+    // Windows
+    const m = p.match(/^(.*)[\\/][^\\/]+$/);
+    return m ? m[1] : p;
+  }, [wslDistro]);
+
+  const beginRename = useCallback((entry: FileEntry) => {
+    setRenamingPath(entry.path);
+    setRenameValue(entry.name);
+    setCtxMenu(null);
+    requestAnimationFrame(() => {
+      const el = renameInputRef.current;
+      if (el) {
+        el.focus();
+        // Select the basename without the extension to make typing easier
+        const dot = entry.name.lastIndexOf('.');
+        if (!entry.isDirectory && dot > 0) el.setSelectionRange(0, dot);
+        else el.select();
+      }
+    });
+  }, []);
+
+  const commitRename = useCallback(async (entry: FileEntry) => {
+    const newName = renameValue.trim();
+    setRenamingPath(null);
+    if (!newName || newName === entry.name) return;
+    const res = await (window.terminalAPI as any).fileRename(entry.path, newName, wslDistro);
+    if (!res?.ok) {
+      window.alert(`Rename failed: ${res?.error || 'unknown error'}`);
+      return;
+    }
+    await reloadDir(parentDirOf(entry.path));
+  }, [renameValue, wslDistro, reloadDir, parentDirOf]);
+
+  const deleteEntry = useCallback(async (entry: FileEntry) => {
+    const what = entry.isDirectory ? 'folder' : 'file';
+    if (!window.confirm(`Move ${what} "${entry.name}" to the Recycle Bin?`)) return;
+    const res = await (window.terminalAPI as any).fileDelete(entry.path, wslDistro);
+    if (!res?.ok) {
+      window.alert(`Delete failed: ${res?.error || 'unknown error'}`);
+      return;
+    }
+    await reloadDir(parentDirOf(entry.path));
+    // If we just deleted the previewed file, close the preview.
+    if (preview && preview.path === entry.path) setPreview(null);
+  }, [wslDistro, reloadDir, parentDirOf, preview]);
+
+  const revealEntry = useCallback((entry: FileEntry) => {
+    (window.terminalAPI as any).fileReveal(entry.path, wslDistro);
+  }, [wslDistro]);
 
   const openFileExternally = useCallback((filePath: string) => {
     if (wslDistro && filePath.startsWith('/')) {
@@ -204,7 +275,29 @@ const FileExplorer: React.FC = () => {
             <span className="file-chevron">{expanded[entry.path] ? '\u25BC' : '\u25B6'}</span>
           )}
           <span className={`file-type-icon ${fileIconClass}`} />
-          <span className="file-name">{entry.name}</span>
+          {renamingPath === entry.path ? (
+            <input
+              ref={renameInputRef}
+              className="file-rename-input"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void commitRename(entry);
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setRenamingPath(null);
+                }
+              }}
+              onBlur={() => { void commitRename(entry); }}
+            />
+          ) : (
+            <span className="file-name">{entry.name}</span>
+          )}
         </div>
         {entry.isDirectory && expanded[entry.path] && children[entry.path] && (
           <div className="file-children" style={{ borderLeft: '1px solid var(--border-color)', marginLeft: 19 + depth * 16 }}>
@@ -265,6 +358,17 @@ const FileExplorer: React.FC = () => {
           </div>
         )}
         <div style={{ display: 'flex', gap: '2px' }}>
+          <button
+            className="file-explorer-nav-btn"
+            onClick={() => {
+              void reloadDir(currentPath);
+              // Also re-expand any expanded folders
+              for (const dirPath of Object.keys(expanded)) {
+                if (expanded[dirPath]) void reloadDir(dirPath);
+              }
+            }}
+            title="Refresh"
+          >&#x21BB;</button>
           <button className="file-explorer-nav-btn" onClick={() => setShowHidden((v) => !v)} title={showHidden ? 'Hide dotfiles' : 'Show dotfiles'}>{showHidden ? '\u25C9' : '\u25CB'}</button>
           <button className="dir-panel-close" onClick={() => useTerminalStore.getState().toggleFileExplorer()}>&#10005;</button>
         </div>
@@ -386,6 +490,24 @@ const FileExplorer: React.FC = () => {
             setCtxMenu(null);
           }}>
             &#128203; Copy Path
+          </button>
+          <button className="context-menu-item" onClick={() => {
+            revealEntry(ctxMenu.entry);
+            setCtxMenu(null);
+          }}>
+            &#128194; Reveal in File Explorer
+          </button>
+          <button className="context-menu-item" onClick={() => {
+            beginRename(ctxMenu.entry);
+          }}>
+            &#9999;&#65039; Rename
+          </button>
+          <button className="context-menu-item danger" onClick={() => {
+            const entry = ctxMenu.entry;
+            setCtxMenu(null);
+            void deleteEntry(entry);
+          }}>
+            &#128465;&#65039; Delete
           </button>
         </div>
       )}

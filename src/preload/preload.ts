@@ -48,6 +48,7 @@ export interface TerminalAPI {
   // ── Keybindings file (TASK-39) ────────────────────────────────────
   getKeybindings(): Promise<{ key: string; action: string }[]>;
   openKeybindingsFile(): Promise<void>;
+  openConfigFile(): Promise<void>;
   resetKeybindings(): Promise<{ key: string; action: string }[]>;
   onKeybindingsChanged(cb: (bindings: { key: string; action: string }[]) => void): () => void;
   // ── Transparency ──────────────────────────────────────────────────
@@ -60,6 +61,9 @@ export interface TerminalAPI {
   // ── File explorer ────────────────────────────────────────────────
   fileList(dirPath: string, wslDistro?: string): Promise<{ name: string; isDirectory: boolean; path: string }[]>;
   fileRead(filePath: string, wslDistro?: string): Promise<string | null>;
+  fileReveal(filePath: string, wslDistro?: string): Promise<{ ok: boolean; error?: string }>;
+  fileRename(oldPath: string, newName: string, wslDistro?: string): Promise<{ ok: boolean; newPath?: string; error?: string }>;
+  fileDelete(filePath: string, wslDistro?: string): Promise<{ ok: boolean; error?: string }>;
   // ── Git worktree ──────────────────────────────────────────────────
   listWorktrees(cwd: string): Promise<RepoWorktrees>;
   createWorktree(repoPath: string, branchName: string, baseBranch: string): Promise<{ success: boolean; worktreePath?: string; error?: string }>;
@@ -374,6 +378,18 @@ const terminalAPI: TerminalAPI = {
 
   fileRead(filePath: string, wslDistro?: string) {
     return ipcRenderer.invoke(IPC.FILE_READ, filePath, wslDistro);
+  },
+
+  fileReveal(filePath: string, wslDistro?: string) {
+    return ipcRenderer.invoke(IPC.FILE_REVEAL, filePath, wslDistro);
+  },
+
+  fileRename(oldPath: string, newName: string, wslDistro?: string) {
+    return ipcRenderer.invoke(IPC.FILE_RENAME, oldPath, newName, wslDistro);
+  },
+
+  fileDelete(filePath: string, wslDistro?: string) {
+    return ipcRenderer.invoke(IPC.FILE_DELETE, filePath, wslDistro);
   },
 
   // ── Git worktree ──────────────────────────────────────────────────

@@ -3,9 +3,10 @@ id: TASK-34
 title: >-
   Pane menu: 'Show in AI sessions' opens sidebar with this pane's session
   selected
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-04-28 10:17'
+updated_date: '2026-05-01 13:09'
 labels: []
 dependencies: []
 ---
@@ -24,8 +25,8 @@ Behaviour:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Pane ⋯ menu shows a 'Show in AI sessions' item when the pane has an aiSessionId
-- [ ] #2 Item is hidden (or disabled) for panes without an aiSessionId
-- [ ] #3 Clicking the item opens showCopilotPanel
-- [ ] #4 Clicking the item leaves the .ai-session-item for this pane'\''s session as the .selected row, even if its group was previously collapsed
+- [x] #1 Pane ⋯ menu shows a 'Show in AI sessions' item when the pane has an aiSessionId
+- [x] #2 Item is hidden (or disabled) for panes without an aiSessionId
+- [x] #3 Clicking the item opens showCopilotPanel
+- [x] #4 Clicking the item leaves the .ai-session-item for this pane'\''s session as the .selected row, even if its group was previously collapsed
 <!-- AC:END -->

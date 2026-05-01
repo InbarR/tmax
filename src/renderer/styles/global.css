@@ -3148,6 +3148,19 @@ select.settings-input {
   text-overflow: ellipsis;
 }
 
+.file-rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 4px;
+  border: 1px solid var(--accent-color, #89b4fa);
+  border-radius: 3px;
+  background: var(--bg-primary, #1e1e2e);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: inherit;
+  outline: none;
+}
+
 .file-children {
   padding-left: 4px;
 }
@@ -3862,10 +3875,20 @@ select.settings-input {
   opacity: 0.7;
 }
 
-.ai-session-item:hover,
+.ai-session-item:hover {
+  background: rgba(137, 180, 250, 0.05);
+}
+
+/* TASK-51: keyboard-cursor row needs to be visibly distinct from hover BUT
+   subordinate to .pane-active (which marks the running terminal's session).
+   Slim left rail + bolder name; no heavy background fill. .pane-active
+   below provides the strong "this is the live one" highlight. */
 .ai-session-item.selected {
-  background: rgba(137, 180, 250, 0.08);
-  border-left-color: var(--focus-border);
+  box-shadow: inset 2px 0 0 0 var(--focus-border);
+}
+.ai-session-item.selected .ai-session-name {
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .ai-session-item.multi-selected {

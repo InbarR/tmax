@@ -1,11 +1,11 @@
 ---
 id: TASK-41
 title: Fix focus-stealing loop with Windows Voice Access / external focus thieves
-status: In Progress
+status: Done
 assignee:
   - '@copilot'
 created_date: '2026-04-30 06:35'
-updated_date: '2026-04-30 06:38'
+updated_date: '2026-05-01 07:24'
 labels: []
 dependencies: []
 priority: high
@@ -21,7 +21,7 @@ Reported by user testing speech-to-text with Copilot CLI inside tmax: dictation 
 <!-- AC:BEGIN -->
 - [x] #1 handleBlur in TerminalPanel does NOT re-focus xterm when document.hasFocus() is false (window-level focus lost)
 - [x] #2 When window regains focus, existing handleWindowFocus path still restores xterm focus
-- [ ] #3 Smoke test: Windows Voice Access can dictate into Copilot CLI inside tmax without focus tug-of-war and the dictation preview overlay renders adjacent to the input box, not floating in the pane gutter
+- [x] #3 Smoke test: Windows Voice Access can dictate into Copilot CLI inside tmax without focus tug-of-war and the dictation preview overlay renders adjacent to the input box, not floating in the pane gutter
 - [x] #4 Existing focus behavior preserved: clicking another in-window element (rename input, sidebar) still steals focus away as before
 <!-- AC:END -->
 

@@ -10,6 +10,7 @@ import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache'
 import { isMac } from '../utils/platform';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { prepareClipboardPaste } from '../utils/paste';
+import { smartUnwrapForCopy } from '../utils/smart-unwrap';
 import type { AppConfig } from '../state/types';
 import '@xterm/xterm/css/xterm.css';
 
@@ -69,13 +70,36 @@ function hexToTerminalRgba(hex: string, alpha: number): string {
 
 /**
  * Force xterm's viewport to sync its native scroll area with the buffer.
- * Without this, the native scrollbar may show no thumb even though there
- * is scrollback content (wheel scrolling still works because xterm handles
- * it in JS, but the scrollbar indicator is absent).
+ *
+ * xterm 5.5's `Viewport.syncScrollArea()` is gated by four cached fields
+ * (`_lastRecordedBufferLength`, `_lastRecordedViewportHeight`,
+ * `_lastRecordedBufferHeight`, `_currentDeviceCellHeight`). After a
+ * grid/float layout change ends up at the same render dimensions as a
+ * previous layout, all four caches match and the call is a no-op — so the
+ * .xterm-viewport scrollHeight stays at the stale (often smaller) value:
+ *   - Scrollbar thumb is missing or tiny (TASK-50)
+ *   - Wheel can only scroll within the stale range (TASK-49)
+ *
+ * We invalidate the caches and call syncScrollArea(true) (immediate=true,
+ * skip rAF) only when the viewport has real geometry — calling against
+ * a zero-sized container would just refresh into another bad state.
+ *
+ * NOTE: Touches xterm 5.5 internals. If you upgrade xterm, re-verify the
+ * field names in node_modules/@xterm/xterm/src/browser/Viewport.ts.
  */
 function syncViewportScrollArea(term: Terminal): void {
   try {
-    (term as any)._core?.viewport?.syncScrollArea();
+    const v = (term as any)?._core?.viewport;
+    if (!v || typeof v.syncScrollArea !== 'function') return;
+    // Bail if the viewport has no real layout yet — _innerRefresh would
+    // record zeros and we'd just have to redo this.
+    const el: HTMLElement | undefined = v._viewportElement;
+    if (el && el.offsetHeight === 0) return;
+    v._lastRecordedBufferLength = -1;
+    v._lastRecordedViewportHeight = -1;
+    v._lastRecordedBufferHeight = -1;
+    v._currentDeviceCellHeight = -1;
+    v.syncScrollArea(true);
   } catch { /* viewport may not be ready */ }
 }
 
@@ -244,6 +268,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   // Tracks signals that mean "an app is drawing its own cursor"; either one
   // being on is enough to keep xterm's cursor hidden. See syncCursorVisibility.
   const cursorHideSignalsRef = useRef({ bracketedPaste: false, altScreen: false });
+  // TASK-52: read latest config in the copy handlers without rebuilding
+  // the terminal. Updated by a small effect below.
+  const smartUnwrapRef = useRef<boolean>(true);
   const isFocused = focusedTerminalId === terminalId;
 
   const handleFocus = useCallback(() => {
@@ -388,7 +415,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         //  - hard-newlined rows have padding spaces past their content, so we
         //    trim those (otherwise the URL regex's anti-whitespace anchor
         //    would clip the match at the first padding char)
-        interface Seg { rowIdx: number; text: string; logicalStart: number; soft: boolean }
+        interface Seg { rowIdx: number; text: string; logicalStart: number; soft: boolean; leadingWS: number }
         const segs: Seg[] = [];
         let logical = '';
         for (let i = softStart; i <= softEnd; i++) {
@@ -397,7 +424,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           // The trailing soft row also needs trim - it's the only one that
           // may not be cols-wide.
           const text = i < softEnd ? line.translateToString(false) : line.translateToString(true);
-          segs.push({ rowIdx: i, text, logicalStart: logical.length, soft: true });
+          segs.push({ rowIdx: i, text, logicalStart: logical.length, soft: true, leadingWS: 0 });
           logical += text;
         }
 
@@ -411,17 +438,26 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           const nextRow = lastSeg.rowIdx + 1;
           const next = buf.getLine(nextRow);
           if (!next || next.isWrapped) break;
-          // Seam check: no whitespace at end of logical, no whitespace at
-          // start of next row, both seam chars are URL-safe.
+          // Seam check: no whitespace at end of logical, last char URL-safe.
           if (/\s$/.test(logical)) break;
           const lastCh = logical.charAt(logical.length - 1);
           if (!URL_BODY.test(lastCh)) break;
-          const nextText = next.translateToString(true);
-          if (!nextText || /^\s/.test(nextText)) break;
-          const m = nextText.match(/^(\S+)/);
-          if (!m || !URL_BODY.test(m[1])) break;
+          const nextTextRaw = next.translateToString(true);
+          if (!nextTextRaw) break;
+          // Allow an indented continuation: gh and similar CLIs hard-wrap
+          // long URLs with the continuation indented under the start of the
+          // line. Trim the leading whitespace and remember it for the
+          // offset->visual-col mapping. To avoid false-positives where an
+          // indented prose paragraph follows a URL ("    bar for more info"),
+          // require the trimmed line to be a SINGLE whitespace-free token —
+          // wrapped URLs look like long opaque token chains, prose doesn't.
+          const wsMatch = nextTextRaw.match(/^(\s*)(\S+)\s*$/);
+          if (!wsMatch) break;
+          const leadingWS = wsMatch[1].length;
+          const nextText = wsMatch[2];
+          if (!URL_BODY.test(nextText)) break;
 
-          segs.push({ rowIdx: nextRow, text: nextText, logicalStart: logical.length, soft: false });
+          segs.push({ rowIdx: nextRow, text: nextText, logicalStart: logical.length, soft: false, leadingWS });
           logical += nextText;
           stitchedFwd++;
         }
@@ -438,15 +474,29 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           if (!prevText || /\s$/.test(prevText)) break;
           const lastCh = prevText.charAt(prevText.length - 1);
           if (!URL_BODY.test(lastCh)) break;
-          // Current first seg must start with a URL-safe token (no leading
-          // whitespace, head token URL-shaped).
-          if (/^\s/.test(firstSeg.text)) break;
-          const tokMatch = firstSeg.text.match(/^(\S+)/);
+          // Current first seg must start with a URL-safe token. Tolerate
+          // indented continuations: trim leading whitespace before checking
+          // the head token, and remember the indent on the seg we're
+          // potentially continuing FROM.
+          const wsMatch = firstSeg.text.match(/^(\s*)(\S.*)$/);
+          if (!wsMatch) break;
+          const trimmedFirst = wsMatch[2];
+          const tokMatch = trimmedFirst.match(/^(\S+)/);
           if (!tokMatch || !URL_BODY.test(tokMatch[1])) break;
+          // If we trimmed the first seg's indent here, persist it so
+          // offsetToRowCol places the cursor at the correct visual col on
+          // the continuation row.
+          if (firstSeg.leadingWS === 0 && wsMatch[1].length > 0) {
+            firstSeg.text = trimmedFirst;
+            firstSeg.leadingWS = wsMatch[1].length;
+            // logical was built before the trim; fix it up.
+            logical = logical.slice(0, firstSeg.logicalStart) + trimmedFirst + logical.slice(firstSeg.logicalStart + wsMatch[1].length + trimmedFirst.length);
+            for (let s = 1; s < segs.length; s++) segs[s].logicalStart -= wsMatch[1].length;
+          }
 
           // Prepend: shift everything's logicalStart by prevText.length.
           for (const s of segs) s.logicalStart += prevText.length;
-          segs.unshift({ rowIdx: prevRow, text: prevText, logicalStart: 0, soft: false });
+          segs.unshift({ rowIdx: prevRow, text: prevText, logicalStart: 0, soft: false, leadingWS: 0 });
           logical = prevText + logical;
           stitchedBack++;
         }
@@ -468,11 +518,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               // Soft-wrapped segments live on a cols-wide grid: an offset
               // larger than `cols` rolls onto the soft-wrap continuation row.
               // Hard-newlined segments are variable width and stay on their
-              // own row; we don't roll them.
+              // own row; we don't roll them. For hard-newlined segs that had
+              // their leading indent trimmed, shift the col back to the
+              // original visual position.
               if (seg.soft && within >= cols) {
                 return { row: seg.rowIdx + Math.floor(within / cols), col: within % cols };
               }
-              return { row: seg.rowIdx, col: within };
+              return { row: seg.rowIdx, col: within + seg.leadingWS };
             }
           }
           return { row: segs[0]?.rowIdx ?? 0, col: 0 };
@@ -485,13 +537,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           const matchEnd = m.index + m[0].length - 1;
           const a = offsetToRowCol(matchStart);
           const b = offsetToRowCol(matchEnd);
-          // Only emit if this link visually touches the row the linkifier asked about.
+          // Only emit if this link visually touches the row the linkifier
+          // asked about. Clip the link's range to JUST that row — emitting a
+          // multi-row range from every row the URL spans causes xterm to
+          // register one link per row, and a click on the wrapped underline
+          // would fire activate() once per row (== open the URL N times).
           if (lineIdx0 < a.row || lineIdx0 > b.row) continue;
+
+          const startX = lineIdx0 === a.row ? a.col + 1 : 1;
+          const endX = lineIdx0 === b.row ? b.col + 1 : term.cols;
 
           links.push({
             range: {
-              start: { x: a.col + 1, y: a.row + 1 },
-              end: { x: b.col + 1, y: b.row + 1 },
+              start: { x: startX, y: lineIdx0 + 1 },
+              end: { x: endX, y: lineIdx0 + 1 },
             },
             text: m[0],
             activate(_e, uri) { window.open(uri, '_blank'); },
@@ -597,7 +656,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       }
       // Ctrl+C with selection: copy instead of SIGINT (Cmd+C on Mac)
       if ((isMac ? event.metaKey : event.ctrlKey) && !event.shiftKey && (event.key === 'c' || event.key === 'C') && term.hasSelection()) {
-        window.terminalAPI.clipboardWrite(term.getSelection());
+        // xterm 5.5 uses a real DOM selection — browser's default Ctrl+C
+        // would fire after this handler and overwrite our unwrapped clipboard
+        // write with the raw newline-preserved selection. Block it.
+        event.preventDefault();
+        window.terminalAPI.clipboardWrite(smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current));
         term.clearSelection();
         return false;
       }
@@ -609,14 +672,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey;
       if (isPlainEnterKey && term.hasSelection()) {
         event.preventDefault(); // Stop xterm's textarea from seeing the newline and echoing CR
-        window.terminalAPI.clipboardWrite(term.getSelection());
+        window.terminalAPI.clipboardWrite(smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current));
         term.clearSelection();
         return false;
       }
       // Ctrl+Shift+C (Cmd+Shift+C on Mac): always copy selection
       if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && (event.key === 'c' || event.key === 'C')) {
         const sel = term.getSelection();
-        if (sel) window.terminalAPI.clipboardWrite(sel);
+        if (sel) {
+          event.preventDefault(); // see comment in plain Ctrl+C above
+          window.terminalAPI.clipboardWrite(smartUnwrapForCopy(sel, smartUnwrapRef.current));
+        }
         return false;
       }
       // Ctrl+Arrow: send win32-input-mode key events so CMD and other shells
@@ -768,16 +834,22 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // viewport's scrollTop never moves. Catch that here and re-sync; the
     // next wheel will work.
     const wheelRecoveryHandler = (e: WheelEvent) => {
+      // Only recover when there's a real direction the wheel SHOULD scroll
+      // but didn't — otherwise we'd thrash sync calls at scroll boundaries
+      // and on shift/horizontal wheels.
+      if (e.deltaY === 0 || e.shiftKey) return;
       const viewport = containerRef.current?.querySelector('.xterm-viewport') as HTMLElement | null;
       if (!viewport) return;
       const before = viewport.scrollTop;
+      const canScrollUp = before > 0;
+      const canScrollDown = before + viewport.clientHeight < viewport.scrollHeight;
+      const wantUp = e.deltaY < 0;
+      if ((wantUp && !canScrollUp) || (!wantUp && !canScrollDown)) return;
       requestAnimationFrame(() => {
         if (viewport.scrollTop === before) {
           syncViewportScrollArea(term);
         }
       });
-      // Don't preventDefault - let xterm handle its own wheel logic too.
-      void e;
     };
     // Manual escape hatch: double-click the right edge (where the scrollbar
     // would be) forces a sync. Useful when the auto-recovery hasn't yet
@@ -851,10 +923,60 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     let pendingData = '';
     let rafScheduled = false;
     let cursorSyncDirty = false;
+
+    // Prompt-line highlight (TASK-48 + TASK-53). Visually distinguish lines
+    // that look like CLI-agent user prompts (Copilot CLI / Claude Code
+    // render submitted prompts as `>`/`›`/`❯` history entries). We scan
+    // newly-written buffer lines and attach an xterm decoration as a
+    // left-border accent bar. Heuristic only.
+    //   `>` — Claude Code, generic
+    //   `›` (U+203A) — Copilot CLI
+    //   `❯` (U+276F) — Starship/oh-my-zsh + some agents
+    const promptDecorations = new Set<{ dispose: () => void; isDisposed?: boolean }>();
+    const decoratedLineKeys = new Set<string>();
+    let lastScannedAbsY = -1;
+    const PROMPT_RE = /^[>\u203A\u276F]\s/;
+    const scanForPromptLines = () => {
+      try {
+        const buffer = term.buffer.active;
+        // Only scan the normal buffer — alt-screen TUIs (vim, less, htop)
+        // overwrite the screen and decoration markers there are noise.
+        if (buffer.type !== 'normal') return;
+        const cursorAbsY = buffer.baseY + buffer.cursorY;
+        const startY = Math.max(0, lastScannedAbsY + 1);
+        const endY = cursorAbsY;
+        for (let y = startY; y <= endY; y++) {
+          const line = buffer.getLine(y);
+          if (!line) continue;
+          const text = line.translateToString(true);
+          if (!PROMPT_RE.test(text)) continue;
+          // Dedupe: a line might be re-rendered while still being typed.
+          const key = `${y}:${text.slice(0, 32)}`;
+          if (decoratedLineKeys.has(key)) continue;
+          decoratedLineKeys.add(key);
+          const marker = term.registerMarker(y - cursorAbsY);
+          if (!marker) continue;
+          const dec = term.registerDecoration({
+            marker,
+            x: 0,
+            width: 1,
+            height: 1,
+            // Use the theme's focus-border accent so the bar sits in the
+            // existing palette instead of clashing as bright green.
+            backgroundColor: themeConfig?.cursor ?? '#89B4FA',
+            layer: 'top',
+          });
+          if (dec) promptDecorations.add(dec);
+        }
+        // Don't lock in the cursor line — it may still be receiving content.
+        lastScannedAbsY = Math.max(lastScannedAbsY, endY - 1);
+      } catch { /* defensive: xterm internals may shift */ }
+    };
+
     const flushPendingData = () => {
       rafScheduled = false;
       if (pendingData) {
-        term.write(pendingData);
+        term.write(pendingData, () => scanForPromptLines());
         pendingData = '';
       }
       // Apply our cursor override AFTER the PTY data is written. In xterm,
@@ -1149,7 +1271,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       e.stopPropagation();
       e.stopImmediatePropagation();
       if (term.hasSelection()) {
-        window.terminalAPI.clipboardWrite(term.getSelection());
+        window.terminalAPI.clipboardWrite(smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current));
         term.clearSelection();
       } else {
         if (window.terminalAPI.clipboardHasImage()) {
@@ -1173,6 +1295,27 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // Use capture phase to intercept before any other handler
     containerRef.current.addEventListener('contextmenu', handleContextMenu, true);
 
+    // Intercept the document-level `copy` event for this pane so that the
+    // browser's default copy (which would write the raw DOM-selected text
+    // with hard newlines) gets rewritten through smartUnwrapForCopy. This
+    // catches OS-level Ctrl+C paths the keydown handler can miss (e.g. when
+    // focus shifts away from the xterm helper textarea after a mouse-drag
+    // selection).
+    const handleCopyEvent = (e: ClipboardEvent) => {
+      try {
+        const sel = term.hasSelection() ? term.getSelection() : '';
+        if (!sel) return; // let the browser do its thing
+        const out = smartUnwrapForCopy(sel, smartUnwrapRef.current);
+        e.preventDefault();
+        e.clipboardData?.setData('text/plain', out);
+        // Mirror to the system clipboard via our IPC too — DOM clipboardData
+        // only populates the synthetic event, not the OS clipboard, when
+        // preventDefault has been called inside an Electron renderer.
+        window.terminalAPI.clipboardWrite(out);
+      } catch { /* defensive */ }
+    };
+    containerRef.current.addEventListener('copy', handleCopyEvent, true);
+
     const containerEl = containerRef.current;
 
     return () => {
@@ -1188,6 +1331,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         textareaEl.removeEventListener('blur', handleBlur);
       }
       containerEl.removeEventListener('contextmenu', handleContextMenu, true);
+      containerEl.removeEventListener('copy', handleCopyEvent, true);
       containerEl.removeEventListener('mousedown', handleRightMouseButton, true);
       containerEl.removeEventListener('mouseup', handleRightMouseButton, true);
       wheelRecoveryEl?.removeEventListener('wheel', wheelRecoveryHandler);
@@ -1198,6 +1342,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         term.write(pendingData);
         pendingData = '';
       }
+      // Dispose prompt-line decorations before tearing down the terminal.
+      for (const dec of promptDecorations) {
+        try { dec.dispose(); } catch { /* ignore */ }
+      }
+      promptDecorations.clear();
+      decoratedLineKeys.clear();
       // Save buffer before dispose so a remount can restore it
       try {
         const serialized = serializeAddon.serialize();
@@ -1213,6 +1363,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       serializeAddonRef.current = null;
     };
   }, [terminalId, handleFocus]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // TASK-52: keep smart-unwrap toggle in sync with the live config so the
+  // copy handlers (which capture config at terminal-init time) read the
+  // current value.
+  useEffect(() => {
+    smartUnwrapRef.current = config?.terminal?.smartUnwrapCopy ?? true;
+  }, [config?.terminal?.smartUnwrapCopy]);
 
   // React to fontSize and fontFamily changes
   const configFontFamily = config?.terminal?.fontFamily;
@@ -1254,11 +1411,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
 
   // Refit all terminals when view mode changes (focus↔grid↔split).
   // The ResizeObserver may fire before the DOM has fully settled, leaving
-  // xterm's viewport scrollbar stale. A delayed refit fixes this.
+  // xterm's viewport scrollbar stale. A delayed refit + a follow-up
+  // rAF sync catches the case where the first refresh happens before the
+  // browser has finished re-laying out the new flex/grid cells (TASK-49).
   const viewMode = useTerminalStore((s) => s.viewMode);
   useEffect(() => {
     if (!fitAddonRef.current || !terminalRef.current) return;
-    const timer = setTimeout(() => {
+    const doFitAndSync = () => {
       try {
         fitAddonRef.current?.fit();
         if (terminalRef.current) {
@@ -1267,6 +1426,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           window.terminalAPI.resizePty(terminalId, cols, rows);
         }
       } catch { /* terminal may be disposed */ }
+    };
+    const timer = setTimeout(() => {
+      doFitAndSync();
+      // Second pass after layout settles — fixes TASK-49 grid scrollback.
+      requestAnimationFrame(() => {
+        if (terminalRef.current) syncViewportScrollArea(terminalRef.current);
+      });
     }, 50);
     return () => clearTimeout(timer);
   }, [viewMode, terminalId]);

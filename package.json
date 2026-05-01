@@ -6,6 +6,7 @@
   "author": "tmax",
   "main": ".vite/build/main.js",
   "scripts": {
+    "prestart": "node scripts/free-vite-port.js",
     "start": "electron-forge start",
     "build": "electron-forge make",
     "package": "electron-forge package",

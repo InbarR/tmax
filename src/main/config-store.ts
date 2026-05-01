@@ -41,6 +41,9 @@ export interface TerminalDefaults {
   fontSize: number;
   fontFamily: string;
   scrollback: number;
+  // TASK-52: stitch CLI-rendered hard newlines + indent continuations
+  // back into single paragraphs at copy time. Default true.
+  smartUnwrapCopy?: boolean;
 }
 
 export type BackgroundMaterial = 'none' | 'auto' | 'mica' | 'acrylic' | 'tabbed';
@@ -206,6 +209,7 @@ export const defaultConfig: AppConfig = {
     fontSize: 14,
     fontFamily: 'CaskaydiaCove Nerd Font, CaskaydiaCove NF, Cascadia Code, Consolas, monospace',
     scrollback: 5000,
+    smartUnwrapCopy: true,
   },
   copilotCommand: 'copilot',
   claudeCodeCommand: 'claude',

@@ -853,6 +853,73 @@ function registerIpcHandlers(): void {
       return null;
     }
   });
+
+  // Translate logical path (Windows or WSL Linux) to a fs-accessible path.
+  function toFsPath(logicalPath: string, wslDistro?: string): string | null {
+    if (wslDistro && logicalPath.startsWith('/')) {
+      if (!/^[\w][\w.\-]*$/.test(wslDistro)) return null;
+      return `\\\\wsl.localhost\\${wslDistro}${logicalPath.replace(/\//g, '\\')}`;
+    }
+    return logicalPath;
+  }
+
+  ipcMain.handle(IPC.FILE_REVEAL, async (_event, filePath: string, wslDistro?: string) => {
+    try {
+      const fsPath = toFsPath(filePath, wslDistro);
+      if (!fsPath) return { ok: false, error: 'Invalid path' };
+      // showItemInFolder is silent on Windows if the file is missing — stat
+      // first so we can return a real error instead of a no-op.
+      try { fs.statSync(fsPath); } catch { return { ok: false, error: `Path not found: ${fsPath}` }; }
+      console.log('[FILE_REVEAL]', fsPath);
+      shell.showItemInFolder(fsPath);
+      return { ok: true };
+    } catch (e) {
+      console.error('[FILE_REVEAL] error:', e);
+      return { ok: false, error: (e as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC.FILE_RENAME, async (_event, oldPath: string, newName: string, wslDistro?: string) => {
+    try {
+      // Validate the new name: no path separators, no traversal.
+      if (!newName || /[\\/]/.test(newName) || newName === '.' || newName === '..') {
+        return { ok: false, error: 'Invalid name' };
+      }
+      const fsOld = toFsPath(oldPath, wslDistro);
+      if (!fsOld) return { ok: false, error: 'Invalid path' };
+      const dir = path.dirname(fsOld);
+      const fsNew = path.join(dir, newName);
+      if (fs.existsSync(fsNew)) return { ok: false, error: 'A file with that name already exists' };
+      fs.renameSync(fsOld, fsNew);
+      // Build the logical (caller-style) new path for the renderer.
+      let newLogical: string;
+      if (wslDistro && oldPath.startsWith('/')) {
+        const lastSlash = oldPath.lastIndexOf('/');
+        newLogical = oldPath.slice(0, lastSlash + 1) + newName;
+      } else {
+        newLogical = path.join(path.dirname(oldPath), newName);
+      }
+      return { ok: true, newPath: newLogical };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC.FILE_DELETE, async (_event, filePath: string, wslDistro?: string) => {
+    try {
+      const fsPath = toFsPath(filePath, wslDistro);
+      if (!fsPath) return { ok: false, error: 'Invalid path' };
+      console.log('[FILE_DELETE]', fsPath);
+      // shell.trashItem moves to Recycle Bin / Trash — recoverable, much safer
+      // than fs.unlink/rmdir.
+      await shell.trashItem(fsPath);
+      console.log('[FILE_DELETE] ok');
+      return { ok: true };
+    } catch (e) {
+      console.error('[FILE_DELETE] error:', e);
+      return { ok: false, error: (e as Error).message };
+    }
+  });
 }
 
 function setupCopilotMonitor(): void {

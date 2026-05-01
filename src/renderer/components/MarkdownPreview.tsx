@@ -74,7 +74,7 @@ interface MarkdownPreviewProps {
   width?: string;
 }
 
-type ViewMode = 'friendly' | 'raw';
+type ViewMode = 'preview' | 'raw';
 
 const DEFAULT_WIDTH_PERCENT = 50;
 const MIN_WIDTH_PX = 300;
@@ -90,7 +90,7 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
   width,
 }) => {
   const isMd = /\.md$/i.test(fileName);
-  const [viewMode, setViewMode] = useState<ViewMode>('friendly');
+  const [viewMode, setViewMode] = useState<ViewMode>('preview');
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -99,14 +99,14 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
   const { zoomPercent, zoomIn, zoomOut, zoomReset, fontSize } = useZoom({ containerRef: overlayRef });
 
   const compiledHtml = useMemo(() => {
-    if (!isMd || viewMode !== 'friendly') return '';
+    if (!isMd || viewMode !== 'preview') return '';
     const rawHtml = marked(content, { breaks: true, gfm: true }) as string;
     return sanitizeHtml(rawHtml);
   }, [content, isMd, viewMode]);
 
   // Render mermaid diagrams after HTML is injected
   useEffect(() => {
-    if (!contentRef.current || !isMd || viewMode !== 'friendly') return;
+    if (!contentRef.current || !isMd || viewMode !== 'preview') return;
     const codeBlocks = contentRef.current.querySelectorAll('code.language-mermaid');
     codeBlocks.forEach(async (block, idx) => {
       const pre = block.parentElement;
@@ -175,11 +175,11 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
               <div className="md-view-toggle">
                 <button
                   type="button"
-                  className={`md-view-toggle-btn${viewMode === 'friendly' ? ' active' : ''}`}
-                  onClick={() => setViewMode('friendly')}
+                  className={`md-view-toggle-btn${viewMode === 'preview' ? ' active' : ''}`}
+                  onClick={() => setViewMode('preview')}
                   title="Rendered markdown"
                 >
-                  Friendly
+                  Preview
                 </button>
                 <button
                   type="button"
@@ -203,7 +203,7 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
             <button className="file-preview-btn close" onClick={onClose} title="Close (Esc)">&#10005;</button>
           </div>
         </div>
-        {isMd && viewMode === 'friendly' ? (
+        {isMd && viewMode === 'preview' ? (
           <div
             ref={contentRef}
             className="md-rendered-content"
