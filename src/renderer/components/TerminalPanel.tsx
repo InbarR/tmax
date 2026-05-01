@@ -361,6 +361,36 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     term.loadAddon(searchAddon);
     term.loadAddon(serializeAddon);
 
+    // TASK-58: xterm auto-registers an OscLinkProvider for OSC 8 hyperlinks
+    // emitted by tools like `gh auth login`. Two real-world bugs result:
+    //   (1) On click it falls through to xterm's defaultActivate, which calls
+    //       `confirm()` then `window.open()` (no URL) - in Electron our
+    //       setWindowOpenHandler denies that empty open AND our custom URL
+    //       provider's activate ALSO fires for the same visible text, so the
+    //       user sees a confirm dialog plus a stray double-fire.
+    //   (2) When a CLI emits an OSC 8 closer that the parser fails to honor,
+    //       the urlId attribute leaks across subsequent cells, so EVERY click
+    //       on any URL in that scrollback returns the original (e.g. SSO)
+    //       URI - clicks get hijacked to one URL.
+    // Our custom URL link provider below handles every visible URL uniformly,
+    // so the safe fix is to remove the built-in OscLinkProvider and let our
+    // provider be the single source of truth for URL clicks.
+    try {
+      const core = (term as unknown as { _core: { _linkProviderService?: { linkProviders?: unknown[]; _linkProviders?: unknown[] } } })._core;
+      const svc = core?._linkProviderService;
+      const arr = svc?.linkProviders || svc?._linkProviders;
+      if (Array.isArray(arr)) {
+        // OscLinkProvider is the only provider auto-registered by xterm's
+        // Terminal constructor (see node_modules/@xterm/xterm/.../Terminal.ts).
+        // Splice it out before we add our own providers.
+        arr.length = 0;
+      }
+    } catch {
+      // If xterm internals change shape, fail open - our custom provider still
+      // works, we just may see the OSC 8 issues again. A test guard below
+      // (task-58-url-real-click.spec.ts) catches that regression.
+    }
+
     // Custom multi-line URL link provider (#62): xterm's built-in WebLinksAddon
     // stops detecting wrapped URLs past a certain row count, so very long links
     // (e.g. Outlook safelinks) only highlight their first row. We walk the
