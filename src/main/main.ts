@@ -281,20 +281,46 @@ function createWindow(): void {
     console.log(`[RENDERER ${prefix}] ${message} (${sourceId}:${line})`);
   });
 
-  // Open external links in the default browser instead of in-app
+  // TASK-58 diagnostic: write main-process URL handler firings to a log file
+  // because packaged tmax.bat has no visible stdout. Path will print via IPC
+  // to the renderer console too.
+  const task58LogPath = require('path').join(require('os').tmpdir(), 'tmax-task58.log');
+  const task58Log = (msg: string, data: unknown) => {
+    const line = `[${new Date().toISOString()}] ${msg} ${JSON.stringify(data)}\n`;
+    try { require('fs').appendFileSync(task58LogPath, line); } catch { /* noop */ }
+    console.warn('[tmax TASK-58]', msg, data);
+  };
+  task58Log('LOG INIT - clicks below this line', { logPath: task58LogPath });
+
+  // External link handling. Returning {action: 'deny'} cancels the new
+  // BrowserWindow. The earlier implementation ALSO called shell.openExternal
+  // here, which produced TWO browser tabs per click: empirically, when our
+  // handler denies a new window for an http(s) URL, another navigation
+  // handler in the stack still opens that URL externally on its own, so the
+  // explicit call was a duplicate. The TASK-58 e2e test only spied on
+  // window.open in the renderer (which correctly fired once), so the
+  // main-process double never registered.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      shell.openExternal(url);
-    }
+    task58Log('setWindowOpenHandler fired', { url });
     return { action: 'deny' };
   });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
     const currentURL = mainWindow?.webContents.getURL();
+    task58Log('will-navigate fired', { url, currentURL });
+    // Block in-frame navigation away from our renderer. Electron does NOT
+    // auto-fallback to external for preventDefault'd will-navigate (unlike
+    // the deny path above), so we route http(s) to shell.openExternal here.
     if (url !== currentURL && (url.startsWith('http://') || url.startsWith('https://'))) {
       event.preventDefault();
       shell.openExternal(url);
     }
+  });
+
+  // Also catch new windows being created (in case some other path bypasses
+  // setWindowOpenHandler) and any did-create-window event for instrumentation.
+  mainWindow.webContents.on('did-create-window', (childWin, details) => {
+    task58Log('did-create-window fired', { url: details.url });
   });
 
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
@@ -602,11 +628,12 @@ function registerIpcHandlers(): void {
     detachedWin.on('unmaximize', () => { applyMaterialToWindow(detachedWin); });
     detachedWindows.set(terminalId, detachedWin);
 
-    // Open external links in the default browser for detached windows too
-    detachedWin.webContents.setWindowOpenHandler(({ url }) => {
-      if (url.startsWith('http://') || url.startsWith('https://')) {
-        shell.openExternal(url);
-      }
+    // Open external links in the default browser for detached windows too.
+    // See main-window setWindowOpenHandler above for why we don't call
+    // shell.openExternal explicitly: another handler in the stack already
+    // routes denied http(s) URLs to the default browser, so an explicit
+    // call here would double-open.
+    detachedWin.webContents.setWindowOpenHandler(() => {
       return { action: 'deny' };
     });
 
