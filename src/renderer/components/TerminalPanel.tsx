@@ -9,7 +9,7 @@ import { registerTerminal, unregisterTerminal } from '../terminal-registry';
 import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache';
 import { isMac } from '../utils/platform';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
-import { prepareClipboardPaste } from '../utils/paste';
+import { prepareClipboardPaste, resolveClipboardPaste } from '../utils/paste';
 import { smartUnwrapForCopy } from '../utils/smart-unwrap';
 import type { AppConfig } from '../state/types';
 import '@xterm/xterm/css/xterm.css';
@@ -21,45 +21,6 @@ function relativeTime(ts: number): string {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
-}
-
-/**
- * Microsoft Outlook wraps every outgoing link in
- * https://<region>.safelinks.protection.outlook.com/?url=<encoded-real-url>&...
- * so a "copy link" out of an email pastes this ugly wrapper instead of the
- * real target. If we detect the wrapper, decode and return the real URL.
- */
-function unwrapSafelinks(url: string): string {
-  try {
-    const u = new URL(url);
-    if (/(^|\.)safelinks\.protection\.outlook\.com$/i.test(u.hostname)) {
-      const real = u.searchParams.get('url');
-      if (real && /^https?:\/\//i.test(real)) return real;
-    }
-  } catch { /* not a valid URL */ }
-  return url;
-}
-
-/**
- * Extract a URL from HTML clipboard content when the content is essentially
- * a single hyperlink (e.g. ADO "Copy to clipboard" for PR titles, Outlook
- * safelinks-wrapped URLs).
- * Returns the href if found, null otherwise.
- */
-function extractLinkFromHtml(html: string): string | null {
-  if (!html) return null;
-  // Match all <a href="..."> tags in the HTML
-  const linkPattern = /<a\s[^>]*href=["']([^"']+)["'][^>]*>/gi;
-  const matches: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = linkPattern.exec(html)) !== null) {
-    matches.push(m[1]);
-  }
-  // Only extract when the HTML contains exactly one link
-  if (matches.length === 1 && /^https?:\/\//i.test(matches[0])) {
-    return unwrapSafelinks(matches[0]);
-  }
-  return null;
 }
 
 function hexToTerminalRgba(hex: string, alpha: number): string {
@@ -583,7 +544,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               end: { x: endX, y: lineIdx0 + 1 },
             },
             text: m[0],
-            activate(_e, uri) { window.open(uri, '_blank'); },
+            activate(_e, uri) {
+              // TASK-58 diagnostic: trace duplicate activations
+              try {
+                (window as unknown as { __tmaxLinkActivates?: number }).__tmaxLinkActivates =
+                  ((window as unknown as { __tmaxLinkActivates?: number }).__tmaxLinkActivates || 0) + 1;
+                console.warn('[tmax TASK-58] URL activate', {
+                  uri,
+                  count: (window as unknown as { __tmaxLinkActivates: number }).__tmaxLinkActivates,
+                  providers: ((term as unknown as { _core: { _linkProviderService: { linkProviders?: unknown[] } } })
+                    ._core?._linkProviderService?.linkProviders || []).length,
+                });
+              } catch { /* noop */ }
+              window.open(uri, '_blank');
+            },
             decorations: { underline: true, pointerCursor: true },
           });
         }
@@ -665,22 +639,18 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       // Ctrl+V / Cmd+V or Ctrl+Shift+V: paste
       if ((event.ctrlKey || event.metaKey) && (event.key === 'v' || event.key === 'V')) {
         event.preventDefault(); // Stop browser native paste (would cause double paste)
-        if (window.terminalAPI.clipboardHasImage()) {
+        const decision = resolveClipboardPaste({
+          hasImage: window.terminalAPI.clipboardHasImage(),
+          html: window.terminalAPI.clipboardReadHTML(),
+          plainText: window.terminalAPI.clipboardRead(),
+        });
+        if (decision.kind === 'image') {
           window.terminalAPI.clipboardSaveImage().then((filePath) => {
             window.terminalAPI.writePty(terminalId, filePath);
           });
-        } else {
-          const html = window.terminalAPI.clipboardReadHTML();
-          const linkUrl = extractLinkFromHtml(html);
-          let text = linkUrl || window.terminalAPI.clipboardRead();
-          // If the user copied a plain safelinks URL (no HTML), unwrap it too.
-          if (text && !linkUrl && /^https?:\/\/[^\s]+$/.test(text.trim())) {
-            text = unwrapSafelinks(text.trim());
-          }
-          if (text) {
-            const payload = prepareClipboardPaste(text, cursorHideSignalsRef.current.bracketedPaste);
-            window.terminalAPI.writePty(terminalId, payload);
-          }
+        } else if (decision.kind === 'text') {
+          const payload = prepareClipboardPaste(decision.text, cursorHideSignalsRef.current.bracketedPaste);
+          window.terminalAPI.writePty(terminalId, payload);
         }
         return false;
       }
@@ -1304,21 +1274,18 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         window.terminalAPI.clipboardWrite(smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current));
         term.clearSelection();
       } else {
-        if (window.terminalAPI.clipboardHasImage()) {
+        const decision = resolveClipboardPaste({
+          hasImage: window.terminalAPI.clipboardHasImage(),
+          html: window.terminalAPI.clipboardReadHTML(),
+          plainText: window.terminalAPI.clipboardRead(),
+        });
+        if (decision.kind === 'image') {
           window.terminalAPI.clipboardSaveImage().then((filePath) => {
             window.terminalAPI.writePty(terminalId, filePath);
           });
-        } else {
-          const html = window.terminalAPI.clipboardReadHTML();
-          const linkUrl = extractLinkFromHtml(html);
-          let text = linkUrl || window.terminalAPI.clipboardRead();
-          if (text && !linkUrl && /^https?:\/\/[^\s]+$/.test(text.trim())) {
-            text = unwrapSafelinks(text.trim());
-          }
-          if (text) {
-            const payload = prepareClipboardPaste(text, cursorHideSignalsRef.current.bracketedPaste);
-            window.terminalAPI.writePty(terminalId, payload);
-          }
+        } else if (decision.kind === 'text') {
+          const payload = prepareClipboardPaste(decision.text, cursorHideSignalsRef.current.bracketedPaste);
+          window.terminalAPI.writePty(terminalId, payload);
         }
       }
     };
