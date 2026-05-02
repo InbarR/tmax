@@ -12,7 +12,7 @@ test('PR #9: Escape closes the shortcuts help dialog', async () => {
 
     // Open shortcuts help via the store
     await window.evaluate(() => {
-      (window as any).__terminalStore.setState({ showShortcutsHelp: true });
+      (window as any).__terminalStore.setState({ showShortcuts: true });
     });
 
     // Verify the dialog is visible
