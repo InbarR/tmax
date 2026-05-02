@@ -828,6 +828,28 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       }
     });
 
+    // Pre-sync for the "wheel-down stops short of the live prompt during
+    // streaming" failure mode (TASK-62). xterm 5.5's Viewport caches the
+    // buffer length on a rAF-debounced refresh, so during continuous PTY
+    // output the .xterm-viewport scrollHeight lags the real buffer by a
+    // frame. The browser then clamps `scrollTop += amount` against that
+    // stale scrollHeight, leaving the user one or more lines above the
+    // bottom even on a vigorous wheel-down. We sync the viewport BEFORE
+    // xterm sees the wheel so it dispatches against the fresh scrollHeight.
+    const wheelPreSyncHandler = (e: WheelEvent) => {
+      if (e.deltaY === 0 || e.shiftKey) return;
+      try {
+        const v: any = (term as any)?._core?.viewport;
+        if (!v) return;
+        // Only sync when the buffer has actually grown beyond what the
+        // viewport last recorded (or the cache hasn't been seeded yet).
+        // This keeps idle terminals on the existing fast path.
+        const bufLen = term.buffer.active.length;
+        if (bufLen > v._lastRecordedBufferLength) {
+          syncViewportScrollArea(term);
+        }
+      } catch { /* viewport may not be ready */ }
+    };
     // Auto-recovery for the "wheel does nothing" failure mode. xterm's
     // viewport scrollArea occasionally desyncs from the buffer (after pane
     // moves, focus-mode toggles, etc.) so wheel events fire but the
@@ -862,6 +884,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       try { syncViewportScrollArea(term); } catch { /* ignore */ }
     };
     const wheelRecoveryEl = containerRef.current;
+    // Capture phase so the sync runs BEFORE xterm's wheel handler computes
+    // the new scrollTop against the (possibly stale) scrollHeight.
+    wheelRecoveryEl?.addEventListener('wheel', wheelPreSyncHandler, { passive: true, capture: true });
     wheelRecoveryEl?.addEventListener('wheel', wheelRecoveryHandler, { passive: true });
     wheelRecoveryEl?.addEventListener('dblclick', manualSyncHandler);
 
@@ -1331,6 +1356,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       containerEl.removeEventListener('copy', handleCopyEvent, true);
       containerEl.removeEventListener('mousedown', handleRightMouseButton, true);
       containerEl.removeEventListener('mouseup', handleRightMouseButton, true);
+      wheelRecoveryEl?.removeEventListener('wheel', wheelPreSyncHandler, true);
       wheelRecoveryEl?.removeEventListener('wheel', wheelRecoveryHandler);
       wheelRecoveryEl?.removeEventListener('dblclick', manualSyncHandler);
       titleDisposable.dispose();
