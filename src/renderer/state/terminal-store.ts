@@ -2913,7 +2913,14 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   updateCopilotSession: (session: CopilotSessionSummary) => {
     const oldSession = get().copilotSessions.find((x) => x.id === session.id);
     set((s) => ({
-      copilotSessions: s.copilotSessions.map((x) => (x.id === session.id ? session : x)),
+      // Upsert: a session-updated IPC event can land before the matching
+      // session-added (e.g. an in-flight loadCopilotSessions response races
+      // with a fresh prompt's onSessionUpdated). A plain `.map` would drop
+      // the update silently and leave the last-prompt bar showing stale
+      // text - TASK-59. Filter+append matches addCopilotSession's shape.
+      copilotSessions: oldSession
+        ? s.copilotSessions.map((x) => (x.id === session.id ? session : x))
+        : [...s.copilotSessions, session],
     }));
     get().updateTerminalTitleFromSession(session, 'copilot');
     // Auto-reactivate only if session has a linked terminal in tmax
@@ -2969,7 +2976,13 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   updateClaudeCodeSession: (session: CopilotSessionSummary) => {
     const oldSession = get().claudeCodeSessions.find((x) => x.id === session.id);
     set((s) => ({
-      claudeCodeSessions: s.claudeCodeSessions.map((x) => (x.id === session.id ? session : x)),
+      // Upsert: see updateCopilotSession for the race that motivates this
+      // (TASK-59). A `.map` over a fresh array silently drops updates for
+      // sessions that haven't been added yet, leaving the per-pane last-
+      // prompt bar wedged on whatever was loaded at startup.
+      claudeCodeSessions: oldSession
+        ? s.claudeCodeSessions.map((x) => (x.id === session.id ? session : x))
+        : [...s.claudeCodeSessions, session],
     }));
     get().updateTerminalTitleFromSession(session, 'claude');
     // Auto-reactivate only if session has a linked terminal in tmax
