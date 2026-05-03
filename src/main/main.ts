@@ -527,6 +527,13 @@ function registerIpcHandlers(): void {
 
       configStore!.set(key as keyof ReturnType<ConfigStore['getAll']>, value as never);
 
+      // TASK-64 settings UI: propagate the toggle to the runtime gate so
+      // disabling notifications in Settings takes effect immediately
+      // without restarting the app.
+      if (key === 'aiSessionNotifications') {
+        setAiSessionNotificationsEnabled(value !== false);
+      }
+
       // Dynamically apply background material changes
       if (key === 'backgroundMaterial' || key === 'backgroundOpacity' || key === 'theme') {
         const allWindows = [mainWindow, ...detachedWindows.values()];

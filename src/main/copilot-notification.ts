@@ -69,41 +69,49 @@ export function notifyCopilotSession(session: CopilotSessionSummary): void {
 }
 
 /**
- * Build a two-line notification body answering the two questions a
- * notification needs to answer in the half-second the user looks at it:
- *  - WHERE is this session?  (line 1, "folder (branch)")
- *  - WHAT was just said?     (line 2, the latest user prompt in quotes)
+ * Build a notification body that answers two questions in the half-
+ * second a toast is on screen:
+ *  - WHICH session is this? (line 1: pane/session name + branch)
+ *  - WHAT was just said?    (line 2: latest user prompt, in quotes)
  *
- * The slug nickname Claude Code generates ("calm-river", etc.) is
- * deliberately omitted - it's random and doesn't help the user
- * disambiguate sessions in practice, just adds visual noise.
+ * Line 1 uses session.summary as the primary identifier - that's the
+ * same source the renderer uses for the pane title (firstPrompt for
+ * sessions the user has prompted in, falling back to cwdFolder for
+ * brand-new ones). The auto-generated slug ("calm-river", etc.) is
+ * deliberately skipped - random adjective+noun pairs add visual noise
+ * without helping the user identify the pane.
  *
- * Falls back to one line for sessions with no latest prompt yet, and to
- * raw cwd / id when the session has no repo/branch metadata.
+ * NOTE: user-set rename overrides (sessionNameOverrides) live in
+ * renderer-only state today. Without an IPC sync to main we can't see
+ * them here, so a renamed pane still gets the auto-derived name in the
+ * notification. Follow-up task tracks adding that sync.
  */
 function buildNotificationBody(session: CopilotSessionSummary): string {
   const parts: string[] = [];
 
   const cwdFolder = deriveCwdFolder(session.cwd);
-  const repoOrFolder = session.repository || cwdFolder || '';
   const branch = session.branch || '';
 
-  let location = '';
-  if (repoOrFolder && branch) {
-    location = `${repoOrFolder} (${branch})`;
-  } else if (repoOrFolder) {
-    location = repoOrFolder;
-  } else if (session.cwd) {
-    location = session.cwd;
-  } else {
-    location = session.id.slice(0, 8);
-  }
-  parts.push(location);
+  // Prefer summary (firstPrompt for active sessions). Skip if it's just
+  // the auto-generated slug.
+  const summary = session.summary && session.summary !== session.slug
+    ? session.summary.trim().replace(/\s+/g, ' ')
+    : '';
+  const rawName = summary || session.repository || cwdFolder || session.id.slice(0, 8);
+  const NAME_MAX = 60;
+  const displayName = rawName.length > NAME_MAX
+    ? rawName.slice(0, NAME_MAX - 1) + '…'
+    : rawName;
 
+  parts.push(branch ? `${displayName} (${branch})` : displayName);
+
+  // Latest prompt, but skip when it's the same as the chosen displayName
+  // (single-prompt sessions where summary === latestPrompt would otherwise
+  // duplicate).
   const prompt = (session.latestPrompt || '').trim().replace(/\s+/g, ' ');
-  if (prompt) {
-    const max = 80;
-    const truncated = prompt.length > max ? prompt.slice(0, max - 1) + '…' : prompt;
+  if (prompt && prompt !== rawName) {
+    const PROMPT_MAX = 80;
+    const truncated = prompt.length > PROMPT_MAX ? prompt.slice(0, PROMPT_MAX - 1) + '…' : prompt;
     parts.push(`"${truncated}"`);
   }
 

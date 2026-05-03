@@ -134,6 +134,14 @@ const TerminalSettings: React.FC = () => {
           placeholder="claude"
           onChange={(e) => update({ claudeCodeCommand: e.target.value } as any)} />
       </SettingRow>
+      <SettingRow label="AI session notifications" description="Show OS notifications when a Copilot or Claude Code session finishes a turn / needs your attention. Disable if you use an external hook plugin (e.g. claude-notifications-go).">
+        <label className="toggle-switch">
+          <input type="checkbox"
+            checked={(config as any).aiSessionNotifications !== false}
+            onChange={(e) => update({ aiSessionNotifications: e.target.checked } as any)} />
+          <span className="toggle-track" />
+        </label>
+      </SettingRow>
       <SettingRow label="Old Session Threshold" description="Days of inactivity before a session is marked as Old">
         <input type="number" className="settings-input small" value={(config as any).oldSessionDays ?? 30}
           onChange={(e) => update({ oldSessionDays: parseInt(e.target.value) || 30 } as any)} />
