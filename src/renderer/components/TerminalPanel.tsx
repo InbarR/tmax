@@ -1141,7 +1141,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               firstCmdBufferRef.current = '';
               if (cmd.length >= 2 && cmd.length <= 80) {
                 firstCmdSavedRef.current = true;
-                useTerminalStore.getState().renameTerminal(terminalId, cmd, true);
+                useTerminalStore.getState().renameTerminal(terminalId, cmd, true, { firstCommand: true });
                 break;
               }
             } else if (code === 0x7f || code === 0x08) {

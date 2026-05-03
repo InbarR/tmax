@@ -660,7 +660,7 @@ interface TerminalStore {
   focusNext: () => void;
   focusPrev: () => void;
   focusDirection: (dir: 'left' | 'right' | 'up' | 'down') => void;
-  renameTerminal: (id: TerminalId, title: string, custom?: boolean) => void;
+  renameTerminal: (id: TerminalId, title: string, custom?: boolean, opts?: { firstCommand?: boolean }) => void;
   setTabColor: (id: TerminalId, color: string | undefined) => void;
   colorizeAllTabs: () => void;
   setDragging: (isDragging: boolean, terminalId?: TerminalId) => void;
@@ -1723,17 +1723,31 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     }
   },
 
-  renameTerminal: (id: TerminalId, title: string, custom?: boolean) => {
+  renameTerminal: (id: TerminalId, title: string, custom?: boolean, opts?: { firstCommand?: boolean }) => {
     const { terminals } = get();
     const instance = terminals.get(id);
     if (!instance) return;
     const newTerminals = new Map(terminals);
-    const updatedInstance = { ...instance, title, customTitle: custom ?? instance.customTitle };
+    // First-command renames (TASK-23) need customTitle:true so OSC titles
+    // don't override, but they're NOT a deliberate user rename. We tag
+    // them with firstCommandTitle so the AI-link path can let the AI
+    // session topic take over once a session is detected (TASK-88).
+    // An explicit user rename clears the flag so the rename truly sticks.
+    const isFirstCmd = !!opts?.firstCommand;
+    const updatedInstance: TerminalInstance = {
+      ...instance,
+      title,
+      customTitle: custom ?? instance.customTitle,
+      firstCommandTitle: custom ? isFirstCmd : instance.firstCommandTitle,
+    };
     if (custom) updatedInstance.aiAutoTitle = false;
     newTerminals.set(id, updatedInstance);
     set({ terminals: newTerminals });
-    // Propagate custom rename to linked AI session
-    if (custom && instance.aiSessionId) {
+    // Propagate custom rename to linked AI session - but only for
+    // explicit user renames, not first-command auto-titles. Otherwise
+    // typing `cd somewhere` before launching claude would override the
+    // AI session's name with `cd somewhere`.
+    if (custom && !isFirstCmd && instance.aiSessionId) {
       get().setSessionNameOverride(instance.aiSessionId, title);
     }
   },
@@ -3037,6 +3051,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
       if (!matched && id === candidateId) {
         const isRelink = !!current.aiSessionId;
+        // A first-command title (TASK-23, e.g. 'cd C:\\') sets
+        // customTitle:true to block OSC overrides, but it's not a
+        // deliberate user rename - the AI session topic should win
+        // once a session attaches here (TASK-88 / GH #85). Treat it
+        // the same as a non-custom title for the purposes of AI link.
+        const hasUserRename = current.customTitle && !current.firstCommandTitle;
         // If the user already renamed this pane before the AI session was
         // matched (typed `claude` / `copilot`, renamed the pane, waited for
         // the first summary), propagate the rename to sessionNameOverrides
@@ -3044,9 +3064,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         // aiSessionId was still undefined at that moment.
         // Skip on re-link: the pane title was set by the previous session's
         // auto-title, not by a deliberate user rename.
+        // Skip for first-command titles: those aren't user-set names.
         if (
           !isRelink &&
-          current.customTitle &&
+          hasUserRename &&
           current.title &&
           !get().sessionNameOverrides[session.id] &&
           !pendingOverride
@@ -3058,9 +3079,13 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
           aiSessionId: session.id,
           // On re-link from a stale session, enable auto-title so the new
           // session's summary replaces the old pane name. On fresh link,
-          // respect whether the user had a custom title.
-          aiAutoTitle: isRelink ? true : !current.customTitle,
+          // enable auto-title unless the user explicitly renamed the pane;
+          // a first-command auto-title doesn't count.
+          aiAutoTitle: isRelink ? true : !hasUserRename,
           customTitle: true,
+          // The pane is now AI-linked. Clear the first-command marker so
+          // a later UI rename behaves like a normal user rename.
+          firstCommandTitle: false,
         };
         newTerminals.set(id, current);
         matched = true;

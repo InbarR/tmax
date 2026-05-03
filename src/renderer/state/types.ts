@@ -89,6 +89,16 @@ export interface TerminalInstance {
   startupCommandSent?: boolean;
   aiSessionId?: string;
   aiAutoTitle?: boolean;
+  /**
+   * True when the pane title was auto-derived from the user's first
+   * shell command (TASK-23) rather than explicitly set by the user.
+   * customTitle is also true in that case (so OSC titles don't override),
+   * but this flag lets the AI-link path tell the two apart: a real user
+   * rename is preserved when an AI session is detected, but a
+   * first-command auto-title is NOT - the AI session topic should take
+   * over. See TASK-88 / GH #85.
+   */
+  firstCommandTitle?: boolean;
   groupId?: string;
   /** Which workspace this terminal belongs to. (TASK-40) */
   workspaceId?: WorkspaceId;
