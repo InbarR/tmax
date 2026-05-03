@@ -111,6 +111,27 @@ const CommandPalette: React.FC = () => {
         const i = ids.indexOf(s.activeWorkspaceId);
         s.setActiveWorkspace(ids[(i - 1 + ids.length) % ids.length]);
       }},
+      // TASK-78: per-workspace "Move pane to workspace: <name>" entries. We
+      // generate one row per workspace (minus the focused pane's own
+      // workspace) so users can fuzzy-search "move pane" and pick the
+      // destination in one keystroke. Hidden entirely when there's no
+      // focused pane or only one workspace exists.
+      ...(() => {
+        const s = store();
+        const focused = s.focusedTerminalId;
+        if (!focused) return [];
+        if (s.workspaces.size < 2) return [];
+        const inst = s.terminals.get(focused);
+        if (!inst) return [];
+        const currentWsId = inst.workspaceId ?? s.activeWorkspaceId;
+        return [...s.workspaces.values()]
+          .filter((ws) => ws.id !== currentWsId)
+          .map((ws) => ({
+            id: `movePaneToWorkspace-${ws.id}`,
+            label: `Move pane to workspace: ${ws.name}`,
+            action: () => store().movePaneToWorkspace(focused, ws.id),
+          }));
+      })(),
       { id: 'openKeybindings', label: 'Keybindings: Open File', action: () => {
         (window.terminalAPI as any).openKeybindingsFile?.();
       }},

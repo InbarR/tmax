@@ -745,6 +745,16 @@ interface TerminalStore {
    * fresh default if it was the last one).
    */
   closeWorkspace: (id: WorkspaceId) => void;
+  /**
+   * TASK-78: Move an existing pane from its current workspace to `destWorkspaceId`
+   * without restarting its PTY. The pane is removed from the source workspace's
+   * tilingRoot and inserted to the right of the last leaf in the destination
+   * workspace's tilingRoot (or as the only leaf if the destination is empty).
+   * If the moved pane is currently focused, the active workspace switches to
+   * the destination so the user follows their pane. No-op if dest === source,
+   * dest workspace doesn't exist, or terminal is not tiled.
+   */
+  movePaneToWorkspace: (terminalId: TerminalId, destWorkspaceId: WorkspaceId) => void;
   toggleCopilotPanel: () => void;
   // Open the AI Sessions panel and ask it to highlight the session
   // linked to this pane. Sets focus to the pane (so the panel reads the
@@ -2815,6 +2825,97 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     for (const tid of terminalIdsToClose) {
       try { window.terminalAPI.killPty(tid); } catch { /* ignore */ }
     }
+    get().saveSession();
+  },
+
+  // TASK-78: Re-home an existing pane into a different workspace without
+  // restarting its PTY. The PTY keeps running (we only mutate the in-memory
+  // layout trees + terminal.workspaceId), so cwd/scrollback/process all
+  // survive the move.
+  movePaneToWorkspace: (terminalId: TerminalId, destWorkspaceId: WorkspaceId) => {
+    const { terminals, workspaces, activeWorkspaceId, layout, focusedTerminalId } = get();
+    const instance = terminals.get(terminalId);
+    if (!instance) return;
+    if (instance.mode !== 'tiled') return; // Only tiled panes are in tilingRoot.
+    const sourceWsId = instance.workspaceId ?? activeWorkspaceId;
+    if (sourceWsId === destWorkspaceId) return;
+    if (!workspaces.has(destWorkspaceId)) return;
+
+    // Snapshot the live `layout` into the source workspace so we mutate a
+    // canonical, up-to-date tree rather than a stale workspaces[sourceId].layout.
+    const nextWorkspaces = new Map(workspaces);
+    const sourceWs = nextWorkspaces.get(sourceWsId);
+    const liveSourceLayout = sourceWsId === activeWorkspaceId ? layout : sourceWs?.layout;
+    if (!liveSourceLayout) return;
+
+    // Remove the leaf from the source workspace's tilingRoot.
+    const sourceRoot = liveSourceLayout.tilingRoot;
+    const newSourceRoot = sourceRoot ? removeLeaf(sourceRoot, terminalId) : null;
+    const newSourceLayout: LayoutState = { ...liveSourceLayout, tilingRoot: newSourceRoot };
+    nextWorkspaces.set(sourceWsId, {
+      ...(sourceWs || { id: sourceWsId, name: sourceWsId, layout: newSourceLayout }),
+      layout: newSourceLayout,
+    });
+
+    // Insert the leaf into the destination workspace's tilingRoot, to the
+    // right of the last leaf (matches createTerminal's heuristic for "where
+    // does a fresh pane land?"). If the destination is empty, the moved pane
+    // becomes the lone leaf.
+    const destWs = nextWorkspaces.get(destWorkspaceId)!;
+    const destRoot = destWs.layout.tilingRoot;
+    let newDestRoot: LayoutNode;
+    if (destRoot === null) {
+      newDestRoot = { kind: 'leaf', terminalId };
+    } else {
+      const order = getLeafOrder(destRoot);
+      const lastId = order[order.length - 1];
+      newDestRoot = insertLeaf(destRoot, lastId, terminalId, 'right');
+    }
+    const newDestLayout: LayoutState = { ...destWs.layout, tilingRoot: newDestRoot };
+    nextWorkspaces.set(destWorkspaceId, { ...destWs, layout: newDestLayout });
+
+    // Update the terminal's workspaceId field so reconcileGridLayout / save
+    // / future workspace switches all agree on where this pane lives.
+    const newTerminals = new Map(terminals);
+    newTerminals.set(terminalId, { ...instance, workspaceId: destWorkspaceId });
+
+    // Decide whether to follow the pane. If the moved pane was focused, switch
+    // to the destination workspace so the user keeps interacting with it.
+    // Otherwise stay where we are - if the source was active, swap in the
+    // updated source layout; if neither was active, top-level layout doesn't
+    // change.
+    const shouldFollow = focusedTerminalId === terminalId;
+    let newActiveWsId = activeWorkspaceId;
+    let newTopLayout = layout;
+    let newFocus: TerminalId | null = focusedTerminalId;
+
+    if (shouldFollow) {
+      newActiveWsId = destWorkspaceId;
+      newTopLayout = newDestLayout;
+      // Focus stays on the moved pane.
+      newFocus = terminalId;
+    } else if (sourceWsId === activeWorkspaceId) {
+      // We're still on the source workspace's view, but its layout just lost
+      // a leaf. Use the updated source layout. Pick a sensible focus if the
+      // previous focus was the moved pane (shouldn't happen here since
+      // shouldFollow would be true, but be defensive).
+      newTopLayout = newSourceLayout;
+      if (focusedTerminalId === terminalId) {
+        const order = newSourceRoot ? getLeafOrder(newSourceRoot) : [];
+        newFocus = order.length > 0 ? order[0] : null;
+      }
+    } else if (destWorkspaceId === activeWorkspaceId) {
+      // We're viewing the destination workspace; show the new layout there.
+      newTopLayout = newDestLayout;
+    }
+
+    set({
+      terminals: newTerminals,
+      workspaces: nextWorkspaces,
+      activeWorkspaceId: newActiveWsId,
+      layout: newTopLayout,
+      focusedTerminalId: newFocus,
+    });
     get().saveSession();
   },
 

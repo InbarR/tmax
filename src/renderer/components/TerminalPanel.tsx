@@ -205,6 +205,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   // Per-pane overflow menu (replaces the row of inline title-bar buttons).
   // Stored as anchor coords so the menu renders fixed-positioned next to ⋯.
   const [paneMenuPos, setPaneMenuPos] = useState<{ x: number; y: number } | null>(null);
+  // TASK-78: "Move to workspace" submenu anchor. When set, renders the list
+  // of workspaces alongside the main overflow menu so the user can pick a
+  // destination without losing the parent context. Coords are the right edge
+  // of the parent submenu trigger so the panel hangs to the right of it.
+  const [moveToWsSubmenuPos, setMoveToWsSubmenuPos] = useState<{ x: number; y: number } | null>(null);
   const [, tickDiag] = useReducer((x: number) => x + 1, 0);
   const diagRef = useRef({ keystrokeCount: 0, lastKeystrokeTime: 0, outputEventCount: 0, lastOutputTime: 0, outputBytes: 0, focusEventCount: 0, lastFocusTime: 0 });
   const mainDiagRef = useRef<{ pid: number; writeCount: number; lastWriteTime: number; dataCount: number; lastDataTime: number; dataBytes: number } | null>(null);
@@ -1786,6 +1791,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   const aiSessionId = useTerminalStore((s) => s.terminals.get(terminalId)?.aiSessionId);
   const paneMode = useTerminalStore((s) => s.terminals.get(terminalId)?.mode);
   const paneCwd = useTerminalStore((s) => s.terminals.get(terminalId)?.cwd);
+  // TASK-78: workspaces list for the "Move to workspace" submenu in the
+  // overflow menu. paneWorkspaceId is the pane's CURRENT workspace (the one
+  // we omit from the destination list so users can't no-op-move into the same
+  // workspace). Falls back to active workspace for legacy panes that predate
+  // the workspaces feature.
+  const workspacesMap = useTerminalStore((s) => s.workspaces);
+  const activeWorkspaceIdState = useTerminalStore((s) => s.activeWorkspaceId);
+  const paneWorkspaceId = useTerminalStore(
+    (s) => s.terminals.get(terminalId)?.workspaceId ?? s.activeWorkspaceId,
+  );
   const latestPrompt = useTerminalStore((s) => {
     if (!aiSessionId) return undefined;
     const cc = s.claudeCodeSessions.find((x) => x.id === aiSessionId);
@@ -2028,8 +2043,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         <>
           <div
             className="pane-menu-backdrop"
-            onClick={() => setPaneMenuPos(null)}
-            onContextMenu={(e) => { e.preventDefault(); setPaneMenuPos(null); }}
+            onClick={() => { setPaneMenuPos(null); setMoveToWsSubmenuPos(null); }}
+            onContextMenu={(e) => { e.preventDefault(); setPaneMenuPos(null); setMoveToWsSubmenuPos(null); }}
           />
           <div
             className="context-menu"
@@ -2086,6 +2101,24 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               setPaneMenuPos(null);
               useTerminalStore.getState().detachTerminal(terminalId);
             }}>↗ Detach to window</button>
+            {/* TASK-78: Move to workspace submenu. Hidden when there's only
+                one workspace (every destination would be the pane's current
+                workspace, so the menu would be empty). */}
+            {workspacesMap.size > 1 && (
+              <button
+                className="context-menu-item"
+                onClick={(e) => {
+                  // Open submenu anchored to this row's right edge so it
+                  // hangs alongside the parent menu without overlapping.
+                  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  setMoveToWsSubmenuPos({ x: r.right, y: r.top });
+                }}
+                title="Move this pane into a different workspace"
+              >
+                🗂 Move to workspace
+                <span className="context-menu-shortcut">▸</span>
+              </button>
+            )}
             {paneCwd && (
               <button className="context-menu-item" onClick={() => {
                 setPaneMenuPos(null);
@@ -2102,6 +2135,51 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               useTerminalStore.getState().closeTerminal(terminalId);
             }}>🗑 Close pane <span className="context-menu-shortcut">Ctrl+Shift+W</span></button>
           </div>
+          {/* TASK-78: Move-to-workspace submenu. Same overlay layer as the
+              parent menu, anchored to the right of the trigger row. Lists
+              every workspace except the pane's current one. */}
+          {moveToWsSubmenuPos && (
+            <div
+              className="context-menu"
+              style={{
+                position: 'fixed',
+                left: moveToWsSubmenuPos.x + 4,
+                top: moveToWsSubmenuPos.y,
+                zIndex: 1001,
+              }}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              {[...workspacesMap.values()]
+                .filter((ws) => ws.id !== paneWorkspaceId)
+                .map((ws) => (
+                  <button
+                    key={ws.id}
+                    className="context-menu-item"
+                    onClick={() => {
+                      setPaneMenuPos(null);
+                      setMoveToWsSubmenuPos(null);
+                      useTerminalStore.getState().movePaneToWorkspace(terminalId, ws.id);
+                    }}
+                    title={`Move pane to "${ws.name}"`}
+                  >
+                    {ws.color && (
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          width: 8,
+                          height: 8,
+                          borderRadius: 2,
+                          background: ws.color,
+                          marginRight: 6,
+                        }}
+                      />
+                    )}
+                    {ws.id === activeWorkspaceIdState ? `${ws.name} (active)` : ws.name}
+                  </button>
+                ))}
+            </div>
+          )}
         </>,
         document.body,
       )}
