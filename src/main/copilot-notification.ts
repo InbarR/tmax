@@ -62,12 +62,61 @@ export function notifyCopilotSession(session: CopilotSessionSummary): void {
     : isClaude ? 'Session Ready' : 'Waiting for Input';
   const title = `${agentLabel}: ${stateLabel}`;
 
-  const body = session.repository
-    ? `${session.repository} (${session.branch || 'unknown branch'})`
-    : session.cwd || session.id;
+  const body = buildNotificationBody(session);
 
   const notification = new Notification({ title, body });
   notification.show();
+}
+
+/**
+ * Build a multi-line notification body that identifies WHICH session and
+ * WHAT it was working on. Mirrors the shape of external Claude-Code
+ * notification plugins (they show "[slug] repo (branch)" + an excerpt)
+ * so users get the same level of context from tmax-native notifications.
+ *
+ * Line 1: location  -> "[slug] folder (branch)"  (Claude Code with slug)
+ *                   or "repo (branch)"            (Copilot or no slug)
+ *                   or just folder / cwd          (no repo, no branch)
+ * Line 2: prompt    -> "<latest user prompt, truncated>" (when present)
+ */
+function buildNotificationBody(session: CopilotSessionSummary): string {
+  const parts: string[] = [];
+
+  // First line: where the session lives.
+  const cwdFolder = deriveCwdFolder(session.cwd);
+  const repoOrFolder = session.repository || cwdFolder || '';
+  const branch = session.branch || '';
+  const slugTag = session.slug ? `[${session.slug}] ` : '';
+
+  let location = '';
+  if (repoOrFolder && branch) {
+    location = `${slugTag}${repoOrFolder} (${branch})`;
+  } else if (repoOrFolder) {
+    location = `${slugTag}${repoOrFolder}`;
+  } else if (session.cwd) {
+    location = `${slugTag}${session.cwd}`;
+  } else {
+    location = `${slugTag}${session.id.slice(0, 8)}`;
+  }
+  parts.push(location);
+
+  // Second line: most recent user prompt, truncated. Skips when empty so
+  // an idle / fresh session keeps the body to one line.
+  const prompt = (session.latestPrompt || '').trim().replace(/\s+/g, ' ');
+  if (prompt) {
+    const max = 80;
+    const truncated = prompt.length > max ? prompt.slice(0, max - 1) + '…' : prompt;
+    parts.push(`"${truncated}"`);
+  }
+
+  return parts.join('\n');
+}
+
+function deriveCwdFolder(cwd: string | undefined): string {
+  if (!cwd) return '';
+  const trimmed = cwd.replace(/[/\\]+$/, '');
+  const parts = trimmed.split(/[/\\]/);
+  return parts[parts.length - 1] || cwd;
 }
 
 export function clearNotificationCooldowns(): void {

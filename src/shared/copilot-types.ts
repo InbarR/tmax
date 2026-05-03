@@ -16,6 +16,8 @@ export interface CopilotSessionSummary {
   branch: string;
   repository: string;
   summary: string;
+  /** Auto-generated session nickname (Claude Code only - e.g. "calm-river") */
+  slug?: string;
   /** Most recent user prompt - useful when the terminal has scrolled past it */
   latestPrompt?: string;
   /** Timestamp (ms since epoch) of the most recent user prompt */

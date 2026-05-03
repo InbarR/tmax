@@ -252,6 +252,7 @@ export class ClaudeCodeSessionMonitor {
       branch: parsed.gitBranch,
       repository: '',
       summary: parsed.firstPrompt || parsed.slug || cwdFolder || '',
+      slug: parsed.slug || undefined,
       latestPrompt: parsed.latestPrompt || undefined,
       latestPromptTime: parsed.latestPromptTime || undefined,
       messageCount: parsed.messageCount,
