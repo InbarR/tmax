@@ -92,6 +92,45 @@ const RootDropZones: React.FC = () => {
   );
 };
 
+/** Walk a layout tree and collect leaf terminal IDs in tiling order
+ *  (left-to-right / top-to-bottom). Used by the focus-mode pane indicator
+ *  to render one dot per pane. */
+function collectLeafIds(node: LayoutNode): string[] {
+  if (node.kind === 'leaf') return [node.terminalId];
+  const split = node as LayoutSplitNode;
+  return [...collectLeafIds(split.first), ...collectLeafIds(split.second)];
+}
+
+/** Floating indicator in focus mode that surfaces "you have N panes, here's
+ *  which one is focused, click a dot to switch." TASK-82 - in workspaces +
+ *  focus mode the tab bar is hidden, leaving Ctrl+Tab as the only way to
+ *  switch panes; new users had no signal that switching was even possible. */
+const FocusModePaneIndicator: React.FC<{ leafIds: string[]; focusedId: string | null }> = ({ leafIds, focusedId }) => {
+  const terminals = useTerminalStore((s) => s.terminals);
+  const setFocus = useTerminalStore((s) => s.setFocus);
+  if (leafIds.length < 2) return null;
+  return (
+    <div className="focus-mode-pane-indicator" role="tablist" aria-label="Switch pane">
+      {leafIds.map((id) => {
+        const t = terminals.get(id);
+        const title = t?.title || (t as { customTitle?: string } | undefined)?.customTitle || id.slice(0, 8);
+        const active = id === focusedId;
+        return (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            className={`focus-mode-pane-dot${active ? ' active' : ''}`}
+            title={`${title}${active ? ' (focused)' : ' - click to focus'}`}
+            onClick={() => setFocus(id)}
+          />
+        );
+      })}
+    </div>
+  );
+};
+
 const TilingLayout: React.FC = () => {
   const tilingRoot = useTerminalStore((s) => s.layout.tilingRoot);
   const viewMode = useTerminalStore((s) => s.viewMode);
@@ -114,6 +153,12 @@ const TilingLayout: React.FC = () => {
     <div className={viewMode === 'focus' ? 'tiling-focus-mode' : 'tiling-normal-mode'}>
       <TilingNode node={tilingRoot} />
       <RootDropZones />
+      {viewMode === 'focus' && (
+        <FocusModePaneIndicator
+          leafIds={collectLeafIds(tilingRoot)}
+          focusedId={focusedTerminalId}
+        />
+      )}
     </div>
   );
 };

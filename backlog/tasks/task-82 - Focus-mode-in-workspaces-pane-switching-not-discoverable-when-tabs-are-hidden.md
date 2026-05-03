@@ -1,9 +1,11 @@
 ---
 id: TASK-82
 title: 'Focus mode in workspaces: pane switching not discoverable when tabs are hidden'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude-agent'
 created_date: '2026-05-03 13:10'
+updated_date: '2026-05-03 14:39'
 labels: []
 dependencies: []
 ---
@@ -17,7 +19,19 @@ In workspaces mode, focus mode hides the tab/pane chrome to give the focused pan
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 From a fresh state, a new user can discover how to switch panes in focus mode without reading docs
-- [ ] #2 There is a visible affordance (or auto-revealing one) for pane switching that does not break the full-screen focus aesthetic
-- [ ] #3 Existing Ctrl+Tab behavior is preserved - power users keep their flow
-- [ ] #4 Affordance does not appear when there is only one pane in the workspace
+- [x] #2 There is a visible affordance (or auto-revealing one) for pane switching that does not break the full-screen focus aesthetic
+- [x] #3 Existing Ctrl+Tab behavior is preserved - power users keep their flow
+- [x] #4 Affordance does not appear when there is only one pane in the workspace
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. In TilingLayout, walk the tilingRoot to collect leaf terminal IDs.\n2. Render a small floating indicator (row of dots) top-center when viewMode === 'focus' and 2+ panes.\n3. Each dot is a clickable button that calls setFocus.\n4. Subtle styling: 55% opacity at rest, 100% on hover; active pane dot is wider/highlighted; tooltip shows pane title.\n5. Hidden when only 1 pane (no point) or not in focus mode.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-05-03: Shipped a top-center dot indicator. Each pane gets a dot, focused pane is wider+blue. Hover any dot for tooltip with pane title; click to switch. Hidden when 1 pane or not in focus mode. Tackles AC #2 (visible affordance), #3 (Ctrl+Tab still works), #4 (no clutter when only 1 pane). AC #1 (new user discovers without docs) is partially - dots are visible but tiny; if feedback wants something louder we can add a first-time tooltip later.
+<!-- SECTION:NOTES:END -->

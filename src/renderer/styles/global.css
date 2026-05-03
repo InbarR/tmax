@@ -1199,6 +1199,51 @@ html.transparency-active .input-dialog {
   pointer-events: auto;
 }
 
+/* TASK-82: pane indicator in focus mode. Subtle row of dots top-center so
+   users see at a glance how many panes exist and which one is focused.
+   Click a dot to focus that pane - the answer to "how do I switch when
+   tabs are hidden" without forcing a Ctrl+Tab discovery. */
+.focus-mode-pane-indicator {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(30, 30, 46, 0.6);
+  border: 1px solid rgba(108, 112, 134, 0.3);
+  border-radius: 999px;
+  z-index: 20;
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+.focus-mode-pane-indicator:hover {
+  opacity: 1;
+}
+.focus-mode-pane-dot {
+  appearance: none;
+  border: none;
+  background: rgba(166, 173, 200, 0.45);
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+.focus-mode-pane-dot:hover {
+  background: rgba(205, 214, 244, 0.85);
+  transform: scale(1.2);
+}
+.focus-mode-pane-dot.active {
+  background: #89b4fa;
+  width: 18px;
+  border-radius: 4px;
+}
+
 /* Quiet contextual hint in the status bar when the focused pane is an AI
    session waiting for input. Reminds users that Ctrl+U clears the input
    line - Ctrl+C is intercepted by Ink-based CLIs as an interrupt. */
