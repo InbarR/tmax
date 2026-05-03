@@ -69,39 +69,37 @@ export function notifyCopilotSession(session: CopilotSessionSummary): void {
 }
 
 /**
- * Build a multi-line notification body that identifies WHICH session and
- * WHAT it was working on. Mirrors the shape of external Claude-Code
- * notification plugins (they show "[slug] repo (branch)" + an excerpt)
- * so users get the same level of context from tmax-native notifications.
+ * Build a two-line notification body answering the two questions a
+ * notification needs to answer in the half-second the user looks at it:
+ *  - WHERE is this session?  (line 1, "folder (branch)")
+ *  - WHAT was just said?     (line 2, the latest user prompt in quotes)
  *
- * Line 1: location  -> "[slug] folder (branch)"  (Claude Code with slug)
- *                   or "repo (branch)"            (Copilot or no slug)
- *                   or just folder / cwd          (no repo, no branch)
- * Line 2: prompt    -> "<latest user prompt, truncated>" (when present)
+ * The slug nickname Claude Code generates ("calm-river", etc.) is
+ * deliberately omitted - it's random and doesn't help the user
+ * disambiguate sessions in practice, just adds visual noise.
+ *
+ * Falls back to one line for sessions with no latest prompt yet, and to
+ * raw cwd / id when the session has no repo/branch metadata.
  */
 function buildNotificationBody(session: CopilotSessionSummary): string {
   const parts: string[] = [];
 
-  // First line: where the session lives.
   const cwdFolder = deriveCwdFolder(session.cwd);
   const repoOrFolder = session.repository || cwdFolder || '';
   const branch = session.branch || '';
-  const slugTag = session.slug ? `[${session.slug}] ` : '';
 
   let location = '';
   if (repoOrFolder && branch) {
-    location = `${slugTag}${repoOrFolder} (${branch})`;
+    location = `${repoOrFolder} (${branch})`;
   } else if (repoOrFolder) {
-    location = `${slugTag}${repoOrFolder}`;
+    location = repoOrFolder;
   } else if (session.cwd) {
-    location = `${slugTag}${session.cwd}`;
+    location = session.cwd;
   } else {
-    location = `${slugTag}${session.id.slice(0, 8)}`;
+    location = session.id.slice(0, 8);
   }
   parts.push(location);
 
-  // Second line: most recent user prompt, truncated. Skips when empty so
-  // an idle / fresh session keeps the body to one line.
   const prompt = (session.latestPrompt || '').trim().replace(/\s+/g, ' ');
   if (prompt) {
     const max = 80;
