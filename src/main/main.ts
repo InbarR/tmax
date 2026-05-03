@@ -1063,6 +1063,16 @@ process.on('uncaughtException', (error) => {
 
 app.whenReady().then(() => {
   try {
+    // TASK-69: pin the Windows appUserModelID so OS toast notifications
+    // (e.g. the TASK-64 "Claude Code: Session Ready" alert) attribute to
+    // "tmax" instead of Electron's default "electron.app.Electron".
+    // Squirrel's shortcut convention is `com.squirrel.<AppName>.<ExeName>`;
+    // matching it here means installed and dev runs share an identity.
+    // No-op on macOS / Linux.
+    if (process.platform === 'win32') {
+      try { app.setAppUserModelId('com.squirrel.tmax.tmax'); } catch { /* noop */ }
+    }
+
     // Purge leftover clipboard temp dirs from crashed/killed sessions
     sweepStaleClipboardDirs();
 
