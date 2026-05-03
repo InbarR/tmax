@@ -1,9 +1,11 @@
 ---
 id: TASK-84
 title: Prompt search (Ctrl+Shift+Y) needs visible jump-to-session affordance per row
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude-agent'
 created_date: '2026-05-03 14:24'
+updated_date: '2026-05-03 14:40'
 labels: []
 dependencies: []
 ---
@@ -16,8 +18,14 @@ After searching prompts via Ctrl+Shift+Y, the result rows are click-to-jump (cli
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Each result row in the prompt search dialog has a visible jump affordance (icon or button)
-- [ ] #2 Hovering the affordance shows a tooltip 'Jump to pane' / 'Show summary' depending on whether the pane is live in this window
-- [ ] #3 Existing keyboard-driven flow is preserved: arrow keys + Enter still jumps without mouse
-- [ ] #4 Click anywhere on the row still triggers the same default action it does today, so existing muscle memory is not broken
+- [x] #1 Each result row in the prompt search dialog has a visible jump affordance (icon or button)
+- [x] #2 Hovering the affordance shows a tooltip 'Jump to pane' / 'Show summary' depending on whether the pane is live in this window
+- [x] #3 Existing keyboard-driven flow is preserved: arrow keys + Enter still jumps without mouse
+- [x] #4 Click anywhere on the row still triggers the same default action it does today, so existing muscle memory is not broken
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped: each prompt-search row now has a visible arrow glyph on the right edge that telegraphs clickability. Live-pane sessions get '↗' (jump to pane), inactive ones get '↑' (open summary). Glyph is dim by default (opacity 0.45), brightens to focus-blue and slides slightly on row hover or keyboard selection. Title attribute reflects the action ('Jump to this pane (Enter)' or 'Open session summary (Enter)'). Existing keyboard flow (arrows + Enter) and click-anywhere-on-row behavior are unchanged.
+<!-- SECTION:FINAL_SUMMARY:END -->

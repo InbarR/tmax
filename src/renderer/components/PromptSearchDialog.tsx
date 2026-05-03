@@ -231,23 +231,33 @@ const PromptSearchDialog: React.FC = () => {
           )}
           {filtered.map((entry, index) => {
             const key = `${entry.sessionId}-${entry.promptIndex}`;
+            // Jump glyph telegraphs that the row is clickable. Live pane gets
+            // a forward-arrow ('jump to pane'); inactive session gets an
+            // upward arrow that hints at the summary popover (TASK-84).
+            const jumpGlyph = entry.terminalId ? '↗' : '↑';
+            const jumpHint = entry.terminalId ? 'Jump to this pane' : 'Open session summary';
             return (
               <div
                 key={key}
                 className={`switcher-item prompt-search-item${index === selectedIndex ? ' selected' : ''}${entry.terminalId ? '' : ' prompt-search-orphan'}`}
                 onClick={() => jumpTo(entry)}
                 onMouseEnter={() => setSelectedIndex(index)}
-                title={entry.terminalId ? 'Jump to this pane' : 'No pane in this window for this session - opens session summary'}
+                title={`${jumpHint} (Enter)`}
               >
-                <div className="prompt-search-prompt">{hl(entry.prompt)}</div>
-                <div className="prompt-search-meta">
-                  <span className="prompt-search-pane">
-                    {entry.terminalId ? '🪟' : '💤'} {hl(entry.paneTitle)}
-                  </span>
-                  {entry.sessionFolder && (
-                    <span className="prompt-search-folder">📁 {hl(entry.sessionFolder)}</span>
-                  )}
-                  <span className="prompt-search-age">{relativePhrase(entry.ageMs)}</span>
+                <div className="prompt-search-row">
+                  <div className="prompt-search-body">
+                    <div className="prompt-search-prompt">{hl(entry.prompt)}</div>
+                    <div className="prompt-search-meta">
+                      <span className="prompt-search-pane">
+                        {entry.terminalId ? '🪟' : '💤'} {hl(entry.paneTitle)}
+                      </span>
+                      {entry.sessionFolder && (
+                        <span className="prompt-search-folder">📁 {hl(entry.sessionFolder)}</span>
+                      )}
+                      <span className="prompt-search-age">{relativePhrase(entry.ageMs)}</span>
+                    </div>
+                  </div>
+                  <span className="prompt-search-jump" aria-hidden="true" title={jumpHint}>{jumpGlyph}</span>
                 </div>
               </div>
             );

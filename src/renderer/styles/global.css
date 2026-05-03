@@ -2284,6 +2284,34 @@ body.broadcast-on .terminal-panel {
   padding: 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
+/* TASK-84: row layout puts a small jump-arrow glyph at the right edge of
+   each result so the row visually signals it's clickable - previously the
+   action was discoverable only via the cursor + tooltip. */
+.prompt-search-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.prompt-search-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.prompt-search-jump {
+  flex: 0 0 auto;
+  font-size: 16px;
+  color: var(--text-secondary);
+  opacity: 0.45;
+  transition: opacity 120ms ease, color 120ms ease, transform 120ms ease;
+}
+.prompt-search-item.selected .prompt-search-jump,
+.prompt-search-item:hover .prompt-search-jump {
+  opacity: 1;
+  color: var(--focus-border, #89b4fa);
+  transform: translateX(2px);
+}
 .prompt-search-item:last-child {
   border-bottom: none;
 }
