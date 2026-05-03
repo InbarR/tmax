@@ -526,6 +526,30 @@ html.transparency-active .input-dialog {
   box-shadow: inset 0 0 0 1px rgba(137, 180, 250, 0.3);
 }
 
+/* TASK-72: Multi-select indicator. Distinct from .focused (which is a soft
+   blue inset) - this is a brighter dashed amber/yellow outline so the user
+   can tell at a glance which panes are queued for "Show selected", even if
+   one of them is also the currently focused pane. */
+.terminal-panel.multi-selected {
+  box-shadow: inset 0 0 0 2px rgba(249, 226, 175, 0.7);
+}
+.terminal-panel.focused.multi-selected {
+  /* Layered: focused inner ring + multi-selected outer ring, so both
+     states are visible at once on the active selected pane. */
+  box-shadow:
+    inset 0 0 0 1px rgba(137, 180, 250, 0.5),
+    inset 0 0 0 3px rgba(249, 226, 175, 0.85);
+}
+.terminal-pane-title.multi-selected {
+  /* Subtle highlight on the chrome the user actually clicked, so the
+     hit target itself shows feedback on top of the pane outline. */
+  background: linear-gradient(
+    to bottom,
+    rgba(249, 226, 175, 0.18),
+    rgba(249, 226, 175, 0.08)
+  );
+}
+
 .terminal-pane-title {
   flex-shrink: 0;
   z-index: 5;

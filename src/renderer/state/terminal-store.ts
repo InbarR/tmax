@@ -682,6 +682,21 @@ interface TerminalStore {
   toggleSelectTerminal: (id: TerminalId) => void;
   clearSelection: () => void;
   gridSelectedTabs: (ids: TerminalId[]) => void;
+  /**
+   * TASK-72: hide every pane in the active workspace that is NOT in
+   * `selectedTerminalIds`, by re-laying out only the selected ones into
+   * an equal grid. The original layout is saved to preGridRoot so
+   * showAllPanes() can restore it. Selection is preserved (unlike
+   * gridSelectedTabs) so the user can still see which panes they picked.
+   * No-op if fewer than 2 panes are selected.
+   */
+  showSelectedPanes: () => void;
+  /**
+   * TASK-72: counterpart to showSelectedPanes - exits the filtered view
+   * and restores the pre-filter layout via preGridRoot. No-op if no
+   * filter is active. Selection is left intact.
+   */
+  showAllPanes: () => void;
   equalizeLayout: () => void;
   cycleGridColumns: () => void;
   moveTerminalDirection: (id: TerminalId, dir: 'up' | 'down' | 'left' | 'right') => void;
@@ -1918,6 +1933,60 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     });
   },
 
+  showSelectedPanes: () => {
+    // TASK-72: filter to currently-selected panes only. Restrict the set
+    // to terminals in the active workspace's tiling tree so a stale
+    // selection (e.g. one that was set in a different workspace) cannot
+    // pull foreign terminals into the visible grid.
+    const { selectedTerminalIds, layout, preGridRoot } = get();
+    const root = layout.tilingRoot;
+    if (!root) return;
+    const inWorkspace = new Set(getLeafOrder(root));
+    const ids = Object.keys(selectedTerminalIds).filter((id) => inWorkspace.has(id));
+    if (ids.length < 2) return;
+    const gridRoot = buildGridTree(ids);
+    if (!gridRoot) return;
+    // Save the original layout so showAllPanes() can restore it. If we're
+    // already in a grid (preGridRoot set), keep that as the canonical
+    // restore target.
+    const originalRoot = preGridRoot || root;
+    const gridIds: Record<string, true> = {};
+    for (const id of ids) gridIds[id] = true;
+    set({
+      viewMode: 'grid',
+      preGridRoot: originalRoot,
+      layout: { ...layout, tilingRoot: gridRoot },
+      gridTabIds: gridIds,
+      // Intentionally DO NOT clear selectedTerminalIds: keeping it lets the
+      // multi-selected visual indicator persist on the visible panes, and
+      // lets the user toggle the filter off and on without re-picking.
+      focusedTerminalId: ids[0],
+    });
+  },
+
+  showAllPanes: () => {
+    // TASK-72: exit the showSelectedPanes filter by restoring preGridRoot.
+    // No-op if there's nothing to restore.
+    const { viewMode, layout, preGridRoot, focusedTerminalId } = get();
+    if (viewMode !== 'grid' || !preGridRoot) return;
+    let restored = preGridRoot;
+    // Defensive guard (mirrors toggleViewMode): if preGridRoot is stale and
+    // doesn't contain the focused terminal, fall back to the live tilingRoot
+    // so we never end up rendering a tree that excludes the user's focus.
+    if (focusedTerminalId) {
+      const preIds = getLeafOrder(preGridRoot);
+      if (!preIds.includes(focusedTerminalId) && layout.tilingRoot) {
+        restored = layout.tilingRoot;
+      }
+    }
+    set({
+      viewMode: 'focus',
+      layout: { ...layout, tilingRoot: restored },
+      preGridRoot: null,
+      gridTabIds: {},
+    });
+  },
+
   equalizeLayout: () => {
     const { layout } = get();
     if (!layout.tilingRoot || layout.tilingRoot.kind === 'leaf') return;
@@ -2652,6 +2721,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       activeWorkspaceId: id,
       layout: target.layout,
       focusedTerminalId: newFocus,
+      // TASK-72: multi-pane selection is per-workspace. Clearing prevents
+      // a stale selection from a previous workspace leaking into the next
+      // one (where IDs would not match anyway).
+      selectedTerminalIds: {},
     });
   },
 

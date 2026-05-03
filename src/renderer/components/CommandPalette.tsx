@@ -36,6 +36,12 @@ const CommandPalette: React.FC = () => {
       { id: 'splitLeft', label: 'Split Left', shortcut: 'Ctrl+Alt+\u2190', action: () => { const id = focusedId(); if (id) store().splitTerminal(id, 'horizontal', undefined, 'left'); } },
       { id: 'splitUp', label: 'Split Up', shortcut: 'Ctrl+Alt+\u2191', action: () => { const id = focusedId(); if (id) store().splitTerminal(id, 'vertical', undefined, 'top'); } },
       { id: 'toggleViewMode', label: 'Toggle View Mode (Focus / Grid)', shortcut: 'Ctrl+Shift+F', action: () => store().toggleViewMode() },
+      // TASK-72: pane multi-select filter. Pair these two commands so they
+      // surface together in the palette - users discover Show all when they
+      // need to undo Show selected.
+      { id: 'showSelectedPanes', label: 'Show Selected Panes (filter to multi-selected)', action: () => store().showSelectedPanes() },
+      { id: 'showAllPanes', label: 'Show All Panes (clear selected-only filter)', action: () => store().showAllPanes() },
+      { id: 'clearPaneSelection', label: 'Clear Pane Selection', action: () => store().clearSelection() },
       { id: 'toggleBroadcastMode', label: 'Toggle Broadcast Input to All Panes', shortcut: 'Ctrl+Shift+A', action: () => store().toggleBroadcastMode() },
       { id: 'cycleGridColumns', label: 'Cycle Grid Layout', shortcut: 'Ctrl+Shift+L', action: () => store().cycleGridColumns() },
       { id: 'toggleDormant', label: 'Toggle Hide (Dormant)', shortcut: 'Ctrl+Shift+H', action: () => { const id = focusedId(); if (id) { const t = store().terminals.get(id); if (t?.mode === 'dormant') store().wakeFromDormant(id); else store().moveToDormant(id); } } },

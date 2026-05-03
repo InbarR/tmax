@@ -233,6 +233,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   // the terminal. Updated by a small effect below.
   const smartUnwrapRef = useRef<boolean>(true);
   const isFocused = focusedTerminalId === terminalId;
+  // TASK-72: pane is part of the user's multi-selection set (Ctrl/Cmd+click
+  // on the title bar). Drives the .multi-selected accent border and is the
+  // input to the "Show selected panes" command.
+  const isMultiSelected = useTerminalStore(
+    (s) => !!s.selectedTerminalIds[terminalId],
+  );
 
   const handleFocus = useCallback(() => {
     const prevFocused = useTerminalStore.getState().focusedTerminalId;
@@ -1836,18 +1842,28 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     runJumpToPromptSearch(search, term, text);
   }, [latestPrompt]);
 
-  const className = `terminal-panel${isFocused ? ' focused' : ''}`;
+  const className = `terminal-panel${isFocused ? ' focused' : ''}${isMultiSelected ? ' multi-selected' : ''}`;
 
   return (
     <div
       className={className}
       data-terminal-id={terminalId}
       onMouseDownCapture={(e) => {
+        // TASK-72: Ctrl/Cmd+click on the title bar is the multi-select
+        // gesture. Skip the focus shift in that case so the user can pick
+        // panes for "Show selected" without losing whichever pane they're
+        // working in. We narrow this to the title bar - clicks elsewhere
+        // (the xterm body) still focus normally because the user clearly
+        // wants to work in that pane.
+        const target = e.target as HTMLElement;
+        const isTitleBarClick = !!target.closest('.terminal-pane-title');
+        if (isTitleBarClick && e.button === 0 && (isMac ? e.metaKey : e.ctrlKey)) {
+          return;
+        }
         if (!isFocused) {
           // Only suppress mouse events targeting the xterm canvas — this prevents
           // mouse-reporting apps (Claude CLI) from shifting focus, while still
           // letting mousedown reach the viewport element for scroll targeting (#48).
-          const target = e.target as HTMLElement;
           if (target.tagName === 'CANVAS' || target.classList.contains('xterm-cursor-layer')) {
             e.stopPropagation();
             window.terminalAPI.diagLog('renderer:pane-switch-click-suppressed', { terminalId });
@@ -1892,9 +1908,23 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       )}
       {title && (
         <div
-          className={`terminal-pane-title${floatTitleBar ? ' float-titlebar' : ''}`}
+          className={`terminal-pane-title${floatTitleBar ? ' float-titlebar' : ''}${isMultiSelected ? ' multi-selected' : ''}`}
           style={bgTint ? { background: bgTint + (isFocused ? '66' : '33') } : undefined}
-          onMouseDown={floatTitleBar?.onMouseDown}
+          onMouseDown={(e) => {
+            // TASK-72: Ctrl/Cmd+click on the title bar toggles this pane in
+            // the multi-selection set. Bound to the title bar (not the
+            // xterm canvas area) so terminal text selection / focus stays
+            // untouched. Suppress the float-window drag in this case so the
+            // selection click doesn't accidentally pick up and move a
+            // floating pane.
+            if (e.button === 0 && (isMac ? e.metaKey : e.ctrlKey)) {
+              e.preventDefault();
+              e.stopPropagation();
+              useTerminalStore.getState().toggleSelectTerminal(terminalId);
+              return;
+            }
+            floatTitleBar?.onMouseDown(e);
+          }}
           onDoubleClick={floatTitleBar?.onDoubleClick}
         >
           <div
