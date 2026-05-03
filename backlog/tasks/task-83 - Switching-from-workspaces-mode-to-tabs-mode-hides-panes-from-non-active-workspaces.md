@@ -7,7 +7,7 @@ status: Done
 assignee:
   - '@copilot-cli'
 created_date: '2026-05-03 13:10'
-updated_date: '2026-05-03 13:20'
+updated_date: '2026-05-03 14:07'
 labels: []
 dependencies: []
 ---
@@ -30,5 +30,5 @@ When the user toggles the layout mode from 'workspaces' (tab = collection of pan
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Flat tab bar (TabBar.tsx) now renders every terminal across every workspace instead of filtering to the active workspace, fixing the regression where panes from non-active workspaces vanished after toggling tabMode workspaces -> flat (TASK-83). Order is stable: workspace insertion order first, then in-workspace creation order. Tabs from a different workspace remain clickable - the onActivate handler now calls setActiveWorkspace(wsId) before setFocus, swapping in that workspace's saved layout so the focused pane is actually visible in the grid. Workspace metadata on each terminal is preserved, so toggling back to workspaces mode restores per-workspace grouping unchanged. No PTY restarts (renderer-only filter/sort + layout swap that already exists from setActiveWorkspace). Single-workspace installs are unaffected.
+Shipped in commit cd29b97. TabBar.tsx no longer filters terminals to the active workspace - flat tab mode now lists every pane across every workspace, sorted by workspace insertion order then in-workspace creation order. Orphan workspaceIds fall back to the active workspace bucket so they stay reachable.
 <!-- SECTION:FINAL_SUMMARY:END -->

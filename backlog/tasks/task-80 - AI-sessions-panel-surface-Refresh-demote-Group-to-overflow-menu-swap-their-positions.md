@@ -7,7 +7,7 @@ status: Done
 assignee:
   - '@copilot-cli'
 created_date: '2026-05-03 13:00'
-updated_date: '2026-05-03 13:18'
+updated_date: '2026-05-03 14:07'
 labels: []
 dependencies: []
 ---
@@ -35,5 +35,5 @@ User feedback (translated from Hebrew, with screenshot): currently the AI Sessio
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Swapped AI Sessions panel header controls per user request: Refresh is now a visible header button (between the panel title and the overflow menu), and Group has moved into the overflow menu where it sits next to 'Show running only' as a checkable item ('Group by repo'). Both controls keep their previous behavior - Refresh still calls handleRefresh() once, and Group by repo still toggles the aiGroupByRepo config and persists it. Refresh button uses dir-panel-close styling for visual consistency with the other header buttons.
+Shipped in commit cd29b97. CopilotPanel.tsx header swaps Refresh and Group: Refresh is now a visible icon button (12x12 SVG), Group moves into the overflow menu next to 'Show running only'.
 <!-- SECTION:FINAL_SUMMARY:END -->
