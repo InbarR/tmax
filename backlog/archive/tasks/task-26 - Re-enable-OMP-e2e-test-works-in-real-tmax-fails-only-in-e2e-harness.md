@@ -4,7 +4,7 @@ title: 'Re-enable OMP e2e test (works in real tmax, fails only in e2e harness)'
 status: Done
 assignee: []
 created_date: '2026-04-26 15:43'
-updated_date: '2026-05-01 13:22'
+updated_date: '2026-05-01 15:21'
 labels: []
 dependencies: []
 ---

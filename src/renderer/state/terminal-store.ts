@@ -624,8 +624,10 @@ interface TerminalStore {
   promptsDialogRequest: { terminalId?: TerminalId; sessionId?: string } | null;
   // AI session summary popover - holds the session ID that should be shown.
   sessionSummaryRequest: string | null;
-  // Markdown preview state
-  markdownPreview: { filePath: string; content: string; fileName: string } | null;
+  // Side-panel preview state. Despite the legacy name, also carries image
+  // previews now (kind: 'image') - the same overlay component branches on
+  // kind to render <img> vs sanitized markdown.
+  markdownPreview: { filePath: string; content: string; fileName: string; kind?: 'md' | 'image' } | null;
   // Diff review state
   diffReviewOpen: boolean;
   diffReviewTerminalId: TerminalId | null;

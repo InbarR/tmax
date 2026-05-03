@@ -13,7 +13,7 @@ const port = Number(process.env.TMAX_VITE_PORT) || 5995;
 function getPidsWindows(p) {
   let out = '';
   try {
-    out = execSync(`netstat -ano -p TCP`, { encoding: 'utf8' });
+    out = execSync(`netstat -ano -p TCP`, { encoding: 'utf8', timeout: 3000 });
   } catch {
     return [];
   }
@@ -38,11 +38,15 @@ function getPidsUnix(p) {
 function getProcName(pid) {
   try {
     if (process.platform === 'win32') {
-      const out = execSync(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, { encoding: 'utf8' });
+      // tasklist can be very slow (>30s) when the system is busy with many
+      // node/electron processes. Cap it so the prestart hook never hangs npm
+      // start (TASK-58 follow-up). On timeout we return '' which means we
+      // skip the PID safely.
+      const out = execSync(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, { encoding: 'utf8', timeout: 3000 });
       const m = out.match(/^"([^"]+)"/m);
       return m ? m[1].toLowerCase() : '';
     }
-    const out = execSync(`ps -p ${pid} -o comm=`, { encoding: 'utf8' });
+    const out = execSync(`ps -p ${pid} -o comm=`, { encoding: 'utf8', timeout: 3000 });
     return out.trim().toLowerCase();
   } catch {
     return '';
@@ -52,9 +56,9 @@ function getProcName(pid) {
 function killPid(pid) {
   try {
     if (process.platform === 'win32') {
-      execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
+      execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore', timeout: 3000 });
     } else {
-      execSync(`kill -9 ${pid}`, { stdio: 'ignore' });
+      execSync(`kill -9 ${pid}`, { stdio: 'ignore', timeout: 3000 });
     }
     return true;
   } catch {

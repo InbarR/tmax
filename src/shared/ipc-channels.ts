@@ -40,6 +40,8 @@ export const IPC = {
   VERSION_RESTART_AND_UPDATE: 'version:restartAndUpdate',
   VERSION_GET_CHANGELOG: 'version:getChangelog',
   CLIPBOARD_SAVE_IMAGE: 'clipboard:saveImage',
+  IMAGE_READ_DATA_URL: 'image:readDataUrl',
+  RESOLVE_CLIPBOARD_BASENAME: 'image:resolveClipboardBasename',
   PTY_GET_DIAG: 'pty:getDiag',
   DIAG_LOG: 'diag:log',
   DIAG_GET_LOG_PATH: 'diag:getLogPath',

@@ -26,6 +26,7 @@ const MarkdownPreviewOverlay: React.FC = () => {
       content={markdownPreview.content}
       fileName={markdownPreview.fileName}
       filePath={markdownPreview.filePath}
+      kind={markdownPreview.kind}
       onClose={handleClose}
       onOpenExternally={handleOpenExternally}
       side={side}

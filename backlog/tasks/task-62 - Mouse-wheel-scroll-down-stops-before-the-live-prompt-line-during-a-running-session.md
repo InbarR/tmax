@@ -3,11 +3,11 @@ id: TASK-62
 title: >-
   Mouse wheel scroll-down stops before the live prompt line during a running
   session
-status: In Progress
+status: Done
 assignee:
   - '@Inbar'
 created_date: '2026-05-02 19:18'
-updated_date: '2026-05-02 19:33'
+updated_date: '2026-05-02 19:50'
 labels: []
 dependencies: []
 ---

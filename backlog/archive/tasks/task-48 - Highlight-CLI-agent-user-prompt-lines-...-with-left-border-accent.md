@@ -1,11 +1,11 @@
 ---
 id: TASK-48
 title: Highlight CLI agent user prompt lines (> ...) with left-border accent
-status: In Progress
+status: Done
 assignee:
   - '@inbar'
 created_date: '2026-05-01 07:51'
-updated_date: '2026-05-01 07:51'
+updated_date: '2026-05-01 15:21'
 labels: []
 dependencies: []
 ---

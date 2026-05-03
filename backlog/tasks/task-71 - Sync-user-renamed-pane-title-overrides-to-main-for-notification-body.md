@@ -1,9 +1,11 @@
 ---
 id: TASK-71
 title: Sync user-renamed pane title overrides to main for notification body
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude-agent'
 created_date: '2026-05-03 07:40'
+updated_date: '2026-05-03 07:45'
 labels: []
 dependencies: []
 ---

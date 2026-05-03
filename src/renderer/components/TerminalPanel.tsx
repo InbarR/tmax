@@ -615,6 +615,177 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       },
     });
 
+    // TASK-70: link provider for image paths - click opens an in-tmax
+    // preview overlay (same one the .md provider uses), not the OS default
+    // viewer. The overlay has an "open externally" button if the user wants
+    // the OS viewer. URLs ending in an image extension still flow through
+    // the URL provider above (`:` is excluded from the path char class, so
+    // `https://...` does not match here).
+    //
+    // Soft-wrap stitching: when a long path wraps across multiple buffer
+    // rows on the prompt line (e.g. inside Copilot CLI's input box), each
+    // row alone fails the regex - the lead row has no `.png`, the wrap
+    // continuation has no path-shape head. We follow the same approach as
+    // the URL provider: walk back/forward through `isWrapped` rows, build
+    // a logical string, run the regex on that, then clip per-row ranges.
+    term.registerLinkProvider({
+      provideLinks(bufferLineNumber, callback) {
+        const buf = term.buffer.active;
+        const lineIdx0 = bufferLineNumber - 1;
+        if (lineIdx0 < 0 || lineIdx0 >= buf.length) { callback(undefined); return; }
+
+        let softStart = lineIdx0;
+        while (softStart > 0) {
+          const cur = buf.getLine(softStart);
+          if (!cur?.isWrapped) break;
+          softStart--;
+        }
+        let softEnd = softStart;
+        while (softEnd + 1 < buf.length) {
+          const next = buf.getLine(softEnd + 1);
+          if (!next?.isWrapped) break;
+          softEnd++;
+        }
+
+        const cols = term.cols;
+        // Soft-wrap segs are cols-wide (no trim) except the last; hard-stitched
+        // segs are variable-width (trimmed) and may have leading whitespace
+        // we stripped to avoid breaking the seam test.
+        interface Seg { rowIdx: number; logicalStart: number; soft: boolean; leadingWS: number }
+        const segs: Seg[] = [];
+        let logical = '';
+        for (let i = softStart; i <= softEnd; i++) {
+          const line = buf.getLine(i);
+          if (!line) continue;
+          const text = i < softEnd ? line.translateToString(false) : line.translateToString(true);
+          segs.push({ rowIdx: i, logicalStart: logical.length, soft: true, leadingWS: 0 });
+          logical += text;
+        }
+
+        // Hard-newline stitching for TUIs (Claude Code's input box) that
+        // re-wrap their content row-by-row without setting `isWrapped`.
+        // Conservative seam: prev row must end with a path-body char and
+        // next row's first non-whitespace token must also be path-body.
+        // Capped at 4 rows so a screen full of path-shaped tokens can't
+        // glue into one giant fake match.
+        const PATH_BODY = /[A-Za-z0-9._\-+~/\\]/;
+        const MAX_HARD_NEWLINE = 4;
+        let stitchedFwd = 0;
+        while (stitchedFwd < MAX_HARD_NEWLINE) {
+          const lastSeg = segs[segs.length - 1];
+          if (!lastSeg) break;
+          const nextRow = lastSeg.rowIdx + 1;
+          if (nextRow >= buf.length) break;
+          const next = buf.getLine(nextRow);
+          if (!next || next.isWrapped) break;
+          if (/\s$/.test(logical)) break;
+          const lastCh = logical.charAt(logical.length - 1);
+          if (!PATH_BODY.test(lastCh)) break;
+          const nextRaw = next.translateToString(true);
+          if (!nextRaw) break;
+          const wsMatch = nextRaw.match(/^(\s*)(\S+)/);
+          if (!wsMatch) break;
+          const headCh = wsMatch[2].charAt(0);
+          if (!PATH_BODY.test(headCh)) break;
+          const trimmed = nextRaw.replace(/^\s+/, '');
+          segs.push({ rowIdx: nextRow, logicalStart: logical.length, soft: false, leadingWS: wsMatch[1].length });
+          logical += trimmed;
+          stitchedFwd++;
+        }
+        let stitchedBack = 0;
+        while (stitchedBack < MAX_HARD_NEWLINE) {
+          const firstSeg = segs[0];
+          if (!firstSeg) break;
+          const prevRow = firstSeg.rowIdx - 1;
+          if (prevRow < 0) break;
+          const prev = buf.getLine(prevRow);
+          if (!prev) break;
+          const prevText = prev.translateToString(true);
+          if (!prevText || /\s$/.test(prevText)) break;
+          const lastCh = prevText.charAt(prevText.length - 1);
+          if (!PATH_BODY.test(lastCh)) break;
+          const headOfCur = logical.replace(/^\s+/, '').charAt(0);
+          if (!PATH_BODY.test(headOfCur)) break;
+          for (const s of segs) s.logicalStart += prevText.length;
+          segs.unshift({ rowIdx: prevRow, logicalStart: 0, soft: false, leadingWS: 0 });
+          logical = prevText + logical;
+          stitchedBack++;
+        }
+
+        function offsetToRowCol(offset: number): { row: number; col: number } {
+          for (let s = segs.length - 1; s >= 0; s--) {
+            const seg = segs[s];
+            if (offset >= seg.logicalStart) {
+              const within = offset - seg.logicalStart;
+              if (seg.soft && within >= cols) return { row: seg.rowIdx + Math.floor(within / cols), col: within % cols };
+              return { row: seg.rowIdx, col: within + seg.leadingWS };
+            }
+          }
+          return { row: segs[0]?.rowIdx ?? 0, col: 0 };
+        }
+
+        // Body char class also excludes `[]()` so paths wrapped in brackets
+        // by a TUI (Copilot CLI displays pasted paths as `[C:\...png]`) are
+        // matched WITHOUT the bracket - otherwise the leading `[` makes the
+        // drive-letter check fail and the path resolves cwd-relative.
+        const imgPathRegex = /(?:[a-zA-Z]:[\\/]|[\/~.])?[^\s"'`<>|:*?\[\]()]*\.(?:png|jpg|jpeg|gif|bmp|webp)\b/gi;
+        const links: Array<{ range: { start: { x: number; y: number }; end: { x: number; y: number } }; text: string; activate: () => void; tooltip: string }> = [];
+        let match: RegExpExecArray | null;
+        imgPathRegex.lastIndex = 0;
+        while ((match = imgPathRegex.exec(logical)) !== null) {
+          const matchStart = match.index;
+          const matchEnd = match.index + match[0].length - 1;
+          const a = offsetToRowCol(matchStart);
+          const b = offsetToRowCol(matchEnd);
+          // Only emit a link for the row xterm is asking about, clipped to
+          // that row. Same anti-double-fire pattern as the URL provider.
+          if (lineIdx0 < a.row || lineIdx0 > b.row) continue;
+          const startX = lineIdx0 === a.row ? a.col + 1 : 1;
+          const endX = lineIdx0 === b.row ? b.col + 1 : cols;
+          const matchedPath = match[0];
+          links.push({
+            range: {
+              start: { x: startX, y: bufferLineNumber },
+              end: { x: endX, y: bufferLineNumber },
+            },
+            text: matchedPath,
+            tooltip: `Ctrl+Click to preview: ${matchedPath}`,
+            activate() {
+              const open = (fullPath: string) => {
+                const fileName = fullPath.split(/[/\\]/).pop() || fullPath;
+                useTerminalStore.setState({
+                  markdownPreview: { filePath: fullPath, content: '', fileName, kind: 'image' },
+                });
+              };
+              const isAbsolute = /^[a-zA-Z]:/.test(matchedPath) || matchedPath.startsWith('/') || matchedPath.startsWith('~');
+              const isBareName = !matchedPath.includes('/') && !matchedPath.includes('\\');
+              const cwdRelative = (): string => {
+                const termInst = useTerminalStore.getState().terminals.get(terminalId);
+                const cwd = termInst?.cwd || '';
+                const sep = cwd.includes('\\') ? '\\' : '/';
+                return cwd + sep + matchedPath;
+              };
+              if (isAbsolute) { open(matchedPath); return; }
+              // Copilot CLI shows pasted clipboard images as `[basename.png]`
+              // (directory hidden). Probe tmax's clipboard dir for the file
+              // before falling back to cwd-relative resolution.
+              if (isBareName) {
+                const api = window.terminalAPI as unknown as { resolveClipboardImageBasename?: (b: string) => Promise<string | null> };
+                if (api.resolveClipboardImageBasename) {
+                  api.resolveClipboardImageBasename(matchedPath)
+                    .then((resolved) => open(resolved || cwdRelative()))
+                    .catch(() => open(cwdRelative()));
+                  return;
+                }
+              }
+              open(cwdRelative());
+            },
+          });
+        }
+        callback(links.length > 0 ? links : undefined);
+      },
+    });
+
     searchAddonRef.current = searchAddon;
     registerTerminal(terminalId, term, searchAddon, (value: boolean) => {
       cursorHideSignalsRef.current.bracketedPaste = value;

@@ -66,6 +66,8 @@ interface MarkdownPreviewProps {
   content: string;
   fileName: string;
   filePath: string;
+  /** Discriminator. 'image' renders an <img> instead of markdown. Defaults to 'md'. */
+  kind?: 'md' | 'image';
   onClose: () => void;
   onOpenExternally?: (path: string) => void;
   /** Side to render on */
@@ -76,6 +78,8 @@ interface MarkdownPreviewProps {
 
 type ViewMode = 'preview' | 'raw';
 
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|bmp|webp)$/i;
+
 const DEFAULT_WIDTH_PERCENT = 50;
 const MIN_WIDTH_PX = 300;
 
@@ -83,14 +87,36 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
   content,
   fileName,
   filePath,
+  kind,
   onClose,
   onOpenExternally,
   side = 'right',
   onToggleSide,
   width,
 }) => {
-  const isMd = /\.md$/i.test(fileName);
+  const isImage = kind === 'image' || IMAGE_EXT_RE.test(fileName);
+  const isMd = !isImage && /\.md$/i.test(fileName);
   const [viewMode, setViewMode] = useState<ViewMode>('preview');
+  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isImage) return;
+    let cancelled = false;
+    setImageDataUrl(null);
+    setImageError(null);
+    (window.terminalAPI as unknown as { imageReadAsDataUrl: (p: string) => Promise<string | null> })
+      .imageReadAsDataUrl(filePath)
+      .then((url) => {
+        if (cancelled) return;
+        if (url) setImageDataUrl(url);
+        else setImageError('File not found or unsupported format.');
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setImageError(err instanceof Error ? err.message : 'Failed to read image.');
+      });
+    return () => { cancelled = true; };
+  }, [isImage, filePath]);
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -203,7 +229,24 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
             <button className="file-preview-btn close" onClick={onClose} title="Close (Esc)">&#10005;</button>
           </div>
         </div>
-        {isMd && viewMode === 'preview' ? (
+        {isImage ? (
+          <div className="image-preview-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', flex: 1, padding: 12 }}>
+            {imageError ? (
+              <div style={{ color: '#f38ba8', fontSize: 13, textAlign: 'center' }}>
+                <div>{imageError}</div>
+                <div style={{ opacity: 0.7, marginTop: 8, wordBreak: 'break-all' }}>{filePath}</div>
+              </div>
+            ) : imageDataUrl ? (
+              <img
+                src={imageDataUrl}
+                alt={fileName}
+                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', transform: `scale(${zoomPercent / 100})`, transformOrigin: 'center center' }}
+              />
+            ) : (
+              <div style={{ opacity: 0.6, fontSize: 13 }}>Loading…</div>
+            )}
+          </div>
+        ) : isMd && viewMode === 'preview' ? (
           <div
             ref={contentRef}
             className="md-rendered-content"

@@ -10,7 +10,7 @@ import { KeybindingsFile } from './keybindings-file';
 import { IPC } from '../shared/ipc-channels';
 import { CopilotSessionMonitor } from './copilot-session-monitor';
 import { CopilotSessionWatcher } from './copilot-session-watcher';
-import { notifyCopilotSession, clearNotificationCooldowns, setAiSessionNotificationsEnabled } from './copilot-notification';
+import { notifyCopilotSession, clearNotificationCooldowns, setAiSessionNotificationsEnabled, setNotificationClickHandler } from './copilot-notification';
 import { ClaudeCodeSessionMonitor } from './claude-code-session-monitor';
 import { ClaudeCodeSessionWatcher } from './claude-code-session-watcher';
 import { WslSessionManager } from './wsl-session-manager';
@@ -135,28 +135,57 @@ let claudeCodeWatcher: ClaudeCodeSessionWatcher | null = null;
 let wslSessionManager: WslSessionManager | null = null;
 let versionChecker: VersionChecker | null = null;
 let clipboardTempDir: string | null = null;
-const CLIPBOARD_DIR_STALE_MS = 6 * 60 * 60 * 1000; // 6 hours
+const CLIPBOARD_FILE_STALE_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 /**
- * Remove stale `tmax-clipboard-*` directories from os.tmpdir().
- * Older-than-threshold directories are leftovers from crashed or killed sessions.
- * Live sessions that regularly write images will have a recent mtime and are preserved.
+ * Stable shared clipboard temp dir, e.g. `<tmpdir>/tmax-clipboard`. Using a
+ * stable name (no random suffix) means image paths inserted into the terminal
+ * stay valid across tmax restarts - the image-path link provider can still
+ * open them when the user clicks the path days later. Per-file random names
+ * keep concurrent instances isolated; per-file 0o600 keeps them non-readable
+ * to other users.
+ */
+function getClipboardDir(): string {
+  return path.join(os.tmpdir(), 'tmax-clipboard');
+}
+
+/**
+ * Sweep individual clipboard files older than 6 hours. Called once on
+ * startup. Used to nuke the whole dir on shutdown, but that broke the
+ * image-path click feature: closing tmax invalidated every clipboard image
+ * path still rendered in the scrollback. Now we only delete *files*, and
+ * only ones that have been on disk long enough that the user is unlikely
+ * to still want them. Also removes legacy per-process `tmax-clipboard-*`
+ * dirs left behind by older builds.
  */
 function sweepStaleClipboardDirs(): void {
   try {
     const tmp = os.tmpdir();
     const now = Date.now();
+    const stableDir = getClipboardDir();
+    // Legacy per-session dirs from before the stable-dir refactor.
     for (const name of fs.readdirSync(tmp)) {
-      if (!name.startsWith('tmax-clipboard-') && name !== 'tmax-clipboard') continue;
+      if (!name.startsWith('tmax-clipboard-')) continue;
       const full = path.join(tmp, name);
       try {
         const stat = fs.statSync(full);
         if (!stat.isDirectory()) continue;
-        if (now - stat.mtimeMs < CLIPBOARD_DIR_STALE_MS) continue;
         fs.rmSync(full, { recursive: true, force: true });
       } catch { /* skip locked or inaccessible dirs */ }
     }
-  } catch { /* tmp listing failed — ignore */ }
+    // Per-file sweep inside the stable dir.
+    if (fs.existsSync(stableDir)) {
+      for (const name of fs.readdirSync(stableDir)) {
+        const full = path.join(stableDir, name);
+        try {
+          const stat = fs.statSync(full);
+          if (!stat.isFile()) continue;
+          if (now - stat.mtimeMs < CLIPBOARD_FILE_STALE_MS) continue;
+          fs.rmSync(full, { force: true });
+        } catch { /* skip */ }
+      }
+    }
+  } catch { /* tmp listing failed - ignore */ }
 }
 const sessionStore = new Store({ name: 'tmax-session' });
 const detachedWindows = new Map<string, BrowserWindow>();
@@ -803,15 +832,63 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle(IPC.CLIPBOARD_SAVE_IMAGE, (_event, base64Png: string) => {
-    // Re-create if the dir was swept by another instance's startup cleanup
-    if (!clipboardTempDir || !fs.existsSync(clipboardTempDir)) {
-      clipboardTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tmax-clipboard-'));
+    // Stable dir: paths stay clickable across restarts. Per-file random
+    // names mean concurrent instances don't collide.
+    if (!clipboardTempDir) clipboardTempDir = getClipboardDir();
+    if (!fs.existsSync(clipboardTempDir)) {
+      fs.mkdirSync(clipboardTempDir, { recursive: true });
     }
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const rand = Math.random().toString(36).slice(2, 10);
     const filePath = path.join(clipboardTempDir, `clipboard-${timestamp}-${rand}.png`);
     fs.writeFileSync(filePath, Buffer.from(base64Png, 'base64'), { mode: 0o600 });
     return filePath;
+  });
+
+  // Resolve a bare clipboard-image basename to its full path. Copilot CLI's
+  // input box hides the directory part of pasted paths and shows just
+  // `[clipboard-...png]`, so the link provider can only see the basename.
+  // We probe the stable clipboard temp dir on disk - no cache, no stale
+  // entries; just check if the file is actually there right now.
+  ipcMain.handle(IPC.RESOLVE_CLIPBOARD_BASENAME, async (_event, basename: string) => {
+    try {
+      // Defense-in-depth: refuse anything that looks like a path. The
+      // renderer is expected to send a bare filename only.
+      if (!basename || /[\\/]/.test(basename) || basename === '.' || basename === '..') return null;
+      const dir = getClipboardDir();
+      const full = path.join(dir, basename);
+      if (!fs.existsSync(full)) return null;
+      return full;
+    } catch {
+      return null;
+    }
+  });
+
+  // Read an image file off disk and return a base64 data URL. Used by the
+  // in-tmax image preview overlay (TASK-70 follow-up): file:// URLs from
+  // the renderer are blocked when the renderer origin is http://localhost
+  // (Vite dev), so we round-trip the bytes through IPC instead.
+  ipcMain.handle(IPC.IMAGE_READ_DATA_URL, async (_event, filePath: string) => {
+    try {
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeMap: Record<string, string> = {
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.bmp': 'image/bmp',
+        '.webp': 'image/webp',
+      };
+      const mime = mimeMap[ext];
+      if (!mime) return null;
+      const stat = fs.statSync(filePath);
+      // Hard ceiling so a stray 1 GB tiff doesn't OOM the renderer.
+      if (stat.size > 50 * 1024 * 1024) return null;
+      const buf = fs.readFileSync(filePath);
+      return `data:${mime};base64,${buf.toString('base64')}`;
+    } catch {
+      return null;
+    }
   });
 
   // ── Diff editor IPC handlers ────────────────────────────────────────
@@ -1128,6 +1205,15 @@ app.whenReady().then(() => {
     createWindow();
     console.log('Window created');
 
+    // Click on a tmax OS notification toast → bring tmax to the front. Same
+    // restore/show/focus dance as the global show-window hotkey below.
+    setNotificationClickHandler(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    });
+
     // Global "show tmax" hotkey (works even when the window is minimized or
     // another app is focused). Default: Ctrl+Shift+Space; override via config
     // key `showWindowHotkey`. Unregistering is handled by `will-quit`.
@@ -1216,10 +1302,10 @@ app.on('will-quit', () => {
 });
 
 app.on('window-all-closed', async () => {
-  // Clean up clipboard temp dir
-  if (clipboardTempDir) {
-    try { fs.rmSync(clipboardTempDir, { recursive: true }); } catch { /* ignore */ }
-  }
+  // Note: we deliberately do NOT delete the clipboard temp dir here. Image
+  // paths inserted into the terminal stay clickable across restarts only
+  // if the files survive the close. Stale files are reaped by the 6h
+  // per-file sweep in sweepStaleClipboardDirs() on next startup.
   ptyManager?.killAll();
   await copilotWatcher?.stop();
   copilotMonitor?.dispose();

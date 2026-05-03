@@ -22,6 +22,15 @@ export function setAiSessionNotificationsEnabled(value: boolean): void {
   enabled = value;
 }
 
+// Click handler injected from main.ts. We can't import mainWindow here
+// without creating a cycle, so the wiring goes the other way: main.ts
+// calls setNotificationClickHandler() once after window creation, and
+// the handler restores/focuses the window when the user clicks a toast.
+let clickHandler: (() => void) | null = null;
+export function setNotificationClickHandler(handler: (() => void) | null): void {
+  clickHandler = handler;
+}
+
 function isAttentionStatus(status: CopilotSessionStatus | undefined): boolean {
   return status === 'awaitingApproval' || status === 'waitingForUser';
 }
@@ -65,6 +74,11 @@ export function notifyCopilotSession(session: CopilotSessionSummary): void {
   const body = buildNotificationBody(session);
 
   const notification = new Notification({ title, body });
+  if (clickHandler) {
+    notification.on('click', () => {
+      try { clickHandler?.(); } catch { /* ignore */ }
+    });
+  }
   notification.show();
 }
 

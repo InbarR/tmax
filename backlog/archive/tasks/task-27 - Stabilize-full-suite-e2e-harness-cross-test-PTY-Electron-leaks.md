@@ -4,7 +4,7 @@ title: Stabilize full-suite e2e harness (cross-test PTY/Electron leaks)
 status: Done
 assignee: []
 created_date: '2026-04-26 16:14'
-updated_date: '2026-05-01 13:22'
+updated_date: '2026-05-01 15:21'
 labels: []
 dependencies: []
 ---

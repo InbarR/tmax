@@ -35,6 +35,8 @@ export interface TerminalAPI {
   clipboardWrite(text: string): void;
   clipboardHasImage(): boolean;
   clipboardSaveImage(): Promise<string>;
+  imageReadAsDataUrl(filePath: string): Promise<string | null>;
+  resolveClipboardImageBasename(basename: string): Promise<string | null>;
   getAppVersion(): Promise<string>;
   getVersionUpdate(): Promise<{ status: string; current: string; latest?: string; url?: string; error?: string; releaseNotes?: string } | null>;
   checkForUpdates(): void;
@@ -136,6 +138,14 @@ const terminalAPI: TerminalAPI = {
     const png = clipboard.readImage().toPNG();
     const base64 = png.toString('base64');
     return ipcRenderer.invoke(IPC.CLIPBOARD_SAVE_IMAGE, base64);
+  },
+
+  imageReadAsDataUrl(filePath: string) {
+    return ipcRenderer.invoke(IPC.IMAGE_READ_DATA_URL, filePath);
+  },
+
+  resolveClipboardImageBasename(basename: string) {
+    return ipcRenderer.invoke(IPC.RESOLVE_CLIPBOARD_BASENAME, basename);
   },
 
   openConfigFile() {
