@@ -138,6 +138,8 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
 
       // Right-click: copy if selection, paste otherwise. Mirrors
       // TerminalPanel so detached windows match main window behaviour.
+      // Skip the implicit paste when clipboard is image-only (issue #84) -
+      // see TerminalPanel.handleContextMenu for the rationale.
       const handleContextMenu = (e: MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
@@ -147,11 +149,11 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
           term.clearSelection();
           return;
         }
-        const decision = resolveClipboardPaste({
-          hasImage: window.terminalAPI.clipboardHasImage(),
-          html: window.terminalAPI.clipboardReadHTML(),
-          plainText: window.terminalAPI.clipboardRead(),
-        });
+        const hasImage = window.terminalAPI.clipboardHasImage();
+        const html = window.terminalAPI.clipboardReadHTML();
+        const plainText = window.terminalAPI.clipboardRead();
+        if (hasImage && !plainText && !html) return;
+        const decision = resolveClipboardPaste({ hasImage, html, plainText });
         if (decision.kind === 'image') {
           window.terminalAPI.clipboardSaveImage().then((filePath: string) => {
             window.terminalAPI.writePty(terminalId, filePath);
