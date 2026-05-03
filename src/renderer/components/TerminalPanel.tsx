@@ -834,25 +834,52 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       }
     });
 
-    // Pre-sync for the "wheel-down stops short of the live prompt during
-    // streaming" failure mode (TASK-62). xterm 5.5's Viewport caches the
-    // buffer length on a rAF-debounced refresh, so during continuous PTY
-    // output the .xterm-viewport scrollHeight lags the real buffer by a
-    // frame. The browser then clamps `scrollTop += amount` against that
-    // stale scrollHeight, leaving the user one or more lines above the
-    // bottom even on a vigorous wheel-down. We sync the viewport BEFORE
-    // xterm sees the wheel so it dispatches against the fresh scrollHeight.
+    // Pre-sync for "wheel-down stops short of the live prompt during a
+    // running session" (TASK-62). Two distinct failure modes feed the same
+    // symptom; this handler covers both:
+    //
+    // 1. Cache lag during streaming. xterm 5.5's Viewport caches buffer
+    //    length on a rAF-debounced refresh, so during continuous PTY
+    //    output `.xterm-viewport` scrollHeight lags the real buffer by a
+    //    frame. The browser clamps `scrollTop += deltaY` against the
+    //    stale scrollHeight. `syncViewportScrollArea` invalidates the
+    //    cache so xterm rebuilds the height before the wheel lands.
+    //
+    // 2. cellHeight mismatch at fractional DPR (the actually-reported
+    //    repro: bufLen and cachedBufLen agreed but ~10 rows of buffer
+    //    were still hidden below max scroll). xterm computes
+    //    `_scrollArea.style.height = round(rowHeight * bufLen) +
+    //    (viewportHeight - css.canvas.height)` in `_innerRefresh`, but
+    //    the canvas-vs-viewport offset can shave enough pixels off the
+    //    scroll area that the browser-clamped scrollTop max maps to a
+    //    ydisp short of `bufLen - rows`. xterm's `_handleScroll` uses
+    //    `_currentRowHeight` for the scrollTop→ydisp conversion, so we
+    //    align the scrollArea height to `bufLen * _currentRowHeight`
+    //    directly — same row height for both directions of the math
+    //    means max-scroll always lands at the live prompt.
     const wheelPreSyncHandler = (e: WheelEvent) => {
       if (e.deltaY === 0 || e.shiftKey) return;
       try {
         const v: any = (term as any)?._core?.viewport;
         if (!v) return;
-        // Only sync when the buffer has actually grown beyond what the
-        // viewport last recorded (or the cache hasn't been seeded yet).
-        // This keeps idle terminals on the existing fast path.
         const bufLen = term.buffer.active.length;
+        // Cache-lag path: streaming PTY data grew the buffer past the
+        // recorded length. Triggering xterm's own resync rebuilds caches.
         if (bufLen > v._lastRecordedBufferLength) {
           syncViewportScrollArea(term);
+        }
+        // cellHeight-mismatch path: align scrollArea height to xterm's
+        // own `_currentRowHeight`. Only ENLARGE — never shrink — so we
+        // don't fight xterm's own bookkeeping when caches are healthy.
+        const rowH: number = v._currentRowHeight;
+        const scrollArea = v._scrollArea;
+        if (rowH > 0 && scrollArea && bufLen > 0) {
+          const targetH = Math.round(rowH * bufLen);
+          const currentH = parseFloat(scrollArea.style.height) || v._lastRecordedBufferHeight || 0;
+          if (targetH > currentH) {
+            scrollArea.style.height = targetH + 'px';
+            v._lastRecordedBufferHeight = targetH;
+          }
         }
       } catch { /* viewport may not be ready */ }
     };
@@ -1296,7 +1323,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     containerRef.current.addEventListener('mousedown', handleRightMouseButton, true);
     containerRef.current.addEventListener('mouseup', handleRightMouseButton, true);
 
-    // Right-click: copy if selection, paste if no selection
+    // Right-click: copy if selection, paste if no selection.
+    // Skip the implicit paste when the clipboard is image-only (issue #84):
+    // a TUI with mouse reporting on (e.g. Claude Code) consumes drag events
+    // so xterm has no selection even though the user thinks they're
+    // selecting text. Auto-pasting a saved-PNG file path on right-click in
+    // that state is almost never what the user wanted. Ctrl+V still pastes
+    // images explicitly.
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1304,20 +1337,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       if (term.hasSelection()) {
         window.terminalAPI.clipboardWrite(smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current));
         term.clearSelection();
-      } else {
-        const decision = resolveClipboardPaste({
-          hasImage: window.terminalAPI.clipboardHasImage(),
-          html: window.terminalAPI.clipboardReadHTML(),
-          plainText: window.terminalAPI.clipboardRead(),
+        return;
+      }
+      const hasImage = window.terminalAPI.clipboardHasImage();
+      const html = window.terminalAPI.clipboardReadHTML();
+      const plainText = window.terminalAPI.clipboardRead();
+      if (hasImage && !plainText && !html) return;
+      const decision = resolveClipboardPaste({ hasImage, html, plainText });
+      if (decision.kind === 'image') {
+        window.terminalAPI.clipboardSaveImage().then((filePath) => {
+          window.terminalAPI.writePty(terminalId, filePath);
         });
-        if (decision.kind === 'image') {
-          window.terminalAPI.clipboardSaveImage().then((filePath) => {
-            window.terminalAPI.writePty(terminalId, filePath);
-          });
-        } else if (decision.kind === 'text') {
-          const payload = prepareClipboardPaste(decision.text, cursorHideSignalsRef.current.bracketedPaste);
-          window.terminalAPI.writePty(terminalId, payload);
-        }
+      } else if (decision.kind === 'text') {
+        const payload = prepareClipboardPaste(decision.text, cursorHideSignalsRef.current.bracketedPaste);
+        window.terminalAPI.writePty(terminalId, payload);
       }
     };
     // Use capture phase to intercept before any other handler
