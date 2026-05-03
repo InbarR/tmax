@@ -10,6 +10,10 @@ interface SearchEntry {
   terminalId: string | null;
   paneTitle: string;
   sessionFolder: string;
+  /** Full cwd of the session - used as fallback to spawn a new pane there
+   *  when the session has no live in-window pane and the live store entry
+   *  is missing (otherwise SessionSummary would render null). */
+  sessionCwd: string;
   ageMs: number;
 }
 
@@ -97,6 +101,7 @@ const PromptSearchDialog: React.FC = () => {
             terminalId,
             paneTitle,
             sessionFolder: shortPath(sess.cwd || ''),
+            sessionCwd: sess.cwd || '',
             // Newer prompts within a session get a smaller age. Without
             // per-prompt timestamps the best we can do is gradient from
             // baseTime down so newest-in-session sorts first.
@@ -140,10 +145,29 @@ const PromptSearchDialog: React.FC = () => {
   const jumpTo = useCallback((entry: SearchEntry) => {
     if (entry.terminalId) {
       useTerminalStore.getState().setFocus(entry.terminalId);
+      close();
+      return;
+    }
+    // No linked pane in this window. Pre-flight the session lookup
+    // SessionSummary uses - if the session is still in the live in-memory
+    // list, opening the summary popover will work. If it isn't (cross-window
+    // session, or it's been evicted since the dialog opened), fall back to
+    // spawning a new pane in the session's cwd so the click does SOMETHING
+    // visible (TASK-86 fix - was a silent no-op when SessionSummary returned
+    // null because its lookup missed).
+    const state = useTerminalStore.getState();
+    const liveSession =
+      state.claudeCodeSessions.find((x) => x.id === entry.sessionId) ||
+      state.copilotSessions.find((x) => x.id === entry.sessionId) ||
+      null;
+    if (liveSession) {
+      state.showSessionSummary(entry.sessionId);
+    } else if (entry.sessionCwd) {
+      void state.createTerminal(undefined, entry.sessionCwd);
     } else {
-      // No linked pane in this window - fall back to opening the session
-      // summary so the user at least sees the conversation.
-      useTerminalStore.getState().showSessionSummary(entry.sessionId);
+      // Last resort - the search dialog only ever feeds entries from the
+      // live lists, so reaching here means the data shape changed under us.
+      console.warn('[tmax] prompt search: no terminal, no live session, no cwd', entry.sessionId);
     }
     close();
   }, [close]);

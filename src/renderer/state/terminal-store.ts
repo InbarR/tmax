@@ -637,7 +637,7 @@ interface TerminalStore {
 
   // Actions
   loadConfig: () => Promise<void>;
-  createTerminal: (shellProfileId?: string) => Promise<void>;
+  createTerminal: (shellProfileId?: string, cwdOverride?: string) => Promise<void>;
   closeTerminal: (id: TerminalId) => Promise<void>;
   setFocus: (id: TerminalId) => void;
   splitTerminal: (
@@ -903,7 +903,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set(updates);
   },
 
-  createTerminal: async (shellProfileId?: string) => {
+  createTerminal: async (shellProfileId?: string, cwdOverride?: string) => {
     const { config, terminals, layout, nextZIndex } = get();
     if (!config) return;
 
@@ -912,7 +912,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     if (!profile) return;
 
     const id = uuidv4();
-    const cwd = profile.cwd || (config as any).defaultCwd || ((window as any).platformInfo?.platform === 'win32' ? 'C:\\Users' : (window as any).platformInfo?.homeDir || '/');
+    // cwdOverride lets callers (e.g. prompt-search "open in this session's
+    // folder" fallback) pin the new pane's working directory without changing
+    // the user's default shell profile.
+    const cwd = cwdOverride || profile.cwd || (config as any).defaultCwd || ((window as any).platformInfo?.platform === 'win32' ? 'C:\\Users' : (window as any).platformInfo?.homeDir || '/');
     const { pid } = await window.terminalAPI.createPty({
       id,
       shellPath: profile.path,
