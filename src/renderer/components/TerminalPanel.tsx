@@ -244,6 +244,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   const isMultiSelected = useTerminalStore(
     (s) => !!s.selectedTerminalIds[terminalId],
   );
+  // TASK-79: workspace mode + filter state for the pane overflow menu's
+  // discoverable Select / Show Selected entries. Same gating as the
+  // WorkspaceTabBar toolbar button so the two stay coherent. Filter-active
+  // requires both grid plumbing AND a live selection (showSelectedPanes
+  // preserves it; the regular grid toggle does not have one).
+  const tabModeForMenu = useTerminalStore((s) => s.config?.tabMode);
+  const viewModeForMenu = useTerminalStore((s) => s.viewMode);
+  const preGridRootForMenu = useTerminalStore((s) => s.preGridRoot);
+  const selectionCountForMenu = useTerminalStore(
+    (s) => Object.keys(s.selectedTerminalIds).length,
+  );
+  const isWorkspacesModeForMenu = tabModeForMenu === 'workspaces';
+  const isShowSelectedActiveForMenu =
+    viewModeForMenu === 'grid' && !!preGridRootForMenu && selectionCountForMenu >= 2;
 
   const handleFocus = useCallback(() => {
     const prevFocused = useTerminalStore.getState().focusedTerminalId;
@@ -2129,6 +2143,47 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               setPaneMenuPos(null);
               useTerminalStore.getState().moveToDormant(terminalId);
             }}>👁 Hide pane <span className="context-menu-shortcut">Ctrl+Shift+H</span></button>
+            {isWorkspacesModeForMenu && (
+              <>
+                <div className="context-menu-separator" />
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    setPaneMenuPos(null);
+                    useTerminalStore.getState().toggleSelectTerminal(terminalId);
+                  }}
+                  title="Add or remove this pane from the multi-selection used by 'Show Selected'"
+                >
+                  {isMultiSelected ? '☐ Deselect pane' : '☑ Select pane'}
+                  <span className="context-menu-shortcut">{isMac ? '⌘' : 'Ctrl'}+Click title</span>
+                </button>
+                {isShowSelectedActiveForMenu ? (
+                  <button className="context-menu-item" onClick={() => {
+                    setPaneMenuPos(null);
+                    useTerminalStore.getState().showAllPanes();
+                  }}>
+                    👁 Show all panes
+                  </button>
+                ) : (
+                  selectionCountForMenu >= 2 && (
+                    <button className="context-menu-item" onClick={() => {
+                      setPaneMenuPos(null);
+                      useTerminalStore.getState().showSelectedPanes();
+                    }}>
+                      🔎 Show selected ({selectionCountForMenu})
+                    </button>
+                  )
+                )}
+                {selectionCountForMenu > 0 && !isShowSelectedActiveForMenu && (
+                  <button className="context-menu-item" onClick={() => {
+                    setPaneMenuPos(null);
+                    useTerminalStore.getState().clearSelection();
+                  }}>
+                    ✕ Clear pane selection
+                  </button>
+                )}
+              </>
+            )}
             <div className="context-menu-separator" />
             <button className="context-menu-item danger" onClick={() => {
               setPaneMenuPos(null);

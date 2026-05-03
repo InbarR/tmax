@@ -19,6 +19,27 @@ const WorkspaceTabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }>
   const config = useTerminalStore((s) => s.config);
   const tabBarPosition = useTerminalStore((s) => s.tabBarPosition);
   const setTabBarPosition = useTerminalStore((s) => (s as any).setTabBarPosition);
+  // TASK-79: discoverable affordance for the multi-select / Show-Selected
+  // filter introduced in TASK-72. We render a toolbar button only when
+  // there is a multi-selection (>= 2 panes). No selection -> no button ->
+  // no clutter (AC #4).
+  //
+  // Why "selection count" and not "is filter active": showSelectedPanes()
+  // intentionally preserves selectedTerminalIds while the filter is on, so
+  // selection-count >= 2 covers both "user picked panes, ready to filter"
+  // and "filter currently engaged, user can toggle off". This also avoids
+  // false-positives from the regular grid<->focus toggle, which shares
+  // viewMode='grid' + preGridRoot but has no selection behind it.
+  const selectedTerminalIds = useTerminalStore((s) => s.selectedTerminalIds);
+  const viewMode = useTerminalStore((s) => s.viewMode);
+  const preGridRoot = useTerminalStore((s) => s.preGridRoot);
+  const showSelectedPanes = useTerminalStore((s) => s.showSelectedPanes);
+  const showAllPanes = useTerminalStore((s) => s.showAllPanes);
+  const clearSelection = useTerminalStore((s) => s.clearSelection);
+  const selectionCount = Object.keys(selectedTerminalIds).length;
+  // Filter-active = grid plumbing engaged AND we still hold a selection
+  // (showSelectedPanes preserves it; gridSelectedTabs clears it).
+  const isFilterActive = viewMode === 'grid' && !!preGridRoot && selectionCount >= 2;
 
   const [renamingId, setRenamingId] = useState<WorkspaceId | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -173,6 +194,46 @@ const WorkspaceTabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }>
       >
         +
       </button>
+      {selectionCount >= 2 && (
+        <div
+          className={`workspace-show-selected${isFilterActive ? ' active' : ''}`}
+          title={
+            isFilterActive
+              ? 'Click to show all panes (exit selected-only filter)'
+              : `Show only the ${selectionCount} selected pane${selectionCount === 1 ? '' : 's'}.\nTip: Ctrl/Cmd+click a pane title bar to toggle it in the selection.`
+          }
+        >
+          <button
+            type="button"
+            className="workspace-show-selected-btn"
+            aria-pressed={isFilterActive}
+            onClick={() => {
+              if (isFilterActive) {
+                showAllPanes();
+              } else {
+                showSelectedPanes();
+              }
+            }}
+          >
+            <span className="workspace-show-selected-dot" aria-hidden="true" />
+            {isFilterActive ? 'Show All' : `Show Selected (${selectionCount})`}
+          </button>
+          {!isFilterActive && (
+            <button
+              type="button"
+              className="workspace-show-selected-clear"
+              title="Clear pane selection"
+              aria-label="Clear pane selection"
+              onClick={(e) => {
+                e.stopPropagation();
+                clearSelection();
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      )}
       <button
         className="tab-mode-switch"
         title="Switch to flat tabs (each tab = one terminal)"

@@ -4958,3 +4958,89 @@ select.settings-input {
   color: #fff;
   opacity: 1;
 }
+
+/* TASK-79: discoverable affordance for the Show-Selected filter / multi-select.
+   Only rendered when there's a selection >= 2 or the filter is active, so
+   workspaces mode without a selection has zero new clutter. */
+.workspace-show-selected {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  margin-left: auto;
+  margin-right: 6px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(249, 226, 175, 0.45);
+  background: rgba(249, 226, 175, 0.08);
+  color: #f9e2af;
+  font-size: 11.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.workspace-show-selected:hover {
+  background: rgba(249, 226, 175, 0.16);
+  border-color: rgba(249, 226, 175, 0.7);
+}
+.workspace-show-selected.active {
+  background: rgba(249, 226, 175, 0.22);
+  border-color: rgba(249, 226, 175, 0.85);
+  color: #fff7d8;
+  box-shadow: 0 0 0 1px rgba(249, 226, 175, 0.35);
+}
+.workspace-show-selected-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0 10px;
+  height: 100%;
+  border-radius: 12px 0 0 12px;
+  letter-spacing: 0.2px;
+}
+.workspace-show-selected-btn:focus-visible {
+  outline: 1px solid rgba(249, 226, 175, 0.9);
+  outline-offset: -2px;
+}
+.workspace-show-selected-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f9e2af;
+  box-shadow: 0 0 4px rgba(249, 226, 175, 0.6);
+  flex-shrink: 0;
+}
+.workspace-show-selected.active .workspace-show-selected-dot {
+  background: #fff7d8;
+  box-shadow: 0 0 6px rgba(249, 226, 175, 0.9);
+}
+.workspace-show-selected-clear {
+  background: transparent;
+  border: none;
+  border-left: 1px solid rgba(249, 226, 175, 0.3);
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 8px;
+  height: 100%;
+  border-radius: 0 12px 12px 0;
+  opacity: 0.7;
+  transition: background 0.12s ease, opacity 0.12s ease;
+}
+.workspace-show-selected-clear:hover {
+  background: rgba(249, 226, 175, 0.18);
+  opacity: 1;
+}
+/* Vertical layout: stack the button below the workspace chips, matching the
+   bar's column flow. */
+.workspace-tab-bar.vertical .workspace-show-selected {
+  margin-left: 6px;
+  margin-right: 6px;
+  align-self: stretch;
+  justify-content: center;
+}
