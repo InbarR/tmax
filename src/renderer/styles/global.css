@@ -1199,13 +1199,16 @@ html.transparency-active .input-dialog {
   pointer-events: auto;
 }
 
-/* TASK-82: pane indicator in focus mode. Subtle row of dots top-center so
-   users see at a glance how many panes exist and which one is focused.
+/* TASK-82: pane indicator in focus mode. Subtle row of dots bottom-center
+   so users see at a glance how many panes exist and which one is focused.
    Click a dot to focus that pane - the answer to "how do I switch when
-   tabs are hidden" without forcing a Ctrl+Tab discovery. */
+   tabs are hidden" without forcing a Ctrl+Tab discovery.
+   Bottom-center because the per-pane title bar already lives at the top
+   and the long first-prompt-derived titles would clash with a top-center
+   indicator (TASK-82 follow-up). */
 .focus-mode-pane-indicator {
   position: absolute;
-  top: 6px;
+  bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
