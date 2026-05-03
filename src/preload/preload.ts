@@ -205,8 +205,8 @@ const terminalAPI: TerminalAPI = {
   },
 
   // ── Copilot session APIs ──────────────────────────────────────────
-  listCopilotSessions() {
-    return ipcRenderer.invoke(IPC.COPILOT_LIST_SESSIONS);
+  listCopilotSessions(limit?: number) {
+    return ipcRenderer.invoke(IPC.COPILOT_LIST_SESSIONS, limit);
   },
 
   getCopilotSession(id: string) {
@@ -227,6 +227,10 @@ const terminalAPI: TerminalAPI = {
 
   getCopilotPrompts(id: string) {
     return ipcRenderer.invoke(IPC.COPILOT_GET_PROMPTS, id);
+  },
+
+  invalidateSessionCaches() {
+    return ipcRenderer.invoke(IPC.AI_INVALIDATE_CACHES);
   },
 
   onCopilotSessionUpdated(cb: (session: unknown) => void): () => void {
@@ -260,8 +264,8 @@ const terminalAPI: TerminalAPI = {
   },
 
   // ── Claude Code session APIs ───────────────────────────────────────
-  listClaudeCodeSessions() {
-    return ipcRenderer.invoke(IPC.CLAUDE_CODE_LIST_SESSIONS);
+  listClaudeCodeSessions(limit?: number) {
+    return ipcRenderer.invoke(IPC.CLAUDE_CODE_LIST_SESSIONS, limit);
   },
 
   getClaudeCodeSession(id: string) {

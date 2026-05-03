@@ -612,6 +612,14 @@ interface TerminalStore {
   aiSessionHighlightRequest: number;
   copilotSessions: CopilotSessionSummary[];
   claudeCodeSessions: CopilotSessionSummary[];
+  /** Total eligible Copilot sessions on disk (may be larger than copilotSessions.length) */
+  copilotSessionsTotal: number;
+  /** Total eligible Claude Code sessions on disk */
+  claudeCodeSessionsTotal: number;
+  /** Current load limit for Copilot sessions */
+  copilotSessionsLimit: number;
+  /** Current load limit for Claude Code sessions */
+  claudeCodeSessionsLimit: number;
   sessionNameOverrides: Record<string, string>;
   sessionLifecycleOverrides: Record<string, import('../../shared/copilot-types').SessionLifecycle>;
   /** Session IDs the user has pinned to the top of the AI sessions list */
@@ -761,6 +769,8 @@ interface TerminalStore {
   // right aiSessionId) and bumps aiSessionHighlightRequest.
   showAiSessionsForPane: (terminalId: TerminalId) => void;
   loadCopilotSessions: () => Promise<void>;
+  loadMoreSessions: (extra: number) => Promise<void>;
+  loadAllSessions: () => Promise<void>;
   searchCopilotSessions: (query: string) => Promise<void>;
   openCopilotSession: (sessionId: string) => Promise<void>;
   setCopilotSessions: (sessions: CopilotSessionSummary[]) => void;
@@ -868,6 +878,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   sessionSummaryRequest: null,
   copilotSessions: [],
   claudeCodeSessions: [],
+  copilotSessionsTotal: 0,
+  claudeCodeSessionsTotal: 0,
+  copilotSessionsLimit: 50,
+  claudeCodeSessionsLimit: 50,
   sessionNameOverrides: {},
   sessionLifecycleOverrides: {},
   sessionPinned: {},
@@ -2957,16 +2971,53 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   loadCopilotSessions: async () => {
-    const sessions = await (window.terminalAPI as any).listCopilotSessions();
-    set({ copilotSessions: sessions ?? [] });
+    const limit = get().copilotSessionsLimit;
+    const result = await (window.terminalAPI as any).listCopilotSessions(limit);
+    // Handle both new { sessions, totalEligible } shape and legacy array
+    const sessions = Array.isArray(result) ? result : (result?.sessions ?? []);
+    const totalEligible = Array.isArray(result) ? sessions.length : (result?.totalEligible ?? sessions.length);
+    set({ copilotSessions: sessions, copilotSessionsTotal: totalEligible });
     get().autoArchiveStaleSessions();
+  },
+
+  loadMoreSessions: async (extra: number) => {
+    const { copilotSessionsLimit, claudeCodeSessionsLimit } = get();
+    const newCopilotLimit = copilotSessionsLimit + extra;
+    const newClaudeLimit = claudeCodeSessionsLimit + extra;
+    set({ copilotSessionsLimit: newCopilotLimit, claudeCodeSessionsLimit: newClaudeLimit });
+    const [copilotResult, claudeResult] = await Promise.all([
+      (window.terminalAPI as any).listCopilotSessions(newCopilotLimit),
+      (window.terminalAPI as any).listClaudeCodeSessions(newClaudeLimit),
+    ]);
+    const cSessions = Array.isArray(copilotResult) ? copilotResult : (copilotResult?.sessions ?? []);
+    const cTotal = Array.isArray(copilotResult) ? cSessions.length : (copilotResult?.totalEligible ?? cSessions.length);
+    const ccSessions = Array.isArray(claudeResult) ? claudeResult : (claudeResult?.sessions ?? []);
+    const ccTotal = Array.isArray(claudeResult) ? ccSessions.length : (claudeResult?.totalEligible ?? ccSessions.length);
+    set({ copilotSessions: cSessions, copilotSessionsTotal: cTotal, claudeCodeSessions: ccSessions, claudeCodeSessionsTotal: ccTotal });
+  },
+
+  loadAllSessions: async () => {
+    const MAX = 999999;
+    set({ copilotSessionsLimit: MAX, claudeCodeSessionsLimit: MAX });
+    const [copilotResult, claudeResult] = await Promise.all([
+      (window.terminalAPI as any).listCopilotSessions(MAX),
+      (window.terminalAPI as any).listClaudeCodeSessions(MAX),
+    ]);
+    const cSessions = Array.isArray(copilotResult) ? copilotResult : (copilotResult?.sessions ?? []);
+    const cTotal = Array.isArray(copilotResult) ? cSessions.length : (copilotResult?.totalEligible ?? cSessions.length);
+    const ccSessions = Array.isArray(claudeResult) ? claudeResult : (claudeResult?.sessions ?? []);
+    const ccTotal = Array.isArray(claudeResult) ? ccSessions.length : (claudeResult?.totalEligible ?? ccSessions.length);
+    set({ copilotSessions: cSessions, copilotSessionsTotal: cTotal, claudeCodeSessions: ccSessions, claudeCodeSessionsTotal: ccTotal });
   },
 
   searchCopilotSessions: async (query: string) => {
     set({ copilotSearchQuery: query });
     if (!query.trim()) {
-      const sessions = await (window.terminalAPI as any).listCopilotSessions();
-      set({ copilotSessions: sessions ?? [] });
+      const limit = get().copilotSessionsLimit;
+      const result = await (window.terminalAPI as any).listCopilotSessions(limit);
+      const sessions = Array.isArray(result) ? result : (result?.sessions ?? []);
+      const totalEligible = Array.isArray(result) ? sessions.length : (result?.totalEligible ?? sessions.length);
+      set({ copilotSessions: sessions, copilotSessionsTotal: totalEligible });
       return;
     }
     const sessions = await (window.terminalAPI as any).searchCopilotSessions(query);
@@ -3170,15 +3221,21 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   // ── Claude Code session actions ────────────────────────────────────
   loadClaudeCodeSessions: async () => {
-    const sessions = await (window.terminalAPI as any).listClaudeCodeSessions();
-    set({ claudeCodeSessions: sessions ?? [] });
+    const limit = get().claudeCodeSessionsLimit;
+    const result = await (window.terminalAPI as any).listClaudeCodeSessions(limit);
+    const sessions = Array.isArray(result) ? result : (result?.sessions ?? []);
+    const totalEligible = Array.isArray(result) ? sessions.length : (result?.totalEligible ?? sessions.length);
+    set({ claudeCodeSessions: sessions, claudeCodeSessionsTotal: totalEligible });
     get().autoArchiveStaleSessions();
   },
 
   searchClaudeCodeSessions: async (query: string) => {
     if (!query.trim()) {
-      const sessions = await (window.terminalAPI as any).listClaudeCodeSessions();
-      set({ claudeCodeSessions: sessions ?? [] });
+      const limit = get().claudeCodeSessionsLimit;
+      const result = await (window.terminalAPI as any).listClaudeCodeSessions(limit);
+      const sessions = Array.isArray(result) ? result : (result?.sessions ?? []);
+      const totalEligible = Array.isArray(result) ? sessions.length : (result?.totalEligible ?? sessions.length);
+      set({ claudeCodeSessions: sessions, claudeCodeSessionsTotal: totalEligible });
       return;
     }
     const sessions = await (window.terminalAPI as any).searchClaudeCodeSessions(query);

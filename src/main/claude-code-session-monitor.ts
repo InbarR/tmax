@@ -25,6 +25,10 @@ export class ClaudeCodeSessionMonitor {
   private callbacks: ClaudeCodeMonitorCallbacks = {};
   private readonly basePath: string;
   private readonly wslDistro?: string;
+  /** Total eligible sessions found in the last scanSessions() call. */
+  lastTotalEligible = 0;
+  /** Cached candidate list from the last full stat scan, sorted by mtime desc. */
+  private cachedCandidates: { filePath: string; mtime: number }[] | null = null;
 
   constructor(options?: { basePath?: string; wslDistro?: string }) {
     this.basePath = options?.basePath ?? path.join(os.homedir(), '.claude', 'projects');
@@ -41,88 +45,100 @@ export class ClaudeCodeSessionMonitor {
 
   // ── Full scan ────────────────────────────────────────────────────────
 
-  scanSessions(): CopilotSessionSummary[] {
+  async scanSessions(limit = 50): Promise<CopilotSessionSummary[]> {
     const summaries: CopilotSessionSummary[] = [];
 
-    if (!fs.existsSync(this.basePath)) return summaries;
+    // Phase 1: build or reuse cached candidate list
+    // Uses sync stat - fast and only runs once (cached after).
+    if (!this.cachedCandidates) {
+      let projectDirs: fs.Dirent[];
+      try {
+        projectDirs = fs.readdirSync(this.basePath, { withFileTypes: true });
+      } catch {
+        return summaries;
+      }
 
-    let projectDirs: fs.Dirent[];
-    try {
-      projectDirs = fs.readdirSync(this.basePath, { withFileTypes: true });
-    } catch {
-      return summaries;
+      const maxAgeMs = 30 * 24 * 60 * 60 * 1000;
+      const cutoff = Date.now() - maxAgeMs;
+      const candidates: { filePath: string; mtime: number }[] = [];
+
+      for (const projEntry of projectDirs) {
+        if (!projEntry.isDirectory()) continue;
+        const projDir = path.join(this.basePath, projEntry.name);
+        let files: fs.Dirent[];
+        try { files = fs.readdirSync(projDir, { withFileTypes: true }); } catch { continue; }
+
+        for (const fileEntry of files) {
+          if (!fileEntry.isFile() || !UUID_RE.test(fileEntry.name)) continue;
+          const filePath = path.join(projDir, fileEntry.name);
+          let mtime = 0;
+          try { mtime = fs.statSync(filePath).mtimeMs; } catch { continue; }
+          if (mtime < cutoff) continue;
+          candidates.push({ filePath, mtime });
+        }
+      }
+
+      candidates.sort((a, b) => b.mtime - a.mtime);
+      this.cachedCandidates = candidates;
     }
 
+    const candidates = this.cachedCandidates;
+    this.lastTotalEligible = candidates.length;
+
+    // Phase 2: parse only the top N (skipping already-loaded sessions)
+    const top = candidates.slice(0, limit);
     const currentIds = new Set<string>();
-    // 30 days matches the app-wide `oldSessionDays` default used by the UI's
-    // stale-session detection and the "mark old" threshold. A tighter scan
-    // filter would hide sessions that `claude --resume` still lists.
-    const maxAgeMs = 30 * 24 * 60 * 60 * 1000;
-    const cutoff = Date.now() - maxAgeMs;
 
-    for (const projEntry of projectDirs) {
-      if (!projEntry.isDirectory()) continue;
+    let parseCount = 0;
+    for (const { filePath } of top) {
+      // Check if already loaded by file path
+      let existingId: string | null = null;
+      for (const [id, fp] of this.filePaths) {
+        if (fp === filePath) { existingId = id; break; }
+      }
 
-      const projDir = path.join(this.basePath, projEntry.name);
-
-      let files: fs.Dirent[];
-      try {
-        files = fs.readdirSync(projDir, { withFileTypes: true });
-      } catch {
+      if (existingId && this.sessions.has(existingId)) {
+        currentIds.add(existingId);
+        summaries.push(this.sessions.get(existingId)!);
         continue;
       }
 
-      for (const fileEntry of files) {
-        if (!fileEntry.isFile() || !UUID_RE.test(fileEntry.name)) continue;
+      const summary = this.loadSession(filePath);
 
-        const filePath = path.join(projDir, fileEntry.name);
+      if (summary) {
+        currentIds.add(summary.id);
+        this.sessions.set(summary.id, summary);
+        this.filePaths.set(summary.id, filePath);
+        summaries.push(summary);
+        this.callbacks.onSessionAdded?.(summary);
+      } else {
+        // Remove failed candidate so totalEligible stays accurate
+        this.cachedCandidates = candidates.filter(c => c.filePath !== filePath);
+        this.lastTotalEligible = this.cachedCandidates.length;
+      }
 
-        // Skip old sessions by file mtime
-        try {
-          const stat = fs.statSync(filePath);
-          if (stat.mtimeMs < cutoff) continue;
-        } catch {
-          continue;
-        }
-
-        const summary = this.loadSession(filePath);
-
-        if (summary) {
-          const old = this.sessions.get(summary.id);
-          currentIds.add(summary.id);
-          this.sessions.set(summary.id, summary);
-          this.filePaths.set(summary.id, filePath);
-          summaries.push(summary);
-
-          if (!old) {
-            this.callbacks.onSessionAdded?.(summary);
-          } else if (
-            old.status !== summary.status ||
-            old.messageCount !== summary.messageCount ||
-            old.toolCallCount !== summary.toolCallCount ||
-            old.summary !== summary.summary ||
-            old.latestPrompt !== summary.latestPrompt
-          ) {
-            // Chokidar's awaitWriteFinish can suppress 'change' events during
-            // long streaming turns (file never stable for 300ms), so this 10s
-            // fallback scan is often the only thing that ships updates.
-            this.callbacks.onSessionUpdated?.(summary);
-          }
-        }
+      // Yield to event loop every 10 parses so the UI stays responsive
+      if (++parseCount % 10 === 0) {
+        await new Promise<void>(resolve => setImmediate(resolve));
       }
     }
 
-    // Detect removed sessions
+    // Silently evict sessions outside the top N from memory and parser cache.
+    // Do NOT fire onSessionRemoved — these sessions still exist on disk.
     for (const [id, fp] of this.filePaths) {
       if (!currentIds.has(id)) {
         this.sessions.delete(id);
         this.filePaths.delete(id);
         clearClaudeCodeCache(fp);
-        this.callbacks.onSessionRemoved?.(id);
       }
     }
 
     return summaries;
+  }
+
+  /** Invalidate the cached candidate list so the next scanSessions() re-stats. */
+  invalidateCache(): void {
+    this.cachedCandidates = null;
   }
 
   // ── Single-session refresh ───────────────────────────────────────────
@@ -203,10 +219,28 @@ export class ClaudeCodeSessionMonitor {
   // ── Watcher callbacks ────────────────────────────────────────────────
 
   handleFileChanged(filePath: string): void {
+    // Promote the session to the front of the cached candidate list
+    if (this.cachedCandidates) {
+      const idx = this.cachedCandidates.findIndex(c => c.filePath === filePath);
+      if (idx > 0) {
+        const [entry] = this.cachedCandidates.splice(idx, 1);
+        entry.mtime = Date.now();
+        this.cachedCandidates.unshift(entry);
+      }
+    }
     this.refreshSession(filePath);
   }
 
   handleNewFile(filePath: string): void {
+    // Insert into cached candidates so "load more" sees the new session
+    if (this.cachedCandidates) {
+      let mtime = Date.now();
+      try { mtime = fs.statSync(filePath).mtimeMs; } catch { /* use now */ }
+      if (!this.cachedCandidates.some(c => c.filePath === filePath)) {
+        this.cachedCandidates.unshift({ filePath, mtime });
+        this.lastTotalEligible = this.cachedCandidates.length;
+      }
+    }
     const summary = this.loadSession(filePath);
     if (summary) {
       this.sessions.set(summary.id, summary);
@@ -225,11 +259,27 @@ export class ClaudeCodeSessionMonitor {
         break;
       }
     }
+    // Remove from cached candidates
+    if (this.cachedCandidates) {
+      this.cachedCandidates = this.cachedCandidates.filter(c => c.filePath !== filePath);
+      this.lastTotalEligible = this.cachedCandidates.length;
+    }
   }
 
   dispose(): void {
     this.sessions.clear();
     this.filePaths.clear();
+  }
+
+  /** Re-check only recently active sessions in memory (no directory scan). */
+  refreshLoadedSessions(): void {
+    for (const [, summary] of this.sessions) {
+      const fp = this.filePaths.get(summary.id);
+      // Only refresh sessions that might be in a stale "thinking" state.
+      if (fp && summary.status !== 'idle') {
+        this.refreshSession(fp);
+      }
+    }
   }
 
   // ── Internal ─────────────────────────────────────────────────────────

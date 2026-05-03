@@ -67,6 +67,7 @@ export class ClaudeCodeSessionWatcher {
       this.callbacks.onFileRemoved(filePath);
     });
 
+    // Only refreshes already-loaded sessions (no directory scan), so safe at 10s.
     this.staleTimer = setInterval(() => {
       this.onStaleCheck?.();
     }, 10_000);

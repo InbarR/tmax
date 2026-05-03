@@ -55,7 +55,7 @@ export class WslSessionManager {
         onNewSession: (id) => copilotMonitor.handleNewSession(id),
         onSessionRemoved: (id) => copilotMonitor.handleSessionRemoved(id),
       });
-      copilotWatcher.setStaleCheckCallback(() => copilotMonitor.scanSessions());
+      copilotWatcher.setStaleCheckCallback(() => copilotMonitor.refreshLoadedSessions());
 
       const claudeMonitor = new ClaudeCodeSessionMonitor({
         basePath: distro.claudeBasePath,
@@ -72,7 +72,7 @@ export class WslSessionManager {
         onNewFile: (fp) => claudeMonitor.handleNewFile(fp),
         onFileRemoved: (fp) => claudeMonitor.handleFileRemoved(fp),
       });
-      claudeWatcher.setStaleCheckCallback(() => claudeMonitor.scanSessions());
+      claudeWatcher.setStaleCheckCallback(() => claudeMonitor.refreshLoadedSessions());
 
       this.pairs.push({
         distro: distro.name,
@@ -97,26 +97,26 @@ export class WslSessionManager {
     // (watchers use ignoreInitial: true, so won't detect pre-existing files)
     for (const pair of this.pairs) {
       try {
-        pair.copilotMonitor.scanSessions();
-        pair.claudeMonitor.scanSessions();
+        await pair.copilotMonitor.scanSessions();
+        await pair.claudeMonitor.scanSessions();
       } catch (err) {
         console.error(`WSL scan failed for distro ${pair.distro}:`, err);
       }
     }
   }
 
-  scanCopilotSessions(): CopilotSessionSummary[] {
+  async scanCopilotSessions(): Promise<CopilotSessionSummary[]> {
     const results: CopilotSessionSummary[] = [];
     for (const pair of this.pairs) {
-      results.push(...pair.copilotMonitor.scanSessions());
+      results.push(...await pair.copilotMonitor.scanSessions());
     }
     return results;
   }
 
-  scanClaudeCodeSessions(): CopilotSessionSummary[] {
+  async scanClaudeCodeSessions(): Promise<CopilotSessionSummary[]> {
     const results: CopilotSessionSummary[] = [];
     for (const pair of this.pairs) {
-      results.push(...pair.claudeMonitor.scanSessions());
+      results.push(...await pair.claudeMonitor.scanSessions());
     }
     return results;
   }

@@ -75,10 +75,11 @@ export class CopilotSessionWatcher {
       }
     });
 
-    // Status timer to detect stale "thinking" sessions
+    // Status timer to detect stale "thinking" sessions.
+    // Only refreshes already-loaded sessions (no directory scan), so safe at 10s.
     this.staleTimer = setInterval(() => {
       this.onStaleCheck?.();
-    }, 5000);
+    }, 10_000);
   }
 
   async stop(): Promise<void> {

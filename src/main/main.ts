@@ -752,10 +752,11 @@ function registerIpcHandlers(): void {
   });
 
   // ── Copilot IPC handlers ────────────────────────────────────────────
-  ipcMain.handle(IPC.COPILOT_LIST_SESSIONS, () => {
-    const native = copilotMonitor?.scanSessions() ?? [];
-    const wsl = wslSessionManager?.scanCopilotSessions() ?? [];
-    return [...native, ...wsl];
+  ipcMain.handle(IPC.COPILOT_LIST_SESSIONS, async (_event, limit?: number) => {
+    const native = await copilotMonitor?.scanSessions(limit ?? 50) ?? [];
+    const wsl = await wslSessionManager?.scanCopilotSessions() ?? [];
+    const totalEligible = (copilotMonitor?.lastTotalEligible ?? 0) + wsl.length;
+    return { sessions: [...native, ...wsl], totalEligible };
   });
 
   ipcMain.handle(IPC.COPILOT_GET_SESSION, (_event, id: string) => {
@@ -786,11 +787,17 @@ function registerIpcHandlers(): void {
     return wslSessionManager?.getCopilotPrompts(id) ?? [];
   });
 
+  ipcMain.handle(IPC.AI_INVALIDATE_CACHES, () => {
+    copilotMonitor?.invalidateCache();
+    claudeCodeMonitor?.invalidateCache();
+  });
+
   // ── Claude Code IPC handlers ──────────────────────────────────────────
-  ipcMain.handle(IPC.CLAUDE_CODE_LIST_SESSIONS, () => {
-    const native = claudeCodeMonitor?.scanSessions() ?? [];
-    const wsl = wslSessionManager?.scanClaudeCodeSessions() ?? [];
-    return [...native, ...wsl];
+  ipcMain.handle(IPC.CLAUDE_CODE_LIST_SESSIONS, async (_event, limit?: number) => {
+    const native = await claudeCodeMonitor?.scanSessions(limit ?? 50) ?? [];
+    const wsl = await wslSessionManager?.scanClaudeCodeSessions() ?? [];
+    const totalEligible = (claudeCodeMonitor?.lastTotalEligible ?? 0) + wsl.length;
+    return { sessions: [...native, ...wsl], totalEligible };
   });
 
   ipcMain.handle(IPC.CLAUDE_CODE_GET_SESSION, (_event, id: string) => {
@@ -1105,8 +1112,8 @@ function setupCopilotMonitor(): void {
   });
 
   copilotWatcher.setStaleCheckCallback(() => {
-    // Re-scan all sessions periodically to catch stale states
-    copilotMonitor!.scanSessions();
+    // Only refresh already-loaded sessions — no full directory re-scan
+    copilotMonitor!.refreshLoadedSessions();
   });
 }
 
@@ -1143,7 +1150,7 @@ function setupClaudeCodeMonitor(): void {
   });
 
   claudeCodeWatcher.setStaleCheckCallback(() => {
-    claudeCodeMonitor!.scanSessions();
+    claudeCodeMonitor!.refreshLoadedSessions();
   });
 }
 
