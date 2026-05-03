@@ -65,11 +65,18 @@ const UpdateModal: React.FC<{ info: UpdateInfoState; appVersion: string; onClose
             <button className="update-modal-btn primary" onClick={() => window.terminalAPI.restartAndUpdate()}>
               Restart &amp; Update
             </button>
-          ) : info.url ? (
-            <button className="update-modal-btn primary" onClick={() => window.open(info.url, '_blank')}>
+          ) : (
+            // Always show a Download button. Prefer the release-specific
+            // url from the version-checker when available; otherwise fall
+            // back to the canonical "latest release" URL so the user is
+            // never left with only a Later button (TASK-93).
+            <button
+              className="update-modal-btn primary"
+              onClick={() => window.open(info.url || `https://github.com/InbarR/tmax/releases/latest`, '_blank')}
+            >
               Download
             </button>
-          ) : null}
+          )}
           <button className="update-modal-btn" onClick={onClose}>Later</button>
         </div>
       </div>
