@@ -374,8 +374,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // WebLinksAddon regex.
     const urlRegex = /(https?|HTTPS?):\/\/[^\s"'!*(){}\\\^<>`]*[^\s"':,.!?{}\\\^~\[\]`()<>]/g;
     // Characters that can plausibly appear inside a URL split point. Anything
-    // outside this set means "this isn't a URL continuation".
-    const URL_BODY = /^[A-Za-z0-9%\-._~!$&'()*+,;=:@/?#\[\]|]+$/;
+    // outside this set means "this isn't a URL continuation". RFC-3986 ASCII
+    // chars + `|`, plus Unicode property classes for letters, numbers,
+    // marks (variation selectors like U+FE0F), and symbols (emoji). The
+    // ASCII-only original truncated URLs whose hard-newline seam landed on
+    // an emoji or its variation selector (TASK-65). The single-token guard
+    // on the next row keeps over-stitching risk minimal even with the
+    // broader char class.
+    const URL_BODY = /^[A-Za-z0-9%\-._~!$&'()*+,;=:@/?#\[\]|\p{L}\p{N}\p{M}\p{S}]+$/u;
     term.registerLinkProvider({
       provideLinks(bufferLineNumber, callback) {
         const buf = term.buffer.active;
