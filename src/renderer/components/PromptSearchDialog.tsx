@@ -156,7 +156,16 @@ const PromptSearchDialog: React.FC = () => {
 
   const jumpTo = useCallback((entry: SearchEntry) => {
     if (entry.terminalId) {
-      useTerminalStore.getState().setFocus(entry.terminalId);
+      // If the linked pane lives in a different workspace, switch to that
+      // workspace first - otherwise setFocus changes focusedTerminalId but
+      // the user is still looking at the wrong workspace's grid (TASK-92).
+      const state = useTerminalStore.getState();
+      const targetTerm = state.terminals.get(entry.terminalId);
+      const targetWsId = targetTerm?.workspaceId;
+      if (targetWsId && targetWsId !== state.activeWorkspaceId) {
+        state.setActiveWorkspace(targetWsId);
+      }
+      state.setFocus(entry.terminalId);
       close();
       return;
     }
