@@ -3,11 +3,11 @@ id: TASK-68
 title: >-
   Workspaces mode - allow Ctrl+click on panes to multi-select for 'show
   selected' filter (lost when tab headers were replaced)
-status: In Progress
+status: Done
 assignee:
   - '@claude-agent'
 created_date: '2026-05-03 07:21'
-updated_date: '2026-05-03 07:45'
+updated_date: '2026-05-03 11:12'
 labels: []
 dependencies: []
 ---
@@ -20,9 +20,15 @@ In workspaces tab mode the user lost a multi-select interaction that worked with
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 In workspaces mode, Ctrl+click (Cmd+click on Mac) on a pane's title bar / chrome adds it to a multi-selection set; visible selection indicator on each selected pane
-- [ ] #2 A 'Show selected' command (Command Palette, overflow menu, or shortcut) hides every pane NOT in the selection and is reversible via 'Show all'
-- [ ] #3 Multi-select state survives common interactions (typing in another pane, clicking elsewhere) until explicitly cleared - matches the previous tab-header behaviour
-- [ ] #4 Cross-platform: Cmd+click on Mac, Ctrl+click on Windows/Linux
-- [ ] #5 Playwright spec covers: enter workspaces mode, Ctrl+click two panes, run Show selected, assert only those two are visible, run Show all, assert all visible again
+- [x] #1 In workspaces mode, Ctrl+click (Cmd+click on Mac) on a pane's title bar / chrome adds it to a multi-selection set; visible selection indicator on each selected pane
+- [x] #2 A 'Show selected' command (Command Palette, overflow menu, or shortcut) hides every pane NOT in the selection and is reversible via 'Show all'
+- [x] #3 Multi-select state survives common interactions (typing in another pane, clicking elsewhere) until explicitly cleared - matches the previous tab-header behaviour
+- [x] #4 Cross-platform: Cmd+click on Mac, Ctrl+click on Windows/Linux
+- [x] #5 Playwright spec covers: enter workspaces mode, Ctrl+click two panes, run Show selected, assert only those two are visible, run Show all, assert all visible again
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped via cherry-pick of agent commit 1fcd5dc onto main. Implementation lives under TASK-72 (the agent had labeled the work as TASK-72 since TASK-68 didn't exist in its worktree at spawn time). Both task files describe the same feature; this entry is closed alongside TASK-72.
+<!-- SECTION:FINAL_SUMMARY:END -->
