@@ -1906,13 +1906,21 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       // Build grid from all tiled terminals in TAB order so the grid panes
       // line up left-to-right, top-to-bottom with the tab bar. Tab order =
       // insertion order of the terminals Map, which TabBar.tsx uses too.
-      // In workspaces tab mode, scope the grid to the active workspace's
-      // panes (TASK-87) - earlier behaviour pulled in panes from every
-      // workspace, leaking them into a workspace they don't belong to when
-      // the user toggled focus -> grid.
+      // Scope to active workspace ONLY when in workspaces tab mode
+      // (TASK-87). In flat tab mode the user sees all panes across all
+      // workspaces in the tab bar, so the grid must show all panes too -
+      // earlier 'always filter' behavior would hide panes from other
+      // workspaces when the user toggled focus -> grid in flat mode.
+      const tabMode = (get().config as { tabMode?: 'flat' | 'workspaces' } | undefined)?.tabMode ?? 'flat';
       const activeWsId = get().activeWorkspaceId;
       const ids = Array.from(get().terminals.entries())
-        .filter(([, t]) => t.mode === 'tiled' && (t.workspaceId ?? activeWsId) === activeWsId)
+        .filter(([, t]) => {
+          if (t.mode !== 'tiled') return false;
+          if (tabMode === 'workspaces') {
+            return (t.workspaceId ?? activeWsId) === activeWsId;
+          }
+          return true;
+        })
         .map(([id]) => id);
       if (ids.length === 0) {
         set({ viewMode: 'grid' });
