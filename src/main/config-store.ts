@@ -64,7 +64,15 @@ export interface AppConfig {
    */
   tabMode?: 'flat' | 'workspaces';
   backgroundMaterial?: BackgroundMaterial;
-  backgroundOpacity?: number; // 0.0–1.0, default 0.8
+  backgroundOpacity?: number; // 0.0-1.0, default 0.8
+  /**
+   * Show OS notifications on AI session state transitions (Copilot
+   * awaitingApproval / waitingForUser, Claude Code waitingForUser i.e.
+   * turn finished). Default true. Set to false if you run an external
+   * hook plugin (e.g. claude-notifications-go) and don't want both
+   * surfaces firing. (TASK-64)
+   */
+  aiSessionNotifications?: boolean;
 }
 
 function findPwsh(): string | null {
@@ -215,6 +223,7 @@ export const defaultConfig: AppConfig = {
   claudeCodeCommand: 'claude',
   backgroundMaterial: 'none',
   backgroundOpacity: 0.8,
+  aiSessionNotifications: true,
 };
 
 export class ConfigStore {

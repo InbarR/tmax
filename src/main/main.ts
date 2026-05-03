@@ -10,7 +10,7 @@ import { KeybindingsFile } from './keybindings-file';
 import { IPC } from '../shared/ipc-channels';
 import { CopilotSessionMonitor } from './copilot-session-monitor';
 import { CopilotSessionWatcher } from './copilot-session-watcher';
-import { notifyCopilotSession, clearNotificationCooldowns } from './copilot-notification';
+import { notifyCopilotSession, clearNotificationCooldowns, setAiSessionNotificationsEnabled } from './copilot-notification';
 import { ClaudeCodeSessionMonitor } from './claude-code-session-monitor';
 import { ClaudeCodeSessionWatcher } from './claude-code-session-watcher';
 import { WslSessionManager } from './wsl-session-manager';
@@ -354,6 +354,11 @@ function setupPtyManager(): void {
 
 function setupConfigStore(): void {
   configStore = new ConfigStore();
+  // TASK-64: propagate the AI-session-notifications opt-out to the
+  // notification module. Default true; users running an external hook
+  // plugin can disable in tmax-config.json without restarting their
+  // notification stack.
+  setAiSessionNotificationsEnabled(configStore.get('aiSessionNotifications') ?? true);
 }
 
 // Action ids that the renderer's keybindings runtime knows how to dispatch.
@@ -989,6 +994,11 @@ function setupClaudeCodeMonitor(): void {
   claudeCodeMonitor.setCallbacks({
     onSessionUpdated(session) {
       mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_UPDATED, session);
+      // TASK-64: Claude Code finishes a turn -> parser flips status to
+      // waitingForUser. The shared notify path treats that as "session
+      // ready / needs attention" and surfaces an OS notification, with
+      // a 30 s per-session cooldown.
+      notifyCopilotSession(session);
     },
     onSessionAdded(session) {
       mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_ADDED, session);
@@ -1033,6 +1043,8 @@ async function setupWslSessionManager(): Promise<void> {
     },
     onClaudeCodeSessionUpdated(session) {
       mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_UPDATED, session);
+      // TASK-64: same notify wiring as the local Claude Code monitor.
+      notifyCopilotSession(session);
     },
     onClaudeCodeSessionAdded(session) {
       mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_ADDED, session);
