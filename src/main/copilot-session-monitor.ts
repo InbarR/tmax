@@ -19,6 +19,10 @@ export class CopilotSessionMonitor {
   private callbacks: CopilotMonitorCallbacks = {};
   private readonly basePath: string;
   private readonly wslDistro?: string;
+  /** Total eligible sessions found in the last scanSessions() call. */
+  lastTotalEligible = 0;
+  /** Cached candidate list from the last full stat scan, sorted by mtime desc. */
+  private cachedCandidates: { sessionId: string; sessionDir: string; mtime: number }[] | null = null;
 
   constructor(options?: { basePath?: string; wslDistro?: string }) {
     this.basePath = options?.basePath ?? path.join(os.homedir(), '.copilot', 'session-state');
@@ -33,84 +37,95 @@ export class CopilotSessionMonitor {
     return this.basePath;
   }
 
-  scanSessions(): CopilotSessionSummary[] {
+  async scanSessions(limit = 50): Promise<CopilotSessionSummary[]> {
     const summaries: CopilotSessionSummary[] = [];
 
-    if (!fs.existsSync(this.basePath)) {
-      return summaries;
-    }
-
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(this.basePath, { withFileTypes: true });
-    } catch {
-      return summaries;
-    }
-
-    const currentIds = new Set<string>();
-    // 30 days matches the app-wide `oldSessionDays` default used by the UI's
-    // stale-session detection and the "mark old" threshold. A tighter scan
-    // filter would hide sessions that `gh copilot --list` still reports.
-    const maxAgeMs = 30 * 24 * 60 * 60 * 1000;
-    const cutoff = Date.now() - maxAgeMs;
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-
-      const sessionId = entry.name;
-      const sessionDir = path.join(this.basePath, sessionId);
-
-      // Quick recency check via workspace.yaml mtime before full parse
-      const wsPath = path.join(sessionDir, 'workspace.yaml');
+    // Phase 1: build or reuse cached candidate list
+    // Uses sync stat - fast (~300ms) and only runs once (cached after).
+    if (!this.cachedCandidates) {
+      let entries: fs.Dirent[];
       try {
-        const stat = fs.statSync(wsPath);
-        if (stat.mtimeMs < cutoff) continue;
+        entries = fs.readdirSync(this.basePath, { withFileTypes: true });
       } catch {
-        // No workspace.yaml — check events.jsonl
-        const evPath = path.join(sessionDir, 'events.jsonl');
-        try {
-          const stat = fs.statSync(evPath);
-          if (stat.mtimeMs < cutoff) continue;
-        } catch {
-          continue;
-        }
+        return summaries;
       }
 
+      const maxAgeMs = 30 * 24 * 60 * 60 * 1000;
+      const cutoff = Date.now() - maxAgeMs;
+      const candidates: { sessionId: string; sessionDir: string; mtime: number }[] = [];
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const sessionId = entry.name;
+        const sessionDir = path.join(this.basePath, sessionId);
+        // Prefer events.jsonl mtime (activity file) over workspace.yaml
+        let mtime = 0;
+        try {
+          mtime = fs.statSync(path.join(sessionDir, 'events.jsonl')).mtimeMs;
+        } catch {
+          try { mtime = fs.statSync(path.join(sessionDir, 'workspace.yaml')).mtimeMs; } catch { continue; }
+        }
+        if (mtime < cutoff) continue;
+        candidates.push({ sessionId, sessionDir, mtime });
+      }
+
+      candidates.sort((a, b) => b.mtime - a.mtime);
+      this.cachedCandidates = candidates;
+    }
+
+    const candidates = this.cachedCandidates;
+    this.lastTotalEligible = candidates.length;
+
+    // Phase 2: parse only the top N (skipping already-loaded sessions)
+    const top = candidates.slice(0, limit);
+    const currentIds = new Set<string>();
+
+    let parseCount = 0;
+    for (const { sessionId, sessionDir } of top) {
       currentIds.add(sessionId);
+
+      // Skip re-parsing sessions already in memory
+      if (this.sessions.has(sessionId)) {
+        summaries.push(this.toSummary(this.sessions.get(sessionId)!));
+        continue;
+      }
 
       const session = this.loadSession(sessionId, sessionDir);
 
       if (session) {
-        const oldSession = this.sessions.get(sessionId);
         this.sessions.set(sessionId, session);
         const summary = this.toSummary(session);
         summaries.push(summary);
+        this.callbacks.onSessionAdded?.(summary);
+      } else {
+        // Remove failed candidate so totalEligible stays accurate
+        this.cachedCandidates = candidates.filter(c => c.sessionId !== sessionId);
+        this.lastTotalEligible = this.cachedCandidates.length;
+      }
 
-        if (!oldSession) {
-          this.callbacks.onSessionAdded?.(summary);
-        } else if (
-          oldSession.status !== session.status ||
-          oldSession.messageCount !== session.messageCount ||
-          oldSession.toolCallCount !== session.toolCallCount ||
-          oldSession.latestPrompt !== session.latestPrompt
-        ) {
-          // Mirror of refreshSession's diff-check so the 10s fallback scan
-          // actually notifies the renderer when chokidar misses a 'change'.
-          this.callbacks.onSessionUpdated?.(summary);
-        }
+      // Yield to event loop every 10 parses so the UI stays responsive
+      if (++parseCount % 10 === 0) {
+        await new Promise<void>(resolve => setImmediate(resolve));
       }
     }
 
-    // Detect removed sessions
+    // Silently evict sessions outside the top N from memory and parser cache.
+    // Do NOT fire onSessionRemoved — these sessions still exist on disk, they're
+    // just outside the current load window. onSessionRemoved is reserved for
+    // sessions truly deleted from disk (handled by handleSessionRemoved).
     for (const [id] of this.sessions) {
       if (!currentIds.has(id)) {
         this.sessions.delete(id);
         clearParserCache(path.join(this.basePath, id, 'events.jsonl'));
-        this.callbacks.onSessionRemoved?.(id);
       }
     }
 
     return summaries;
+  }
+
+  /** Invalidate the cached candidate list so the next scanSessions() re-stats. */
+  invalidateCache(): void {
+    this.cachedCandidates = null;
   }
 
   getSession(id: string): CopilotSession | null {
@@ -177,11 +192,33 @@ export class CopilotSessionMonitor {
   }
 
   handleEventsChanged(sessionId: string): void {
+    // Promote the session to the front of the cached candidate list
+    if (this.cachedCandidates) {
+      const idx = this.cachedCandidates.findIndex(c => c.sessionId === sessionId);
+      if (idx > 0) {
+        const [entry] = this.cachedCandidates.splice(idx, 1);
+        entry.mtime = Date.now();
+        this.cachedCandidates.unshift(entry);
+      }
+    }
     this.refreshSession(sessionId);
   }
 
   handleNewSession(sessionId: string): void {
     const sessionDir = path.join(this.basePath, sessionId);
+    // Insert into cached candidates so "load more" sees the new session
+    if (this.cachedCandidates) {
+      const wsPath = path.join(sessionDir, 'workspace.yaml');
+      let mtime = Date.now();
+      try { mtime = fs.statSync(wsPath).mtimeMs; } catch {
+        try { mtime = fs.statSync(path.join(sessionDir, 'events.jsonl')).mtimeMs; } catch { /* use now */ }
+      }
+      // Prepend (newest first) if not already present
+      if (!this.cachedCandidates.some(c => c.sessionId === sessionId)) {
+        this.cachedCandidates.unshift({ sessionId, sessionDir, mtime });
+        this.lastTotalEligible = this.cachedCandidates.length;
+      }
+    }
     const session = this.loadSession(sessionId, sessionDir);
     if (session) {
       this.sessions.set(sessionId, session);
@@ -195,10 +232,26 @@ export class CopilotSessionMonitor {
       clearParserCache(path.join(this.basePath, sessionId, 'events.jsonl'));
       this.callbacks.onSessionRemoved?.(sessionId);
     }
+    // Remove from cached candidates
+    if (this.cachedCandidates) {
+      this.cachedCandidates = this.cachedCandidates.filter(c => c.sessionId !== sessionId);
+      this.lastTotalEligible = this.cachedCandidates.length;
+    }
   }
 
   dispose(): void {
     this.sessions.clear();
+  }
+
+  /** Re-check only recently active sessions in memory (no directory scan). */
+  refreshLoadedSessions(): void {
+    for (const [id, session] of this.sessions) {
+      // Only refresh sessions that might be in a stale "thinking" state.
+      // Idle sessions with no recent activity don't need re-checking.
+      if (session.status !== 'idle') {
+        this.refreshSession(id);
+      }
+    }
   }
 
   private loadSession(id: string, sessionDir: string): CopilotSession | null {
@@ -223,7 +276,6 @@ export class CopilotSessionMonitor {
       messageCount: parsed?.messageCount ?? 0,
       toolCallCount: parsed?.toolCallCount ?? 0,
       lastActivityTime: parsed?.lastActivityTime ?? 0,
-      timeline: parsed?.timeline ?? [],
       pendingToolCalls: parsed?.pendingToolCalls ?? 0,
       totalTokens: parsed?.totalTokens ?? 0,
       latestPrompt: parsed?.latestPrompt || undefined,

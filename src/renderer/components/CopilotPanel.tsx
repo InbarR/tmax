@@ -141,6 +141,28 @@ const CopilotPanel: React.FC = () => {
     }
     return m;
   }, [terminals, tabGroups, defaultTabColor]);
+  const copilotSessionsTotal = useTerminalStore((s) => s.copilotSessionsTotal);
+  const claudeCodeSessionsTotal = useTerminalStore((s) => s.claudeCodeSessionsTotal);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [renderLimit, setRenderLimit] = useState(200);
+
+  const totalLoaded = copilotSessions.length + claudeCodeSessions.length;
+  const totalEligible = copilotSessionsTotal + claudeCodeSessionsTotal;
+  const hasMore = totalEligible > totalLoaded;
+
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    try { await useTerminalStore.getState().loadMoreSessions(100); } finally { setLoadingMore(false); }
+  };
+  const handleLoadAll = async () => {
+    if (totalEligible > 1000) {
+      const ok = confirm(`Loading all ${totalEligible.toLocaleString()} sessions may use significant memory. Continue?`);
+      if (!ok) return;
+    }
+    setLoadingMore(true);
+    try { await useTerminalStore.getState().loadAllSessions(); } finally { setLoadingMore(false); }
+  };
+
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
@@ -528,7 +550,8 @@ const CopilotPanel: React.FC = () => {
     setCtxMenu(null);
   }, [summaryOverrides]);
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = useCallback(async () => {
+    await (window.terminalAPI as any).invalidateSessionCaches?.();
     const store = useTerminalStore.getState();
     store.loadCopilotSessions();
     store.loadClaudeCodeSessions();
@@ -876,8 +899,31 @@ const CopilotPanel: React.FC = () => {
         onKeyDown={handleKeyDown}
       />
 
+      {hasMore && !query && (
+        <div style={{ display: 'flex', gap: '6px', padding: '4px 8px', fontSize: '11px', alignItems: 'center' }}>
+          <span style={{ opacity: 0.6 }}>Loaded {totalLoaded} of {totalEligible}</span>
+          <button
+            className="dir-panel-close"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            style={{ fontSize: '11px', padding: '1px 6px', cursor: loadingMore ? 'wait' : 'pointer' }}
+          >
+            {loadingMore ? '…' : '+100'}
+          </button>
+          <button
+            className="dir-panel-close"
+            onClick={handleLoadAll}
+            disabled={loadingMore}
+            title={totalEligible > 1000 ? `Load all ${totalEligible.toLocaleString()} sessions (may use significant memory)` : `Load all ${totalEligible.toLocaleString()} sessions`}
+            style={{ fontSize: '11px', padding: '1px 6px', cursor: loadingMore ? 'wait' : 'pointer' }}
+          >
+            {loadingMore ? '…' : 'All'}
+          </button>
+        </div>
+      )}
+
       <div className="dir-panel-list" ref={listRef}>
-        {displayList.map((session, index) => {
+        {displayList.slice(0, renderLimit).map((session, index) => {
           const title = getTitle(session);
           const subtitle = getSubtitle(session);
           const active = isActiveStatus(session.status);
@@ -1031,6 +1077,14 @@ const CopilotPanel: React.FC = () => {
             </React.Fragment>
           );
         })}
+        {displayList.length > renderLimit && (
+          <div
+            style={{ padding: '8px', textAlign: 'center', fontSize: '11px', opacity: 0.7, cursor: 'pointer' }}
+            onClick={() => setRenderLimit(r => r + 200)}
+          >
+            Showing {renderLimit} of {displayList.length} — click to show more
+          </div>
+        )}
         {displayList.length === 0 && (
           <div className="dir-panel-empty">
             {lifecycleTab === 'active' && allCount === 0

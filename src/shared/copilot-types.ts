@@ -51,7 +51,6 @@ export interface CopilotSession {
   messageCount: number;
   toolCallCount: number;
   lastActivityTime: number;
-  timeline: CopilotActivityEntry[];
   pendingToolCalls: number;
   totalTokens: number;
   latestPrompt?: string;

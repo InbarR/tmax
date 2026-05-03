@@ -1,7 +1,6 @@
 import * as fs from 'node:fs';
 import type {
   CopilotSessionStatus,
-  CopilotActivityEntry,
 } from '../shared/copilot-types';
 
 export interface ParsedSessionEvents {
@@ -9,33 +8,29 @@ export interface ParsedSessionEvents {
   messageCount: number;
   toolCallCount: number;
   lastActivityTime: number;
-  timeline: CopilotActivityEntry[];
   pendingToolCalls: number;
   totalTokens: number;
   latestPrompt: string;
   latestPromptTime: number;
 }
 
+/** Incremental state cache - stores aggregates, not raw events. */
 interface ParserCache {
   byteOffset: number;
-  events: EventRecord[];
-}
-
-interface EventRecord {
-  type: string;
-  timestamp: number;
-  data?: Record<string, unknown>;
+  status: CopilotSessionStatus;
+  messageCount: number;
+  toolCallCount: number;
+  lastActivityTime: number;
+  pendingToolCalls: number;
+  totalTokens: number;
+  latestPrompt: string;
+  latestPromptTime: number;
+  /** Last N prompts for search, capped to avoid unbounded growth. */
+  recentPrompts: string[];
 }
 
 const cache = new Map<string, ParserCache>();
-
-interface PromptsCacheEntry {
-  mtimeMs: number;
-  size: number;
-  limit: number;
-  prompts: string[];
-}
-const promptsCache = new Map<string, PromptsCacheEntry>();
+const MAX_CACHED_PROMPTS = 20;
 
 export function parseSessionEvents(eventsFilePath: string): ParsedSessionEvents | null {
   let fileHandle: number | undefined;
@@ -45,15 +40,14 @@ export function parseSessionEvents(eventsFilePath: string): ParsedSessionEvents 
 
     const cached = cache.get(eventsFilePath);
     const startOffset = cached?.byteOffset ?? 0;
-    const existingEvents = cached?.events ?? [];
 
-    if (startOffset >= fileSize && existingEvents.length > 0) {
-      return deriveState(existingEvents);
+    if (cached && startOffset >= fileSize) {
+      return cacheToResult(cached);
     }
 
     const bytesToRead = fileSize - startOffset;
-    if (bytesToRead <= 0 && existingEvents.length > 0) {
-      return deriveState(existingEvents);
+    if (bytesToRead <= 0 && cached) {
+      return cacheToResult(cached);
     }
 
     if (bytesToRead <= 0) {
@@ -73,20 +67,35 @@ export function parseSessionEvents(eventsFilePath: string): ParsedSessionEvents 
     const newText = buffer.slice(0, completeBytes).toString('utf-8');
     const lines = newText.split('\n').filter((l) => l.trim().length > 0);
 
-    const newEvents: EventRecord[] = [];
+    // Update running state incrementally — no raw events stored
+    const state: ParserCache = cached
+      ? { ...cached }
+      : {
+          byteOffset: 0,
+          status: 'idle',
+          messageCount: 0,
+          toolCallCount: 0,
+          lastActivityTime: 0,
+          pendingToolCalls: 0,
+          totalTokens: 0,
+          latestPrompt: '',
+          latestPromptTime: 0,
+          recentPrompts: [],
+        };
+
     for (const line of lines) {
       try {
-        const parsed = JSON.parse(line);
-        newEvents.push(normalizeEvent(parsed));
+        const raw = JSON.parse(line);
+        processEvent(raw, state);
       } catch {
         // skip malformed lines
       }
     }
 
-    const allEvents = [...existingEvents, ...newEvents];
-    cache.set(eventsFilePath, { byteOffset: startOffset + completeBytes, events: allEvents });
+    state.byteOffset = startOffset + completeBytes;
+    cache.set(eventsFilePath, state);
 
-    return deriveState(allEvents);
+    return cacheToResult(state);
   } catch {
     return null;
   } finally {
@@ -96,13 +105,94 @@ export function parseSessionEvents(eventsFilePath: string): ParsedSessionEvents 
   }
 }
 
-export function extractCopilotPrompts(eventsFilePath: string, limit = 20): string[] {
-  try {
-    const stat = fs.statSync(eventsFilePath);
-    const cached = promptsCache.get(eventsFilePath);
-    if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size && cached.limit === limit) {
-      return cached.prompts;
+/** Process a single raw event into the running state. */
+function processEvent(raw: Record<string, unknown>, state: ParserCache): void {
+  const type = (raw.type as string) || 'unknown';
+  const timestamp = raw.timestamp
+    ? new Date(raw.timestamp as string).getTime()
+    : Date.now();
+  const data = raw.data as Record<string, unknown> | undefined;
+
+  if (timestamp > state.lastActivityTime) {
+    state.lastActivityTime = timestamp;
+  }
+
+  switch (type) {
+    case 'session.start':
+    case 'session.resume':
+      state.status = 'idle';
+      break;
+    case 'assistant.turn_start':
+      state.status = 'thinking';
+      break;
+    case 'assistant.turn_end':
+      state.status = 'idle';
+      break;
+    case 'user.message': {
+      state.messageCount++;
+      state.status = 'thinking';
+      const text = String(data?.content || data?.transformedContent || '').trim();
+      if (text) {
+        state.latestPrompt = text.slice(0, 120).replace(/\n/g, ' ');
+        state.latestPromptTime = timestamp;
+        state.recentPrompts.push(text.slice(0, 300));
+        if (state.recentPrompts.length > MAX_CACHED_PROMPTS) {
+          state.recentPrompts.shift();
+        }
+      }
+      break;
     }
+    case 'tool.execution_start':
+      state.toolCallCount++;
+      state.pendingToolCalls++;
+      state.status = 'executingTool';
+      break;
+    case 'tool.execution_complete':
+      if (state.pendingToolCalls > 0) state.pendingToolCalls--;
+      if (state.pendingToolCalls === 0) state.status = 'thinking';
+      break;
+    case 'confirmation_request':
+    case 'approval_request':
+      state.status = 'awaitingApproval';
+      break;
+    case 'confirmation_response':
+    case 'approval_response':
+      state.status = 'thinking';
+      break;
+    case 'input_request':
+    case 'user_input_request':
+      state.status = 'waitingForUser';
+      break;
+    case 'token_usage':
+      if (data) {
+        const tokens = (data.total_tokens as number) || (data.totalTokens as number) || 0;
+        if (tokens > 0) state.totalTokens = tokens;
+      }
+      break;
+  }
+}
+
+function cacheToResult(cached: ParserCache): ParsedSessionEvents {
+  return {
+    status: cached.status,
+    messageCount: cached.messageCount,
+    toolCallCount: cached.toolCallCount,
+    lastActivityTime: cached.lastActivityTime,
+    pendingToolCalls: cached.pendingToolCalls,
+    totalTokens: cached.totalTokens,
+    latestPrompt: cached.latestPrompt,
+    latestPromptTime: cached.latestPromptTime,
+  };
+}
+
+export function extractCopilotPrompts(eventsFilePath: string, limit = 20): string[] {
+  // Use cached prompts from the parser if available (avoids re-reading the file)
+  const cached = cache.get(eventsFilePath);
+  if (cached && cached.recentPrompts.length > 0) {
+    return cached.recentPrompts.slice(-limit);
+  }
+  // Fallback: read file (only for sessions not yet parsed)
+  try {
     const content = fs.readFileSync(eventsFilePath, 'utf-8');
     const prompts: string[] = [];
     for (const line of content.split('\n')) {
@@ -115,9 +205,7 @@ export function extractCopilotPrompts(eventsFilePath: string, limit = 20): strin
         }
       } catch { /* skip */ }
     }
-    const result = prompts.slice(-limit);
-    promptsCache.set(eventsFilePath, { mtimeMs: stat.mtimeMs, size: stat.size, limit, prompts: result });
-    return result;
+    return prompts.slice(-limit);
   } catch {
     return [];
   }
@@ -125,114 +213,4 @@ export function extractCopilotPrompts(eventsFilePath: string, limit = 20): strin
 
 export function clearParserCache(eventsFilePath: string): void {
   cache.delete(eventsFilePath);
-  promptsCache.delete(eventsFilePath);
-}
-
-function normalizeEvent(raw: Record<string, unknown>): EventRecord {
-  const type = (raw.type as string) || 'unknown';
-  const timestamp = raw.timestamp
-    ? new Date(raw.timestamp as string).getTime()
-    : Date.now();
-
-  return { type, timestamp, data: raw.data as Record<string, unknown> | undefined };
-}
-
-function deriveState(events: EventRecord[]): ParsedSessionEvents {
-  let status: CopilotSessionStatus = 'idle';
-  let messageCount = 0;
-  let toolCallCount = 0;
-  let lastActivityTime = 0;
-  let pendingToolCalls = 0;
-  let totalTokens = 0;
-  let latestPrompt = '';
-  let latestPromptTime = 0;
-
-  for (const event of events) {
-    if (event.timestamp > lastActivityTime) {
-      lastActivityTime = event.timestamp;
-    }
-
-    switch (event.type) {
-      // Session lifecycle
-      case 'session.start':
-      case 'session.resume':
-        status = 'idle';
-        break;
-
-      // Assistant turns
-      case 'assistant.turn_start':
-        status = 'thinking';
-        break;
-      case 'assistant.turn_end':
-        status = 'idle';
-        break;
-
-      // Messages
-      case 'user.message': {
-        messageCount++;
-        status = 'thinking';
-        const text = String(event.data?.content || event.data?.transformedContent || '').trim();
-        if (text) {
-          latestPrompt = text.slice(0, 120).replace(/\n/g, ' ');
-          latestPromptTime = event.timestamp;
-        }
-        break;
-      }
-      case 'assistant.message':
-        break;
-
-      // Tool execution
-      case 'tool.execution_start':
-        toolCallCount++;
-        pendingToolCalls++;
-        status = 'executingTool';
-        break;
-      case 'tool.execution_complete':
-        if (pendingToolCalls > 0) pendingToolCalls--;
-        if (pendingToolCalls === 0) status = 'thinking';
-        break;
-
-      // Confirmation / approval
-      case 'confirmation_request':
-      case 'approval_request':
-        status = 'awaitingApproval';
-        break;
-      case 'confirmation_response':
-      case 'approval_response':
-        status = 'thinking';
-        break;
-
-      // Input requests
-      case 'input_request':
-      case 'user_input_request':
-        status = 'waitingForUser';
-        break;
-
-      // Token usage
-      case 'token_usage':
-        if (event.data) {
-          const tokens = (event.data.total_tokens as number) || (event.data.totalTokens as number) || 0;
-          if (tokens > 0) totalTokens = tokens;
-        }
-        break;
-    }
-  }
-
-  const timeline: CopilotActivityEntry[] = events.slice(-50).map((e) => ({
-    type: e.type,
-    timestamp: e.timestamp,
-    data: e.data,
-  }));
-
-  return {
-    status,
-    messageCount,
-    toolCallCount,
-    lastActivityTime,
-    timeline,
-    pendingToolCalls,
-    totalTokens,
-    latestPrompt,
-    latestPromptTime,
-  };
 }
