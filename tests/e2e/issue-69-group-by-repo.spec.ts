@@ -18,28 +18,32 @@ test('Group toggle renders group headers and contiguous sessions per repo (#69)'
       return;
     }
 
-    // Group is on by default (#69) - click the Group button once to turn it
-    // OFF, so the test starts from a known headerless state, then click again
-    // to turn it back on and exercise the grouping path.
-    const findGroupBtn = async () => {
-      for (const b of await window.$$('.ai-session-tab')) {
-        const text = (await b.textContent() || '').trim();
-        if (text === 'Group') return b;
+    // Group is on by default (#69) - toggle the Group setting once to turn it
+    // OFF, so the test starts from a known headerless state, then toggle again
+    // to turn it back on and exercise the grouping path. The Group toggle now
+    // lives inside the header's "More actions" dropdown.
+    const toggleGroup = async () => {
+      const moreBtn = await window.$('.dir-panel-header [aria-label="More actions"]');
+      expect(moreBtn).not.toBeNull();
+      await moreBtn!.click();
+      await window.waitForTimeout(150);
+      for (const item of await window.$$('.context-menu-item')) {
+        const text = (await item.textContent() || '').trim();
+        if (text.includes('Group sessions by repo')) {
+          await item.click();
+          return;
+        }
       }
-      return null;
+      throw new Error('Group sessions by repo menu item not found');
     };
-    const groupOff = await findGroupBtn();
-    expect(groupOff).not.toBeNull();
-    await groupOff!.click();
+    await toggleGroup();
     await window.waitForTimeout(300);
 
     const headersBefore = await window.$$('.ai-session-group-header');
     expect(headersBefore.length).toBe(0);
 
-    // Click Group again - now we're testing the off→on transition.
-    const groupOn = await findGroupBtn();
-    expect(groupOn).not.toBeNull();
-    await groupOn!.click();
+    // Toggle Group again - now we're testing the off→on transition.
+    await toggleGroup();
     await window.waitForTimeout(400);
 
     // Now headers should appear. Groups auto-collapse on first toggle, so by
@@ -70,11 +74,8 @@ test('Group toggle renders group headers and contiguous sessions per repo (#69)'
     expect(expandedLayout[0]).toBe('H');
     expect(expandedLayout[1]).toBe('S');
 
-    // Clicking Group again should turn headers off
-    for (const b of await window.$$('.ai-session-tab')) {
-      const text = (await b.textContent() || '').trim();
-      if (text === 'Group') { await b.click(); break; }
-    }
+    // Toggling Group again should turn headers off
+    await toggleGroup();
     await window.waitForTimeout(300);
     const headersAfter = await window.$$('.ai-session-group-header');
     expect(headersAfter.length).toBe(0);

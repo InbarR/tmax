@@ -693,12 +693,12 @@ const CopilotPanel: React.FC = () => {
         <span>✨ AI Sessions</span>
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center', position: 'relative' }}>
           <button
-            className={`ai-session-tab${groupByRepo ? ' active' : ''}`}
-            onClick={toggleGroupByRepo}
-            data-tooltip="Group sessions by repo"
-            style={{ fontSize: '10px', padding: '1px 6px' }}
+            className="dir-panel-close"
+            onClick={handleRefresh}
+            data-tooltip="Refresh"
+            aria-label="Refresh"
           >
-            Group
+            <span style={{ fontSize: '12px', lineHeight: 1 }}>⟲</span>
           </button>
           <button
             className="dir-panel-close"
@@ -725,10 +725,10 @@ const CopilotPanel: React.FC = () => {
               >
                 <button
                   className="context-menu-item"
-                  onClick={() => { handleRefresh(); setHeaderMenuOpen(false); }}
+                  onClick={() => { toggleGroupByRepo(); setHeaderMenuOpen(false); }}
                 >
-                  <span style={{ display: 'inline-block', width: 16 }}>⟲</span>
-                  Refresh
+                  <span style={{ display: 'inline-block', width: 16, color: groupByRepo ? 'var(--focus-border, #89b4fa)' : 'transparent' }}>✓</span>
+                  Group sessions by repo
                 </button>
                 <button
                   className="context-menu-item"
