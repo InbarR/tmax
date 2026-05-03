@@ -169,25 +169,27 @@ const PromptSearchDialog: React.FC = () => {
       close();
       return;
     }
-    // No linked pane in this window. Pre-flight the session lookup
-    // SessionSummary uses - if the session is still in the live in-memory
-    // list, opening the summary popover will work. If it isn't (cross-window
-    // session, or it's been evicted since the dialog opened), fall back to
-    // spawning a new pane in the session's cwd so the click does SOMETHING
-    // visible (TASK-86 fix - was a silent no-op when SessionSummary returned
-    // null because its lookup missed).
+    // No linked pane in this window. Resume the AI session in a new pane -
+    // same flow as clicking Resume on the AI sessions sidebar (TASK-91).
+    // openAiSession spawns a pane with `<provider> --resume <sessionId>` as
+    // startup command. If the session isn't in main's in-memory list (cross-
+    // window edge case), the resume IPC returns null and openAiSession
+    // bails; in that case we still want to do SOMETHING visible, so fall
+    // back to a plain pane in the session's cwd (TASK-86 behavior).
     const state = useTerminalStore.getState();
     const liveSession =
       state.claudeCodeSessions.find((x) => x.id === entry.sessionId) ||
       state.copilotSessions.find((x) => x.id === entry.sessionId) ||
       null;
     if (liveSession) {
-      state.showSessionSummary(entry.sessionId);
+      if (entry.provider === 'claude-code') {
+        void state.openClaudeCodeSession(entry.sessionId);
+      } else {
+        void state.openCopilotSession(entry.sessionId);
+      }
     } else if (entry.sessionCwd) {
       void state.createTerminal(undefined, entry.sessionCwd);
     } else {
-      // Last resort - the search dialog only ever feeds entries from the
-      // live lists, so reaching here means the data shape changed under us.
       console.warn('[tmax] prompt search: no terminal, no live session, no cwd', entry.sessionId);
     }
     close();
