@@ -1,5 +1,51 @@
 # Changelog
 
+## v1.7.0
+
+A big release - **workspaces** lands as the headline feature, plus a deep round of paste / scroll / link / notification fixes and polish.
+
+### New Features
+
+- **Workspaces** - a tab is now a collection of panes. Switch workspaces from the tab bar, layouts and pane state are preserved per workspace. Per-workspace color tints, colorize toggle, polished workspace tab bar.
+- **Multi-select panes in workspaces** - Ctrl+click (Cmd+click on Mac) on a pane title bar to select multiple panes; visible "Show Selected (N)" toolbar button + Command Palette commands ("Show Selected Panes", "Show All Panes", "Clear Pane Selection") + pane menu entries with a Ctrl/Cmd+Click hint.
+- **Move pane to workspace** - per-pane overflow menu and Command Palette entry to relocate an existing pane into another workspace without recreating it. PTY / cwd / scrollback survive the move.
+- **Focus-mode pane indicator** - in workspaces + focus mode, a subtle row of dots at the bottom of the focused pane shows pane count, marks the focused one, and lets you switch with a click. Ctrl+Tab still works for power users.
+- **In-tmax image preview** - click image paths in the terminal (`.png/.jpg/.jpeg/.gif/.bmp/.webp`) to open an in-app preview side-panel with zoom and drag-resize. Works for absolute, relative, and bare-basename paths (Copilot CLI shows pasted clipboard images as `[basename.png]` - those resolve too). "Open externally" button still routes to the OS viewer.
+- **Markdown preview overlay** - click `.md` paths in the terminal to open a side-panel with rendered markdown, mermaid diagrams, zoom, drag-to-resize, and Friendly/Raw toggle.
+- **Native AI session notifications** - tmax fires its own OS toast when Claude Code or Copilot CLI finishes a turn or asks for approval. Settings toggle lets you disable if you prefer an external hook plugin. Toast click brings tmax to the front; toast header reads "tmax" on Windows (was `electron.app.Electron`); body shows session summary + branch + latest prompt and respects user-renamed pane titles.
+- **Faster prompt search (Ctrl+Shift+Y)** - results stream in progressively as each session resolves rather than waiting for all of them; mtime-keyed cache makes reopens near-instant. Visible jump-glyph (↗ for live panes, ↑ for inactive sessions) signals each row is clickable. Cross-workspace jumps switch workspaces before focusing. Inactive sessions resume in a new pane via `<provider> --resume <id>` (same flow as the AI Sessions sidebar Resume).
+- **AI Sessions header polish** - Refresh button promoted to the visible toolbar; Group toggle moved into the overflow menu next to "Show running only".
+- **VSCode-style keybindings.json** - customize shortcuts via an on-disk file.
+- **Configurable Vite port** - set `TMAX_VITE_PORT` to override the renderer dev port.
+
+### Bug Fixes
+
+- **URL clicks no longer open twice** - removed redundant `shell.openExternal` call; URLs with embedded emoji also stitch correctly across hard newlines past the emoji.
+- **Rich-text paste prefers visible text** over link URL or PNG path; stricter standalone-link detection so prose with an inline link no longer gets clobbered.
+- **Right-click paste with image clipboard** skips auto-paste when the clipboard is image-only (issue #84).
+- **Mouse wheel scroll-down during streaming** - pre-sync xterm viewport on wheel so the live prompt line is reachable.
+- **Stale "last prompt" bar** - upserts in updateSession so the bar tracks the latest input.
+- **Clipboard image paths survive restart** - stable temp dir + per-file 6h sweep replaces dir-on-shutdown deletion. Old paths in scrollback stay clickable across tmax restarts.
+- **Terminal title no longer fixates on first command** - the auto-title from your first command (e.g. `cd <path>`) used to block AI sessions from retitling the pane to their topic. Now AI session topics win over first-command auto-titles, while explicit user renames still win over both. Fixes #85.
+- **Workspaces ↔ flat tabs ↔ grid view** - flat tab mode lists every pane across all workspaces; grid view in flat mode shows them all; in workspaces mode, focus→grid stays scoped to the active workspace's panes.
+- **Voice Access focus thrash** - stop fighting Voice Access for focus; dictation no longer splices utterances mid-string.
+- **Markdown / mermaid renderer hardened** - sanitized output to prevent renderer-side script injection.
+- **Ctrl+W frees up for shell readline** - close pane moved to Ctrl+Shift+W.
+- **Stale session name on pane re-link** - cleared correctly when relinking a pane.
+- **Diff Review send button label** - uses the dynamic agent label (#78).
+
+### Internals
+
+- xterm helper textarea hidden from UIA so screen readers / Voice Access stop misplacing the overlay.
+- Regression test pass for 12 merged PRs.
+- 3s timeouts on `netstat` / `tasklist` / `ps` in the prestart hook so `npm start` never hangs.
+
+### Contributors
+
+@yodobrin, @yoziv, @omer91se, plus Claude Code and Copilot CLI agents.
+
+---
+
 ## v1.6.1
 
 A focused polish release on top of v1.6.0 - lots of fixes around the AI Sessions sidebar, plus paste / float / pane-title edge cases.
