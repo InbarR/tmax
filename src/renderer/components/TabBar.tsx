@@ -244,15 +244,28 @@ const TabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }> = ({ ver
     []
   );
 
-  // In flat tab mode, filter terminals to the active workspace so users
-  // who opted into workspaces and then back to flat don't see ghost
-  // tabs from other workspaces. In a single-workspace install this is a
-  // no-op. (TASK-40)
+  // In flat tab mode, show every terminal across every workspace so that
+  // toggling from workspaces -> tabs doesn't make panes disappear (TASK-83).
+  // Order is stable: workspace insertion order first, then in-workspace
+  // creation order. Terminals whose workspaceId no longer exists fall back
+  // to the active workspace bucket so they remain visible.
   const activeWorkspaceId = useTerminalStore((s) => s.activeWorkspaceId);
-  const allEntries = Array.from(terminals.entries());
-  const terminalEntries = allEntries.filter(([, t]) =>
-    (t.workspaceId ?? activeWorkspaceId) === activeWorkspaceId,
-  );
+  const workspaces = useTerminalStore((s) => s.workspaces);
+  const terminalEntries = useMemo(() => {
+    const allEntries = Array.from(terminals.entries());
+    const workspaceOrder = new Map<string, number>();
+    let i = 0;
+    for (const wsId of workspaces.keys()) workspaceOrder.set(wsId, i++);
+    const fallbackIdx = workspaceOrder.get(activeWorkspaceId) ?? Number.MAX_SAFE_INTEGER;
+    return allEntries
+      .map(([id, t], creationIdx) => {
+        const wsId = t.workspaceId ?? activeWorkspaceId;
+        const wsIdx = workspaceOrder.has(wsId) ? workspaceOrder.get(wsId)! : fallbackIdx;
+        return { id, t, wsIdx, creationIdx };
+      })
+      .sort((a, b) => a.wsIdx - b.wsIdx || a.creationIdx - b.creationIdx)
+      .map(({ id, t }) => [id, t] as [typeof allEntries[0][0], typeof allEntries[0][1]]);
+  }, [terminals, workspaces, activeWorkspaceId]);
   const terminalIds = useMemo(() => terminalEntries.map(([id]) => id), [terminalEntries]);
   const sortStrategy = vertical ? verticalListSortingStrategy : horizontalListSortingStrategy;
 
@@ -316,7 +329,17 @@ const TabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }> = ({ ver
               isActive={focusedTerminalId === section.id}
               isRenaming={renamingId === section.id}
               groupColor={section.groupColor}
-              onActivate={() => useTerminalStore.getState().setFocus(section.id)}
+              onActivate={() => {
+                const store = useTerminalStore.getState();
+                const wsId = section.terminal.workspaceId;
+                // If this tab lives in a different workspace, swap the
+                // active workspace's layout in first so its pane becomes
+                // visible in the grid (TASK-83).
+                if (wsId && wsId !== store.activeWorkspaceId && store.workspaces.has(wsId)) {
+                  store.setActiveWorkspace(wsId);
+                }
+                useTerminalStore.getState().setFocus(section.id);
+              }}
               onClose={() => useTerminalStore.getState().closeTerminal(section.id)}
               onContextMenu={(e) => handleContextMenu(e, section.id)}
             />
