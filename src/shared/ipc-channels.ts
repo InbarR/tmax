@@ -9,6 +9,10 @@ export const IPC = {
   CONFIG_SET: 'config:set',
   SESSION_SAVE: 'session:save',
   SESSION_LOAD: 'session:load',
+  // TASK-71: renderer -> main sync of user-set pane title overrides so OS
+  // notifications can show the same display name the user sees in the pane
+  // title. The map is `Record<string, string>` (sessionId -> displayName).
+  SESSION_NAME_OVERRIDES_SYNC: 'session:nameOverridesSync',
   CONFIG_OPEN: 'config:open',
   OPEN_PATH: 'shell:openPath',
   DETACH_CREATE: 'detach:create',

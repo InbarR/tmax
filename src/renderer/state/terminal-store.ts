@@ -2403,6 +2403,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
     if (session.sessionNameOverrides && typeof session.sessionNameOverrides === 'object') {
       set({ sessionNameOverrides: session.sessionNameOverrides as Record<string, string> });
+      // TASK-71: push the restored map to main so the first notification
+      // of this run picks up user-set names even if main hadn't already
+      // seeded the cache from disk (belt-and-suspenders).
+      try {
+        (window.terminalAPI as any).syncSessionNameOverrides?.(session.sessionNameOverrides as Record<string, string>);
+      } catch { /* non-fatal */ }
     }
 
     if (session.sessionLifecycleOverrides && typeof session.sessionLifecycleOverrides === 'object') {
@@ -3024,6 +3030,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     });
     // Persist immediately — beforeunload often doesn't complete before renderer shutdown
     get().saveSession();
+    // TASK-71: push the updated map to main so notifyCopilotSession can
+    // surface the user's chosen name in OS notifications. Fire-and-forget;
+    // missing API (older preload) is non-fatal.
+    try {
+      (window.terminalAPI as any).syncSessionNameOverrides?.(get().sessionNameOverrides);
+    } catch { /* ignore - main side falls back to summary if not synced */ }
   },
 
   setSessionLifecycle: (sessionId: string, lifecycle: import('../../shared/copilot-types').SessionLifecycle) => {

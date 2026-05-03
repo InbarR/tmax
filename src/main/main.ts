@@ -10,7 +10,7 @@ import { KeybindingsFile } from './keybindings-file';
 import { IPC } from '../shared/ipc-channels';
 import { CopilotSessionMonitor } from './copilot-session-monitor';
 import { CopilotSessionWatcher } from './copilot-session-watcher';
-import { notifyCopilotSession, clearNotificationCooldowns, setAiSessionNotificationsEnabled, setNotificationClickHandler } from './copilot-notification';
+import { notifyCopilotSession, clearNotificationCooldowns, setAiSessionNotificationsEnabled, setNotificationClickHandler, setSessionNameOverrides } from './copilot-notification';
 import { ClaudeCodeSessionMonitor } from './claude-code-session-monitor';
 import { ClaudeCodeSessionWatcher } from './claude-code-session-watcher';
 import { WslSessionManager } from './wsl-session-manager';
@@ -390,6 +390,27 @@ function setupConfigStore(): void {
   setAiSessionNotificationsEnabled(configStore.get('aiSessionNotifications') ?? true);
 }
 
+// TASK-71: seed the notification module's override cache directly from
+// the on-disk session store at startup. Without this, the very first
+// notification of the run (which can fire before the renderer has had a
+// chance to send SESSION_NAME_OVERRIDES_SYNC) would still show the auto-
+// derived name even for previously-renamed sessions.
+function seedSessionNameOverridesFromDisk(): void {
+  try {
+    const session = sessionStore.get('session') as Record<string, unknown> | undefined;
+    const raw = session?.sessionNameOverrides;
+    if (!raw || typeof raw !== 'object') return;
+    const map: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof v === 'string' && v.trim()) map[k] = v;
+    }
+    setSessionNameOverrides(map);
+  } catch {
+    // Session store unreadable at startup - non-fatal; renderer will sync
+    // a fresh map shortly after it boots.
+  }
+}
+
 // Action ids that the renderer's keybindings runtime knows how to dispatch.
 // Documented in the keybindings.json header so users discover what's bindable
 // without reading source. (TASK-39)
@@ -577,6 +598,23 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.SESSION_SAVE, (_event, data: unknown) => {
     sessionStore.set('session', data);
+  });
+
+  // TASK-71: receive the user-set pane title overrides from the renderer
+  // so notifyCopilotSession can prefer them over the auto-derived
+  // session.summary. The renderer fires this on every rename (and once
+  // after restoreSession). Main also seeds the cache from sessionStore
+  // at startup - see seedSessionNameOverridesFromDisk.
+  ipcMain.on(IPC.SESSION_NAME_OVERRIDES_SYNC, (_event, overrides: unknown) => {
+    if (!overrides || typeof overrides !== 'object') {
+      setSessionNameOverrides({});
+      return;
+    }
+    const map: Record<string, string> = {};
+    for (const [k, v] of Object.entries(overrides as Record<string, unknown>)) {
+      if (typeof v === 'string' && v.trim()) map[k] = v;
+    }
+    setSessionNameOverrides(map);
   });
 
   ipcMain.handle(IPC.CONFIG_OPEN, () => {
@@ -1195,6 +1233,15 @@ app.whenReady().then(() => {
     initDiagLogger();
     setupConfigStore();
     console.log('Config store ready');
+    seedSessionNameOverridesFromDisk();
+    if (process.env.TMAX_E2E === '1') {
+      // TASK-71: expose a few notification helpers on `global` so e2e tests
+      // can drive notifyCopilotSession directly via app.evaluate without
+      // having to spin up the real session monitor and watch a fake JSONL
+      // file being written.
+      (global as any).__notifyCopilotSession = notifyCopilotSession;
+      (global as any).__clearNotificationCooldowns = clearNotificationCooldowns;
+    }
     setupKeybindingsFile();
     setupPtyManager();
     console.log('PTY manager ready');

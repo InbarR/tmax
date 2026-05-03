@@ -31,6 +31,20 @@ export function setNotificationClickHandler(handler: (() => void) | null): void 
   clickHandler = handler;
 }
 
+// TASK-71: cached copy of the renderer's `sessionNameOverrides` map. The
+// renderer fires SESSION_NAME_OVERRIDES_SYNC on every rename and once at
+// startup after restoring tmax-session.json; main.ts also seeds this from
+// the on-disk session store so the very first notification of a session
+// (fired before the renderer connects) still picks up an existing override.
+let sessionNameOverrides: Record<string, string> = {};
+export function setSessionNameOverrides(map: Record<string, string>): void {
+  sessionNameOverrides = { ...map };
+}
+export function getSessionNameOverride(sessionId: string): string {
+  const raw = sessionNameOverrides[sessionId];
+  return typeof raw === 'string' ? raw.trim() : '';
+}
+
 function isAttentionStatus(status: CopilotSessionStatus | undefined): boolean {
   return status === 'awaitingApproval' || status === 'waitingForUser';
 }
@@ -73,6 +87,16 @@ export function notifyCopilotSession(session: CopilotSessionSummary): void {
 
   const body = buildNotificationBody(session);
 
+  // E2E test hook: capture every notification body main builds so tests
+  // can assert on the override-vs-summary precedence without having to
+  // intercept the OS toast surface itself. Production-safe (gated on
+  // TMAX_E2E so the array never grows in normal runs).
+  if (process.env.TMAX_E2E === '1') {
+    const g = globalThis as any;
+    if (!Array.isArray(g.__capturedNotifications)) g.__capturedNotifications = [];
+    g.__capturedNotifications.push({ title, body });
+  }
+
   const notification = new Notification({ title, body });
   if (clickHandler) {
     notification.on('click', () => {
@@ -88,17 +112,14 @@ export function notifyCopilotSession(session: CopilotSessionSummary): void {
  *  - WHICH session is this? (line 1: pane/session name + branch)
  *  - WHAT was just said?    (line 2: latest user prompt, in quotes)
  *
- * Line 1 uses session.summary as the primary identifier - that's the
- * same source the renderer uses for the pane title (firstPrompt for
- * sessions the user has prompted in, falling back to cwdFolder for
- * brand-new ones). The auto-generated slug ("calm-river", etc.) is
- * deliberately skipped - random adjective+noun pairs add visual noise
- * without helping the user identify the pane.
- *
- * NOTE: user-set rename overrides (sessionNameOverrides) live in
- * renderer-only state today. Without an IPC sync to main we can't see
- * them here, so a renamed pane still gets the auto-derived name in the
- * notification. Follow-up task tracks adding that sync.
+ * Line 1 precedence (TASK-71):
+ *   1. user-set rename override (sessionNameOverrides[id]) - synced from
+ *      the renderer so renamed panes show their custom name in toasts.
+ *   2. session.summary (firstPrompt for active sessions, skipping the
+ *      auto-generated slug like "calm-river").
+ *   3. session.repository.
+ *   4. cwd folder name.
+ *   5. id slice (last-resort identifier).
  */
 function buildNotificationBody(session: CopilotSessionSummary): string {
   const parts: string[] = [];
@@ -106,12 +127,16 @@ function buildNotificationBody(session: CopilotSessionSummary): string {
   const cwdFolder = deriveCwdFolder(session.cwd);
   const branch = session.branch || '';
 
+  // TASK-71: user override wins. Empty string means "no override - fall
+  // back to summary."
+  const override = getSessionNameOverride(session.id);
+
   // Prefer summary (firstPrompt for active sessions). Skip if it's just
   // the auto-generated slug.
   const summary = session.summary && session.summary !== session.slug
     ? session.summary.trim().replace(/\s+/g, ' ')
     : '';
-  const rawName = summary || session.repository || cwdFolder || session.id.slice(0, 8);
+  const rawName = override || summary || session.repository || cwdFolder || session.id.slice(0, 8);
   const NAME_MAX = 60;
   const displayName = rawName.length > NAME_MAX
     ? rawName.slice(0, NAME_MAX - 1) + '…'

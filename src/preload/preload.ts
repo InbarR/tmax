@@ -71,6 +71,8 @@ export interface TerminalAPI {
   createWorktree(repoPath: string, branchName: string, baseBranch: string): Promise<{ success: boolean; worktreePath?: string; error?: string }>;
   deleteWorktree(repoPath: string, worktreePath: string): Promise<{ success: boolean; error?: string }>;
   getBranches(repoPath: string): Promise<string[]>;
+  // ── Session name overrides sync (TASK-71) ─────────────────────────
+  syncSessionNameOverrides(overrides: Record<string, string>): void;
 }
 
 const terminalAPI: TerminalAPI = {
@@ -414,6 +416,11 @@ const terminalAPI: TerminalAPI = {
   },
   getBranches(repoPath: string) {
     return ipcRenderer.invoke(IPC.GIT_GET_BRANCHES, repoPath);
+  },
+
+  // ── Session name overrides sync (TASK-71) ─────────────────────────
+  syncSessionNameOverrides(overrides: Record<string, string>) {
+    ipcRenderer.send(IPC.SESSION_NAME_OVERRIDES_SYNC, overrides);
   },
 
 };
