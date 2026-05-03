@@ -3,11 +3,11 @@ id: TASK-81
 title: >-
   Regression: pasted clipboard images no longer embed into AI agent input (used
   to work)
-status: To Do
+status: Done
 assignee:
   - '@inbarr'
 created_date: '2026-05-03 13:02'
-updated_date: '2026-05-03 15:09'
+updated_date: '2026-05-03 15:14'
 labels: []
 dependencies: []
 ---
@@ -30,4 +30,12 @@ When the user Ctrl+V's a clipboard image into tmax, the renderer's clipboardSave
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-05-03: User reports this is a regression - the flow used to embed images into Claude Code as image content, now Claude Code only sees the literal path text. Bisect needed to confirm tmax-side vs Claude Code CLI side. Likely tmax suspects: TASK-61 (rich-text paste) or TASK-66 (right-click image-only) - though both commits claim image-only Ctrl+V was preserved. If it bisects to no tmax change, file with Anthropic for the Claude Code CLI side.
+
+Closed 2026-05-03: not actionable from tmax. Investigation showed the Ctrl+V image paste flow has been identical since 4e23bb7 - tmax saves a PNG and types the path into the PTY, which is exactly what it always did. Claude Code CLI used to auto-embed images from pasted file paths and recently stopped; the regression is upstream. Workaround: ask the AI to Read <path> explicitly, or paste an @-mention if Claude Code adds one. Re-open if Anthropic restores the auto-embed or we adopt a paste protocol (OSC 1337 / known marker).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Won't do from tmax - upstream Claude Code CLI regression. The tmax-side paste path (clipboardSaveImage -> writePty(path)) is unchanged from when this used to work; Claude Code stopped auto-embedding images from pasted file paths. Workaround for the user is to ask the AI to Read the file path explicitly. File upstream with Anthropic if we want this restored.
+<!-- SECTION:FINAL_SUMMARY:END -->
