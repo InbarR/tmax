@@ -3,9 +3,10 @@ id: TASK-76
 title: >-
   One-click peek at hidden panes - toggle reveal/hide for loop tabs in
   workspaces
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-03 11:44'
+updated_date: '2026-05-03 15:13'
 labels: []
 dependencies: []
 ---
@@ -24,3 +25,15 @@ User keeps several loop panes (e.g. the first 3 tabs from the left in workspaces
 - [ ] #4 Saved workspace layout / persistent hide-list is unchanged after peek toggle
 - [ ] #5 Cross-platform: works the same on Windows/macOS/Linux
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Closed 2026-05-03: not important enough now that workspaces (TASK-40) ship. Workspaces already give a way to keep loop panes in a separate workspace and switch to that workspace when you want to glance at them, so the dedicated 'peek' affordance is redundant. Re-open if loop visibility comes up again as a separate concern.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Won't do - superseded by workspaces (TASK-40). Loop panes can live in their own workspace and be revealed by switching to it; a dedicated peek toggle is no longer worth the extra UI surface.
+<!-- SECTION:FINAL_SUMMARY:END -->
