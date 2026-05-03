@@ -3,10 +3,11 @@ id: TASK-81
 title: >-
   Regression: pasted clipboard images no longer embed into AI agent input (used
   to work)
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@inbarr'
 created_date: '2026-05-03 13:02'
-updated_date: '2026-05-03 13:13'
+updated_date: '2026-05-03 14:45'
 labels: []
 dependencies: []
 ---

@@ -61,28 +61,40 @@ const PromptSearchDialog: React.FC = () => {
   const copilotSessions = useTerminalStore((s) => s.copilotSessions);
   const terminals = useTerminalStore((s) => s.terminals);
 
-  // Reset and fetch when opening. Each open re-fetches because new prompts
-  // may have arrived since last open.
+  // Reset and fetch when opening. Each open re-fetches (cheap for unchanged
+  // sessions thanks to the mtime-keyed cache in extractClaudeCodePrompts /
+  // extractCopilotPrompts). TASK-85: render progressively - each session's
+  // prompts land as they arrive instead of waiting for Promise.all to settle,
+  // so the dialog is usable within a frame or two even with 50+ sessions.
   useEffect(() => {
     if (!show) return;
     setQuery('');
     setSelectedIndex(0);
+    setEntries([]);
     setLoading(true);
     requestAnimationFrame(() => inputRef.current?.focus());
 
     const api = window.terminalAPI as any;
-    const buildEntries = (sessions: CopilotSessionSummary[], provider: 'copilot' | 'claude-code'): Promise<SearchEntry[]> => {
+    const allSessions: Array<{ sess: CopilotSessionSummary; provider: 'copilot' | 'claude-code' }> = [
+      ...claudeCodeSessions.map((s) => ({ sess: s, provider: 'claude-code' as const })),
+      ...copilotSessions.map((s) => ({ sess: s, provider: 'copilot' as const })),
+    ];
+    if (allSessions.length === 0) { setLoading(false); return; }
+
+    let cancelled = false;
+    let outstanding = allSessions.length;
+    const finishOne = () => {
+      outstanding--;
+      if (outstanding === 0 && !cancelled) setLoading(false);
+    };
+
+    for (const { sess, provider } of allSessions) {
       const fetcher = provider === 'claude-code' ? api.getClaudeCodePrompts : api.getCopilotPrompts;
-      return Promise.all(
-        sessions.map(async (sess) => {
-          let prompts: string[] = [];
-          try {
-            prompts = await fetcher(sess.id);
-            if (!Array.isArray(prompts)) prompts = [];
-          } catch { /* ignore */ }
-          // Find the linked pane by aiSessionId. Cross-window panes won't
-          // be in this map but the dialog can still surface the prompt -
-          // jump will simply have no target.
+      fetcher(sess.id)
+        .then((prompts: string[] | undefined) => {
+          if (cancelled) return;
+          const list = Array.isArray(prompts) ? prompts : [];
+          // Resolve linked pane once per session, not once per prompt.
           let terminalId: string | null = null;
           let paneTitle = sess.summary || sess.id.slice(0, 8);
           for (const [tid, t] of terminals) {
@@ -93,35 +105,35 @@ const PromptSearchDialog: React.FC = () => {
             }
           }
           const baseTime = sess.lastActivityTime || sess.latestPromptTime || Date.now();
-          return prompts.map((p, i) => ({
-            sessionId: sess.id,
-            provider,
-            promptIndex: i,
-            prompt: p,
-            terminalId,
-            paneTitle,
-            sessionFolder: shortPath(sess.cwd || ''),
-            sessionCwd: sess.cwd || '',
-            // Newer prompts within a session get a smaller age. Without
-            // per-prompt timestamps the best we can do is gradient from
-            // baseTime down so newest-in-session sorts first.
-            ageMs: Math.max(0, Date.now() - baseTime) + (prompts.length - i - 1) * 1000,
-          }));
-        }),
-      ).then((arrs) => arrs.flat());
-    };
+          const sessionEntries: SearchEntry[] = list
+            .map((p, i) => ({
+              sessionId: sess.id,
+              provider,
+              promptIndex: i,
+              prompt: p,
+              terminalId,
+              paneTitle,
+              sessionFolder: shortPath(sess.cwd || ''),
+              sessionCwd: sess.cwd || '',
+              ageMs: Math.max(0, Date.now() - baseTime) + (list.length - i - 1) * 1000,
+            }))
+            .filter((e) => !isTrivial(e.prompt));
+          if (sessionEntries.length === 0) return;
+          // Progressive merge: each resolution appends to entries; sort once
+          // here to keep newest-first ordering. Sort cost is O(n log n) per
+          // resolution but n is bounded by total prompts shown (<=200 in the
+          // filtered view anyway).
+          setEntries((prev) => {
+            const merged = prev.concat(sessionEntries);
+            merged.sort((a, b) => a.ageMs - b.ageMs);
+            return merged;
+          });
+        })
+        .catch(() => { /* ignore per-session failures */ })
+        .finally(finishOne);
+    }
 
-    Promise.all([
-      buildEntries(claudeCodeSessions, 'claude-code'),
-      buildEntries(copilotSessions, 'copilot'),
-    ])
-      .then(([cc, cp]) => {
-        const all = [...cc, ...cp].filter((e) => !isTrivial(e.prompt));
-        // Sort newest first
-        all.sort((a, b) => a.ageMs - b.ageMs);
-        setEntries(all);
-      })
-      .finally(() => setLoading(false));
+    return () => { cancelled = true; };
   }, [show]);
 
   const filtered = useMemo(() => {

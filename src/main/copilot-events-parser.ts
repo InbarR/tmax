@@ -96,7 +96,10 @@ export function parseSessionEvents(eventsFilePath: string): ParsedSessionEvents 
   }
 }
 
-export function extractCopilotPrompts(eventsFilePath: string, limit = 20): string[] {
+// TASK-85: default cap of 10 (was 20). Search rarely benefits from deep
+// per-session history; 10 keeps the dataset small for fast filtering. The
+// existing mtime-keyed cache means re-opens are still near-instant.
+export function extractCopilotPrompts(eventsFilePath: string, limit = 10): string[] {
   try {
     const stat = fs.statSync(eventsFilePath);
     const cached = promptsCache.get(eventsFilePath);

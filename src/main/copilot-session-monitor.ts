@@ -171,7 +171,9 @@ export class CopilotSessionMonitor {
     return results;
   }
 
-  getPrompts(sessionId: string, limit = 20): string[] {
+  // TASK-85: default cap matches the parser's default of 10. Callers can
+  // still pass a higher limit if they need deeper history.
+  getPrompts(sessionId: string, limit = 10): string[] {
     const eventsPath = path.join(this.basePath, sessionId, 'events.jsonl');
     return extractCopilotPrompts(eventsPath, limit);
   }

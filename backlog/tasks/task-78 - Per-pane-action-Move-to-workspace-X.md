@@ -1,9 +1,11 @@
 ---
 id: TASK-78
 title: 'Per-pane action: Move to workspace X'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude-agent'
 created_date: '2026-05-03 12:57'
+updated_date: '2026-05-03 14:45'
 labels: []
 dependencies: []
 ---

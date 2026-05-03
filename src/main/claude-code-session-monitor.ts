@@ -193,7 +193,8 @@ export class ClaudeCodeSessionMonitor {
     return results;
   }
 
-  getPrompts(sessionId: string, limit = 20): string[] {
+  // TASK-85: default cap matches the parser's default of 10.
+  getPrompts(sessionId: string, limit = 10): string[] {
     const filePath = this.filePaths.get(sessionId);
     if (!filePath) return [];
     return extractClaudeCodePrompts(filePath, limit);

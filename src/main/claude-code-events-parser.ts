@@ -334,7 +334,8 @@ function deriveResult(
   };
 }
 
-export function extractClaudeCodePrompts(filePath: string, limit = 20): string[] {
+// TASK-85: default cap of 10 (was 20). See extractCopilotPrompts for rationale.
+export function extractClaudeCodePrompts(filePath: string, limit = 10): string[] {
   try {
     const stat = fs.statSync(filePath);
     const cached = promptsCache.get(filePath);

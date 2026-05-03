@@ -1,9 +1,11 @@
 ---
 id: TASK-79
 title: Improve discoverability of pane multi-select + 'Show Selected' filter
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude-agent'
 created_date: '2026-05-03 12:57'
+updated_date: '2026-05-03 14:45'
 labels: []
 dependencies: []
 ---
