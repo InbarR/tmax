@@ -6,7 +6,7 @@
 // Safety: only kills node/electron processes that own the port. Skips anything
 // else (e.g., a dev tool the user intentionally bound to that port).
 
-const { execSync } = require('node:child_process');
+const { execSync, execFileSync } = require('node:child_process');
 
 const port = Number(process.env.TMAX_VITE_PORT) || 5995;
 
@@ -36,16 +36,33 @@ function getPidsUnix(p) {
 }
 
 function getProcName(pid) {
-  try {
-    if (process.platform === 'win32') {
-      // tasklist can be very slow (>30s) when the system is busy with many
-      // node/electron processes. Cap it so the prestart hook never hangs npm
-      // start (TASK-58 follow-up). On timeout we return '' which means we
-      // skip the PID safely.
-      const out = execSync(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, { encoding: 'utf8', timeout: 3000 });
+  if (process.platform === 'win32') {
+    // execFileSync (no shell) so /FI isn't translated by Git Bash/MSYS and
+    // quoting can't be mangled by whatever script-shell npm is using.
+    try {
+      const out = execFileSync(
+        'tasklist',
+        ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'],
+        { encoding: 'utf8', timeout: 3000, windowsHide: true },
+      );
       const m = out.match(/^"([^"]+)"/m);
-      return m ? m[1].toLowerCase() : '';
+      if (m) return m[1].toLowerCase();
+    } catch { /* fall through to PowerShell */ }
+    // PowerShell fallback: tasklist sometimes returns no match for live PIDs
+    // (slow CSV parse, racy exit, restricted access). Get-Process uses a
+    // different API and is far more reliable.
+    try {
+      const out = execFileSync(
+        'powershell',
+        ['-NoProfile', '-Command', `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).ProcessName`],
+        { encoding: 'utf8', timeout: 5000, windowsHide: true },
+      );
+      return out.trim().toLowerCase();
+    } catch {
+      return '';
     }
+  }
+  try {
     const out = execSync(`ps -p ${pid} -o comm=`, { encoding: 'utf8', timeout: 3000 });
     return out.trim().toLowerCase();
   } catch {
@@ -56,9 +73,9 @@ function getProcName(pid) {
 function killPid(pid) {
   try {
     if (process.platform === 'win32') {
-      execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore', timeout: 3000 });
+      execFileSync('taskkill', ['/F', '/PID', String(pid)], { stdio: 'ignore', timeout: 3000, windowsHide: true });
     } else {
-      execSync(`kill -9 ${pid}`, { stdio: 'ignore', timeout: 3000 });
+      execFileSync('kill', ['-9', String(pid)], { stdio: 'ignore', timeout: 3000 });
     }
     return true;
   } catch {
