@@ -1,11 +1,11 @@
 ---
 id: TASK-100
 title: 'Bug: drag-select breaks after Ctrl+C kills a TUI (Copilot CLI / Claude Code)'
-status: In Progress
+status: Done
 assignee:
   - '@inbarr'
 created_date: '2026-05-04 12:25'
-updated_date: '2026-05-04 12:25'
+updated_date: '2026-05-04 13:49'
 labels:
   - bug
   - workspaces
@@ -20,8 +20,14 @@ Repro from user: open a fresh terminal, run copilot, exit it with Ctrl+C, return
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 After Ctrl+C kills Copilot CLI / Claude Code, drag-select works again immediately in the same terminal
-- [ ] #2 TUIs that exit cleanly are unaffected (no double-reset)
-- [ ] #3 Mouse modes enabled OUTSIDE alt-screen are NOT reset (we only act on alt-screen exit)
-- [ ] #4 Cursor-hide handling for the same alt-screen toggle continues to work
+- [x] #1 After Ctrl+C kills Copilot CLI / Claude Code, drag-select works again immediately in the same terminal
+- [x] #2 TUIs that exit cleanly are unaffected (no double-reset)
+- [x] #3 Mouse modes enabled OUTSIDE alt-screen are NOT reset (we only act on alt-screen exit)
+- [x] #4 Cursor-hide handling for the same alt-screen toggle continues to work
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped in commit bfe8527. TerminalPanel.tsx now tracks any active mouse-tracking mode (?1000h/?1002h/?1003h/?1006h/?1015h) alongside the existing alt-screen toggle. On alt-screen exit (?1049l/?1047l) with mouse modes still active, force-writes the matching reset sequences to xterm so it stops forwarding mouse events to the (now-dead) child process and drag-select works again. Spec at tests/e2e/task-100-mouse-mode-reset-on-altscreen-exit.spec.ts covers leftover-reset, no-double-reset, and no-touch-without-altscreen cases.
+<!-- SECTION:FINAL_SUMMARY:END -->
