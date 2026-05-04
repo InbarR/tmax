@@ -5,6 +5,7 @@ import type { LayoutNode, LayoutSplitNode } from '../state/types';
 import TerminalPanel from './TerminalPanel';
 import SplitResizer from './SplitResizer';
 import PaneDropZones from './PaneDropZones';
+import EmptyState from './EmptyState';
 
 interface TilingNodeProps {
   node: LayoutNode;
@@ -137,11 +138,7 @@ const TilingLayout: React.FC = () => {
   const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
 
   if (!tilingRoot) {
-    return (
-      <div className="empty-state">
-        Press Ctrl+Shift+N to create a new terminal
-      </div>
-    );
+    return <EmptyState />;
   }
 
   // Always render a stable wrapper div so React never unmounts the TilingNode tree
