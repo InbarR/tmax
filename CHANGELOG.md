@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.7.2
+
+A small patch focused on the startup experience.
+
+### New Features
+
+- **"Restoring session..." loading indicator** - on launch, while tmax is rebuilding your saved layout, you now see a neutral spinner instead of the empty-state hero. Previously the hero rendered for 1-3 seconds during restore and looked like the panes had been lost. The hero only shows now when restore actually completes with nothing to display.
+
+### Performance
+
+- **Faster session restore** - PTY spawns during session restore now run in parallel via `Promise.all` rather than sequentially. With N panes the startup time is roughly bounded by the slowest spawn instead of the sum of all spawns.
+- **One less disk read at startup** - favoriteDirs / recentDirs now hydrate from the same `loadSession` payload that `restoreSession` reads, instead of duplicating the read.
+
 ## v1.7.1
 
 A patch release focused on fixing URL clicks in Claude Code, polishing the empty state, and adding browser-style undo close.
