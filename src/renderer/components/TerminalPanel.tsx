@@ -468,12 +468,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           if (!nextTextRaw) break;
           // Allow an indented continuation: gh and similar CLIs hard-wrap
           // long URLs with the continuation indented under the start of the
-          // line. Trim the leading whitespace and remember it for the
-          // offset->visual-col mapping. To avoid false-positives where an
-          // indented prose paragraph follows a URL ("    bar for more info"),
-          // require the trimmed line to be a SINGLE whitespace-free token —
-          // wrapped URLs look like long opaque token chains, prose doesn't.
-          const wsMatch = nextTextRaw.match(/^(\s*)(\S+)\s*$/);
+          // line. Trim leading whitespace + table-border chars (`|`, `│`)
+          // and remember the visual offset for the offset->col mapping. To
+          // avoid false-positives where an indented prose paragraph follows
+          // a URL ("    bar for more info"), require the meaningful payload
+          // to be a SINGLE non-whitespace, non-pipe token between optional
+          // table-noise borders. Markdown tables that wrap a long URL onto
+          // the next row would otherwise look like `|   |   4)   |` and the
+          // older /^(\s*)(\S+)\s*$/ check rejected them, leaving the URL
+          // truncated at the wrap point.
+          const wsMatch = nextTextRaw.match(/^([\s|│]*)([^\s|│]+)[\s|│]*$/);
           if (!wsMatch) break;
           const leadingWS = wsMatch[1].length;
           const nextText = wsMatch[2];
