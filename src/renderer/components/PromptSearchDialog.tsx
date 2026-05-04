@@ -271,9 +271,13 @@ const PromptSearchDialog: React.FC = () => {
                   <div className="prompt-search-body">
                     <div className="prompt-search-prompt">{hl(entry.prompt)}</div>
                     <div className="prompt-search-meta">
-                      <span className="prompt-search-pane">{hl(entry.paneTitle)}</span>
+                      <span className="prompt-search-pane">
+                        <span className="prompt-search-meta-label">title:</span> {hl(entry.paneTitle)}
+                      </span>
                       {entry.sessionFolder && (
-                        <span className="prompt-search-folder">{hl(entry.sessionFolder)}</span>
+                        <span className="prompt-search-folder">
+                          <span className="prompt-search-meta-label">folder:</span> {hl(entry.sessionFolder)}
+                        </span>
                       )}
                       <span className="prompt-search-age">{relativePhrase(entry.ageMs)}</span>
                     </div>

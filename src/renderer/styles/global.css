@@ -2349,6 +2349,11 @@ body.broadcast-on .terminal-panel {
   color: var(--text-secondary);
   opacity: 0.7;
 }
+.prompt-search-meta-label {
+  color: var(--text-secondary);
+  opacity: 0.6;
+  font-weight: 400;
+}
 .prompt-search-mark {
   background: rgba(249, 226, 175, 0.35);
   color: var(--text-primary);
