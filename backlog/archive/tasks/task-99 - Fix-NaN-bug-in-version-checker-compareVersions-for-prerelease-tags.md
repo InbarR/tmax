@@ -1,9 +1,10 @@
 ---
 id: TASK-99
 title: Fix NaN bug in version-checker compareVersions for prerelease tags
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-04 09:21'
+updated_date: '2026-05-04 13:47'
 labels: []
 dependencies: []
 ---
@@ -21,3 +22,15 @@ src/main/version-checker.ts:559-568 splits version strings by dot and applies Nu
 - [ ] #3 compareVersions never returns NaN for any well-formed semver tag
 - [ ] #4 Unit tests cover prerelease comparisons (rc, beta, alpha) and confirm the version-checker gating works as expected
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Closed 2026-05-04: skipping. Defense-in-depth value not worth the unit-test setup; the prerelease-filter at the release-workflow layer (fb5a100) and at /releases/latest is the real gate, and that's working. Re-open if NaN in compareVersions ever surfaces again.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Won't do - defense-in-depth fix not worth the cost. Real gating happens at the prerelease filter, not at compareVersions.
+<!-- SECTION:FINAL_SUMMARY:END -->
