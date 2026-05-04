@@ -114,8 +114,21 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
         window.terminalAPI.writePty(terminalId, data);
       });
 
+      let mouseTrackingOn = false;
       const unsubscribePtyData = window.terminalAPI.onPtyData((id, data) => {
-        if (id === terminalId) term.write(data);
+        if (id !== terminalId) return;
+        // Track mouse reporting modes so handleContextMenu can suppress paste
+        for (let i = 0; i < data.length; i++) {
+          if (data.charCodeAt(i) !== 0x1b) continue;
+          if (data.startsWith('\x1b[?1000h', i) || data.startsWith('\x1b[?1002h', i) ||
+              data.startsWith('\x1b[?1003h', i)) {
+            mouseTrackingOn = true;
+          } else if (data.startsWith('\x1b[?1000l', i) || data.startsWith('\x1b[?1002l', i) ||
+                     data.startsWith('\x1b[?1003l', i)) {
+            mouseTrackingOn = false;
+          }
+        }
+        term.write(data);
       });
 
       const unsubscribePtyExit = window.terminalAPI.onPtyExit((id) => {
@@ -140,6 +153,33 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
       // TerminalPanel so detached windows match main window behaviour.
       // Skip the implicit paste when clipboard is image-only (issue #84) -
       // see TerminalPanel.handleContextMenu for the rationale.
+
+      // Track recent left-button drag attempts for failed-selection detection.
+      let recentDragWithoutSelection = false;
+      let dragStartPos: { x: number; y: number } | null = null;
+      const DRAG_THRESHOLD = 5;
+
+      const handleLeftMouseDown = (e: MouseEvent) => {
+        if (e.button === 0) {
+          dragStartPos = { x: e.clientX, y: e.clientY };
+          recentDragWithoutSelection = false;
+        }
+      };
+      const handleLeftMouseUp = (e: MouseEvent) => {
+        if (e.button === 0 && dragStartPos) {
+          const dx = e.clientX - dragStartPos.x;
+          const dy = e.clientY - dragStartPos.y;
+          const wasDrag = Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD;
+          if (wasDrag && mouseTrackingOn && !term.hasSelection()) {
+            recentDragWithoutSelection = true;
+            setTimeout(() => { recentDragWithoutSelection = false; }, 3000);
+          } else {
+            recentDragWithoutSelection = false;
+          }
+          dragStartPos = null;
+        }
+      };
+
       const handleContextMenu = (e: MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
@@ -147,6 +187,12 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
         if (term.hasSelection()) {
           window.terminalAPI.clipboardWrite(term.getSelection());
           term.clearSelection();
+          return;
+        }
+        // When mouse tracking consumed a recent drag (user tried to select but
+        // the TUI swallowed it), suppress paste.
+        if (recentDragWithoutSelection) {
+          recentDragWithoutSelection = false;
           return;
         }
         const hasImage = window.terminalAPI.clipboardHasImage();
@@ -176,6 +222,8 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
       containerEl.addEventListener('contextmenu', handleContextMenu, true);
       containerEl.addEventListener('mousedown', handleRightMouseButton, true);
       containerEl.addEventListener('mouseup', handleRightMouseButton, true);
+      containerEl.addEventListener('mousedown', handleLeftMouseDown, true);
+      containerEl.addEventListener('mouseup', handleLeftMouseUp, true);
 
       term.focus();
 
@@ -188,6 +236,8 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
         containerEl.removeEventListener('contextmenu', handleContextMenu, true);
         containerEl.removeEventListener('mousedown', handleRightMouseButton, true);
         containerEl.removeEventListener('mouseup', handleRightMouseButton, true);
+        containerEl.removeEventListener('mousedown', handleLeftMouseDown, true);
+        containerEl.removeEventListener('mouseup', handleLeftMouseUp, true);
         term.dispose();
       };
     })();
