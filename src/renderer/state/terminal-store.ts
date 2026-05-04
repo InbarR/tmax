@@ -810,6 +810,15 @@ interface TerminalStore {
   getLayoutNames: () => Promise<{ name: string; count: number }[]>;
   saveSession: () => Promise<void>;
   restoreSession: () => Promise<boolean>;
+  /**
+   * True from app boot until session restore + auto-spawn fallback have
+   * finished. Used by TilingLayout to render a neutral loading indicator
+   * instead of the empty-state hero while panes are still being attached
+   * (TASK-117). App.tsx is responsible for flipping it to false in the
+   * init effect's finally clause; restoreSession also flips it false on
+   * its own exit so direct callers (tests, hot-reload) don't leave it stuck.
+   */
+  isRestoring: boolean;
   addFavoriteDir: (dir: string) => void;
   removeFavoriteDir: (dir: string) => void;
   addRecentDir: (dir: string) => void;
@@ -950,6 +959,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   activeWorkspaceId: DEFAULT_WORKSPACE_ID,
   focusedTerminalId: null,
   config: null,
+  // Default true so the loading indicator covers the very first paint -
+  // App.tsx flips this to false in its init effect's finally block.
+  isRestoring: true,
   isDragging: false,
   draggedTerminalId: null,
   nextZIndex: 100,
@@ -2775,6 +2787,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   restoreSession: async () => {
+    try {
     const session = (await window.terminalAPI.loadSession()) as Record<string, unknown> | null;
     // Flip the hydration flag whether or not a saved session exists —
     // subsequent saveSession calls are safe either way.
@@ -2782,6 +2795,16 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     if (!session) return false;
     // Cache session extras (layouts, etc.) so saveSession doesn't need async load
     _sessionExtras = { ...session };
+
+    // Hydrate favoriteDirs / recentDirs here so we don't need a separate
+    // loadDirs() call from App.tsx (TASK-117 - drops a redundant
+    // loadSession disk read at startup). The .exe filter mirrors what
+    // loadDirs used to do.
+    const isNotExe = (d: string) => !/\.(exe|cmd|bat|com|ps1|sh|msi|dll)$/i.test(d);
+    set({
+      favoriteDirs: ((session.favoriteDirs as string[]) ?? []).filter(isNotExe),
+      recentDirs: ((session.recentDirs as string[]) ?? []).filter(isNotExe),
+    });
 
     if (typeof session.autoColorTabs === 'boolean') {
       set({ autoColorTabs: session.autoColorTabs });
@@ -2836,23 +2859,46 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       const restoredWorkspaces = new Map<WorkspaceId, Workspace>();
       let workspaceContext: WorkspaceId = DEFAULT_WORKSPACE_ID;
 
+      // TASK-117: parallelize pty spawn for the whole tree. Walk the tree
+      // pre-order to collect every leaf's createTerm() promise, await them
+      // concurrently with Promise.all, then assemble the LayoutNode tree
+      // synchronously from the resolved IDs in pre-order. Cuts wall-clock
+      // restore time on N panes from N*spawn to ~1*spawn.
       async function rebuildNode(node: any): Promise<LayoutNode | null> {
-        if (node.kind === 'leaf') {
-          const result = await createTerm({ ...node.terminal, workspaceId: workspaceContext });
-          if (!result) return null;
-          newTerminals.set(result.id, result.instance);
-          if (!firstId) firstId = result.id;
-          return { kind: 'leaf', terminalId: result.id };
+        const leafPromises: Promise<{ id: TerminalId; instance: TerminalInstance } | null>[] = [];
+        function collect(n: any): void {
+          if (!n || typeof n !== 'object') return;
+          if (n.kind === 'leaf') {
+            leafPromises.push(createTerm({ ...n.terminal, workspaceId: workspaceContext }));
+          } else if (n.kind === 'split') {
+            collect(n.first);
+            collect(n.second);
+          }
         }
-        if (node.kind === 'split') {
-          const first = await rebuildNode(node.first);
-          const second = await rebuildNode(node.second);
-          if (!first && !second) return null;
-          if (!first) return second;
-          if (!second) return first;
-          return { kind: 'split', id: uuidv4(), direction: node.direction, splitRatio: node.splitRatio ?? 0.5, first, second };
+        collect(node);
+        const leafResults = await Promise.all(leafPromises);
+
+        let cursor = 0;
+        function build(n: any): LayoutNode | null {
+          if (!n || typeof n !== 'object') return null;
+          if (n.kind === 'leaf') {
+            const result = leafResults[cursor++];
+            if (!result) return null;
+            newTerminals.set(result.id, result.instance);
+            if (!firstId) firstId = result.id;
+            return { kind: 'leaf', terminalId: result.id };
+          }
+          if (n.kind === 'split') {
+            const first = build(n.first);
+            const second = build(n.second);
+            if (!first && !second) return null;
+            if (!first) return second;
+            if (!second) return first;
+            return { kind: 'split', id: uuidv4(), direction: n.direction, splitRatio: n.splitRatio ?? 0.5, first, second };
+          }
+          return null;
         }
-        return null;
+        return build(node);
       }
 
       // Workspaces-aware restore: if session has a workspaces array, walk
@@ -2871,8 +2917,11 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
           const wsRoot: LayoutNode | null = ws.tree ? await rebuildNode(ws.tree) : null;
           const wsFloating: FloatingPanelState[] = [];
           if (Array.isArray(ws.floating)) {
-            for (const f of ws.floating as any[]) {
-              const result = await createTerm({ ...f.terminal, workspaceId: wsId });
+            // TASK-117: parallelize floating-pane spawns within the workspace.
+            const floatingPairs = await Promise.all(
+              (ws.floating as any[]).map(async (f) => ({ result: await createTerm({ ...f.terminal, workspaceId: wsId }), f })),
+            );
+            for (const { result, f } of floatingPairs) {
               if (result) {
                 result.instance.mode = 'floating';
                 newTerminals.set(result.id, result.instance);
@@ -2902,8 +2951,11 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         workspaceContext = DEFAULT_WORKSPACE_ID;
         if (session.tree) newRoot = await rebuildNode(session.tree);
         if (Array.isArray(session.floating)) {
-          for (const f of session.floating as any[]) {
-            const result = await createTerm({ ...f.terminal, workspaceId: DEFAULT_WORKSPACE_ID });
+          // TASK-117: parallelize legacy-format floating-pane spawns.
+          const floatingPairs = await Promise.all(
+            (session.floating as any[]).map(async (f) => ({ result: await createTerm({ ...f.terminal, workspaceId: DEFAULT_WORKSPACE_ID }), f })),
+          );
+          for (const { result, f } of floatingPairs) {
             if (result) {
               result.instance.mode = 'floating';
               newTerminals.set(result.id, result.instance);
@@ -2955,6 +3007,13 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       } catch { /* skip */ }
     }
     return true;
+    } finally {
+      // Always flip the loading flag off so TilingLayout stops showing
+      // the loading indicator. App.tsx also clears this in its init's
+      // finally clause as a belt-and-suspenders against early throws
+      // before restoreSession is reached.
+      set({ isRestoring: false });
+    }
   },
 
   setDragging: (isDragging: boolean, terminalId?: TerminalId) => {

@@ -132,12 +132,29 @@ const FocusModePaneIndicator: React.FC<{ leafIds: string[]; focusedId: string | 
   );
 };
 
+const SessionLoading: React.FC = () => (
+  <div className="session-loading" role="status" aria-live="polite" aria-label="Restoring previous session">
+    <div className="session-loading-spinner" />
+    <div className="session-loading-text">Restoring session...</div>
+  </div>
+);
+
 const TilingLayout: React.FC = () => {
   const tilingRoot = useTerminalStore((s) => s.layout.tilingRoot);
   const viewMode = useTerminalStore((s) => s.viewMode);
   const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
+  const isRestoring = useTerminalStore((s) => s.isRestoring);
 
   if (!tilingRoot) {
+    // TASK-117: while session restore is in flight, render a neutral
+    // loading indicator instead of the empty-state hero. The hero showing
+    // mid-restore made users think their panes were lost. Once restore
+    // completes - either by attaching panes (which sets tilingRoot) or
+    // by confirming nothing to restore (which clears isRestoring) - we
+    // fall through to <EmptyState />.
+    if (isRestoring) {
+      return <SessionLoading />;
+    }
     return <EmptyState />;
   }
 

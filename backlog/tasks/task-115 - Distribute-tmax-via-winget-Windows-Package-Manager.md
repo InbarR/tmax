@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@inbar'
 created_date: '2026-05-04 20:31'
-updated_date: '2026-05-04 20:32'
+updated_date: '2026-05-04 21:25'
 labels: []
 dependencies: []
 ---
@@ -37,3 +37,19 @@ Allow Windows users to install tmax with 'winget install tmax' instead of downlo
 7. After acceptance, the next tagged release auto-PRs the new version via the workflow.
 8. ACs verified: winget install tmax + winget upgrade tmax on a clean Win11 box.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-05-05: Trusted Signing infrastructure provisioned on personal MSA tenant (Visual Studio Enterprise Subscription so credits cover the basic SKU).
+
+- Tenant: 4bc6e0bf-96a6-4f95-9a81-a77882ae173f (i565.onmicrosoft.com)
+- Subscription: bb884073-9bfb-4b63-8ad6-d3b88e37ae68 (Visual Studio Enterprise Subscription)
+- Resource group: rg-tmax-signing (westeurope)
+- Trusted Signing account: tmaxsigning
+- Account URI: https://weu.codesigning.azure.net/
+- Microsoft.CodeSigning resource provider registered
+- trustedsigning CLI extension installed (preview)
+
+Stopped here per Ian's instructions. Next: send tenant + subscription IDs to Ian for individual-developer allowlist, then create the Identity Validation in Azure portal once cleared, then create a PublicTrust certificate profile, then integrate Trusted Signing into build.yml and winget manifests.
+<!-- SECTION:NOTES:END -->

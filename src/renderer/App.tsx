@@ -77,11 +77,17 @@ const App: React.FC = () => {
     async function init() {
       try {
         await loadConfig();
-        await useTerminalStore.getState().loadDirs();
-        // Load AI session lists before restore so getStartupCommand() can
-        // determine the correct agent (copilot vs claude) for each terminal.
-        await useTerminalStore.getState().loadCopilotSessions();
-        await useTerminalStore.getState().loadClaudeCodeSessions();
+        // TASK-117: previously called loadDirs() here, but it issued a
+        // separate loadSession() disk read that restoreSession then
+        // immediately repeated. Hydration of favoriteDirs/recentDirs now
+        // happens inside restoreSession from the same payload.
+        // AI session lists must finish before restore so getStartupCommand()
+        // can determine the correct agent (copilot vs claude) for each
+        // terminal - but they're independent of each other so run in parallel.
+        await Promise.all([
+          useTerminalStore.getState().loadCopilotSessions(),
+          useTerminalStore.getState().loadClaudeCodeSessions(),
+        ]);
         if (cancelled) return;
         // Restore FIRST so checkStaleActiveSessions sees persisted overrides
         // and its update gets merged on top rather than being overwritten.
@@ -99,6 +105,14 @@ const App: React.FC = () => {
         useTerminalStore.getState().checkStaleActiveSessions();
       } catch (err) {
         console.error('Init failed:', err);
+      } finally {
+        // TASK-117: always clear the loading flag so a thrown init doesn't
+        // leave the loading indicator on screen forever. restoreSession's
+        // own finally also clears it; this guards against early throws
+        // (loadConfig, AI-session loaders) before restoreSession is reached.
+        if (!cancelled) {
+          useTerminalStore.setState({ isRestoring: false });
+        }
       }
     }
     init();
