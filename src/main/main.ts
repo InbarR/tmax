@@ -322,15 +322,20 @@ function createWindow(): void {
   task58Log('LOG INIT - clicks below this line', { logPath: task58LogPath });
 
   // External link handling. Returning {action: 'deny'} cancels the new
-  // BrowserWindow. The earlier implementation ALSO called shell.openExternal
-  // here, which produced TWO browser tabs per click: empirically, when our
-  // handler denies a new window for an http(s) URL, another navigation
-  // handler in the stack still opens that URL externally on its own, so the
-  // explicit call was a duplicate. The TASK-58 e2e test only spied on
-  // window.open in the renderer (which correctly fired once), so the
-  // main-process double never registered.
+  // BrowserWindow; we then route http(s) URLs to the default browser via
+  // shell.openExternal. An older comment claimed Electron auto-fell-through
+  // to external open after deny, making the explicit call a double-open -
+  // diagnostic logging (tmax-task58.log) showed that's no longer true: in
+  // Electron 30 a denied window.open fires neither will-navigate nor
+  // did-create-window, so without this call the URL is silently dropped.
+  // That manifested as "click does nothing" inside Claude Code panes
+  // (TASK-106). Guard the scheme to keep file:// / mailto: / custom-scheme
+  // links from triggering an unintended browser open.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     task58Log('setWindowOpenHandler fired', { url });
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url);
+    }
     return { action: 'deny' };
   });
 
@@ -708,11 +713,13 @@ function registerIpcHandlers(): void {
     detachedWindows.set(terminalId, detachedWin);
 
     // Open external links in the default browser for detached windows too.
-    // See main-window setWindowOpenHandler above for why we don't call
-    // shell.openExternal explicitly: another handler in the stack already
-    // routes denied http(s) URLs to the default browser, so an explicit
-    // call here would double-open.
-    detachedWin.webContents.setWindowOpenHandler(() => {
+    // Mirror the main-window handler: deny the new BrowserWindow, then call
+    // shell.openExternal explicitly for http(s) - Electron 30's deny path
+    // does not auto-fall-through to will-navigate.
+    detachedWin.webContents.setWindowOpenHandler(({ url }) => {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        shell.openExternal(url);
+      }
       return { action: 'deny' };
     });
 
