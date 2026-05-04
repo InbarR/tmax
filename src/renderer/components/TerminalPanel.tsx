@@ -580,6 +580,15 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             },
             text: m[0],
             activate(_e, uri) {
+              // Diagnostic counter (kept for ongoing repro of TASK-104/106).
+              // Increments on every fire, even ones the dedupe drops, so
+              // users can tell from DevTools whether the handler is reaching
+              // us at all.
+              try {
+                (window as unknown as { __tmaxLinkActivates?: number }).__tmaxLinkActivates =
+                  ((window as unknown as { __tmaxLinkActivates?: number }).__tmaxLinkActivates || 0) + 1;
+              } catch { /* noop */ }
+
               // Dedupe rapid duplicate fires of the same URL. xterm's
               // linkifier sometimes invokes our activate multiple times
               // for what is logically one click (observed: 5 fires per
