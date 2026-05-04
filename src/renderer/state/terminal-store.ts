@@ -924,6 +924,14 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       updates.terminalOpacity = (config as any).terminalOpacity;
       document.documentElement.style.setProperty('--terminal-opacity', String((config as any).terminalOpacity));
     }
+    // Seed AI session load limits from config so subsequent
+    // loadCopilotSessions / loadClaudeCodeSessions calls in App.init
+    // honor the user's preference (0 = no scan).
+    const aiLimit = (config as any)?.aiSessionLoadLimit;
+    if (typeof aiLimit === 'number' && aiLimit >= 0) {
+      updates.copilotSessionsLimit = aiLimit;
+      updates.claudeCodeSessionsLimit = aiLimit;
+    }
     set(updates);
   },
 
@@ -1904,7 +1912,22 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         }
       }
     }
+    // Mirror aiSessionLoadLimit into the runtime session-limit fields and
+    // re-scan so the new threshold takes effect immediately (incl. 0 = clear).
+    const newAiLimit = (update as any).aiSessionLoadLimit;
+    const aiLimitChanged =
+      typeof newAiLimit === 'number' && newAiLimit !== (config as any).aiSessionLoadLimit;
+    if (aiLimitChanged) {
+      extra.copilotSessionsLimit = newAiLimit;
+      extra.claudeCodeSessionsLimit = newAiLimit;
+    }
     set(extra);
+    if (aiLimitChanged) {
+      await Promise.all([
+        get().loadCopilotSessions(),
+        get().loadClaudeCodeSessions(),
+      ]);
+    }
   },
 
   toggleTabBarPosition: () => {

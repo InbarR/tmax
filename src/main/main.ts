@@ -753,10 +753,16 @@ function registerIpcHandlers(): void {
 
   // ── Copilot IPC handlers ────────────────────────────────────────────
   ipcMain.handle(IPC.COPILOT_LIST_SESSIONS, async (_event, limit?: number) => {
-    const native = await copilotMonitor?.scanSessions(limit ?? 50) ?? [];
-    const wsl = await wslSessionManager?.scanCopilotSessions() ?? [];
+    const cap = limit ?? 50;
+    const native = await copilotMonitor?.scanSessions(cap) ?? [];
+    const wsl = await wslSessionManager?.scanCopilotSessions(cap) ?? [];
+    // Apply the cap to the combined (native + WSL) list, sorted by recency,
+    // so the user-facing limit is honored across both sources.
+    const combined = [...native, ...wsl]
+      .sort((a, b) => (b.lastActivityTime ?? 0) - (a.lastActivityTime ?? 0))
+      .slice(0, cap);
     const totalEligible = (copilotMonitor?.lastTotalEligible ?? 0) + wsl.length;
-    return { sessions: [...native, ...wsl], totalEligible };
+    return { sessions: combined, totalEligible };
   });
 
   ipcMain.handle(IPC.COPILOT_GET_SESSION, (_event, id: string) => {
@@ -794,10 +800,16 @@ function registerIpcHandlers(): void {
 
   // ── Claude Code IPC handlers ──────────────────────────────────────────
   ipcMain.handle(IPC.CLAUDE_CODE_LIST_SESSIONS, async (_event, limit?: number) => {
-    const native = await claudeCodeMonitor?.scanSessions(limit ?? 50) ?? [];
-    const wsl = await wslSessionManager?.scanClaudeCodeSessions() ?? [];
+    const cap = limit ?? 50;
+    const native = await claudeCodeMonitor?.scanSessions(cap) ?? [];
+    const wsl = await wslSessionManager?.scanClaudeCodeSessions(cap) ?? [];
+    // Apply the cap to the combined (native + WSL) list, sorted by recency,
+    // so the user-facing limit is honored across both sources.
+    const combined = [...native, ...wsl]
+      .sort((a, b) => (b.lastActivityTime ?? 0) - (a.lastActivityTime ?? 0))
+      .slice(0, cap);
     const totalEligible = (claudeCodeMonitor?.lastTotalEligible ?? 0) + wsl.length;
-    return { sessions: [...native, ...wsl], totalEligible };
+    return { sessions: combined, totalEligible };
   });
 
   ipcMain.handle(IPC.CLAUDE_CODE_GET_SESSION, (_event, id: string) => {
@@ -1183,7 +1195,13 @@ async function setupWslSessionManager(): Promise<void> {
     },
   });
 
-  await wslSessionManager.start();
+  // Pass the user's aiSessionLoadLimit so the boot-time WSL scan honors it.
+  // Without this, an uncapped initial scan fires onSessionAdded for every
+  // WSL session and the renderer's load-with-cap result gets swamped by
+  // the side-channel events (TASK-3 / TASK-104).
+  const cfgLimit = (configStore?.getAll() as any)?.aiSessionLoadLimit;
+  const initialLimit = typeof cfgLimit === 'number' && cfgLimit >= 0 ? cfgLimit : 314;
+  await wslSessionManager.start(initialLimit);
 }
 
 process.on('uncaughtException', (error) => {

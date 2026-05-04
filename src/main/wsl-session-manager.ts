@@ -34,7 +34,13 @@ export class WslSessionManager {
     this.callbacks = callbacks;
   }
 
-  async start(): Promise<void> {
+  /**
+   * @param initialLimit Cap applied to the boot-time scan that hydrates the
+   * in-memory cache (and fires onSessionAdded for each parsed session). Pass
+   * the user's aiSessionLoadLimit so the cap is honored across both the
+   * sync IPC path and the boot-side scan. 0 = skip the boot scan entirely.
+   */
+  async start(initialLimit = 314): Promise<void> {
     if (!isWslAvailable()) return;
 
     const distros = await getWslDistroInfo();
@@ -94,29 +100,34 @@ export class WslSessionManager {
     }
 
     // Perform initial scan to discover existing sessions
-    // (watchers use ignoreInitial: true, so won't detect pre-existing files)
-    for (const pair of this.pairs) {
-      try {
-        await pair.copilotMonitor.scanSessions();
-        await pair.claudeMonitor.scanSessions();
-      } catch (err) {
-        console.error(`WSL scan failed for distro ${pair.distro}:`, err);
+    // (watchers use ignoreInitial: true, so won't detect pre-existing files).
+    // Cap honors aiSessionLoadLimit: each parsed session fires onSessionAdded
+    // which the renderer treats as authoritative, so an uncapped scan here
+    // would leak past the user's limit even after the IPC return slices it.
+    if (initialLimit > 0) {
+      for (const pair of this.pairs) {
+        try {
+          await pair.copilotMonitor.scanSessions(initialLimit);
+          await pair.claudeMonitor.scanSessions(initialLimit);
+        } catch (err) {
+          console.error(`WSL scan failed for distro ${pair.distro}:`, err);
+        }
       }
     }
   }
 
-  async scanCopilotSessions(): Promise<CopilotSessionSummary[]> {
+  async scanCopilotSessions(limit?: number): Promise<CopilotSessionSummary[]> {
     const results: CopilotSessionSummary[] = [];
     for (const pair of this.pairs) {
-      results.push(...await pair.copilotMonitor.scanSessions());
+      results.push(...await pair.copilotMonitor.scanSessions(limit));
     }
     return results;
   }
 
-  async scanClaudeCodeSessions(): Promise<CopilotSessionSummary[]> {
+  async scanClaudeCodeSessions(limit?: number): Promise<CopilotSessionSummary[]> {
     const results: CopilotSessionSummary[] = [];
     for (const pair of this.pairs) {
-      results.push(...await pair.claudeMonitor.scanSessions());
+      results.push(...await pair.claudeMonitor.scanSessions(limit));
     }
     return results;
   }

@@ -73,6 +73,12 @@ export interface AppConfig {
    * surfaces firing. (TASK-64)
    */
   aiSessionNotifications?: boolean;
+  /**
+   * Maximum number of recent Copilot / Claude Code sessions scanned on
+   * startup. 0 disables session loading entirely (lists stay empty,
+   * no scan runs). Default 314. (TASK-102)
+   */
+  aiSessionLoadLimit?: number;
 }
 
 function findPwsh(): string | null {
@@ -224,6 +230,7 @@ export const defaultConfig: AppConfig = {
   backgroundMaterial: 'none',
   backgroundOpacity: 0.8,
   aiSessionNotifications: true,
+  aiSessionLoadLimit: 314,
 };
 
 export class ConfigStore {
