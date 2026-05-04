@@ -268,6 +268,8 @@ This lets you use custom aliases or wrapper scripts. The configured command is i
 
 Contributions are very welcome - bug reports, feature ideas, and pull requests all help make tmax better.
 
+> **Use your personal GitHub account, not your org/EMU account** when filing issues or opening PRs. EMU accounts are typically blocked from interacting with public repos outside their enterprise.
+
 ### Reporting bugs
 
 Open an issue on the [GitHub tracker](https://github.com/InbarR/tmax/issues) with:
