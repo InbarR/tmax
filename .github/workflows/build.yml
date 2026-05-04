@@ -199,6 +199,9 @@ jobs:
             artifacts/**/*.nupkg
             artifacts/**/RELEASES*
           draft: false
-          prerelease: false
+          # Hyphenated tags (e.g. v1.7.1-rc1, v2.0.0-beta) are flagged as
+          # prereleases so they don't surface via /releases/latest and trigger
+          # auto-updates for stable users.
+          prerelease: ${{ contains(github.ref_name, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
