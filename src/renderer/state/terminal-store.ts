@@ -14,12 +14,15 @@ import type {
   TabGroup,
   Workspace,
   WorkspaceId,
+  ClosedTerminalEntry,
+  ClosedPaneSnapshot,
 } from './types';
 import { DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from './types';
 import type { CopilotSessionSummary } from '../../shared/copilot-types';
 import type { DiffMode } from '../../shared/diff-types';
 import type { RepoWorktrees } from '../../shared/worktree-types';
 import { getAllTerminals, getTerminalEntry } from '../terminal-registry';
+import { confirmDialog } from '../components/AppDialog';
 
 // Session IDs must be alphanumeric/dash/dot/underscore only (prevent shell injection)
 const SAFE_SESSION_ID = /^[a-zA-Z0-9._-]+$/;
@@ -29,6 +32,85 @@ function validateSessionId(id: string): boolean {
 }
 
 type SessionProvider = 'copilot' | 'claude-code';
+
+/**
+ * Capture the bits of a TerminalInstance that the undo-close stack
+ * needs to recreate an equivalent pane (TASK-112). Provider for AI
+ * sessions is derived by looking the session id up in the live session
+ * lists, since TerminalInstance does not store it.
+ */
+function snapshotPaneForRestore(
+  instance: TerminalInstance,
+  copilotSessions: CopilotSessionSummary[],
+  claudeCodeSessions: CopilotSessionSummary[],
+): ClosedPaneSnapshot {
+  let aiProvider: 'copilot' | 'claude-code' | undefined;
+  if (instance.aiSessionId) {
+    if (copilotSessions.some((s) => s.id === instance.aiSessionId)) {
+      aiProvider = 'copilot';
+    } else if (claudeCodeSessions.some((s) => s.id === instance.aiSessionId)) {
+      aiProvider = 'claude-code';
+    }
+  }
+  return {
+    title: instance.title,
+    customTitle: instance.customTitle,
+    shellProfileId: instance.shellProfileId,
+    cwd: instance.cwd,
+    tabColor: instance.tabColor,
+    workspaceId: instance.workspaceId,
+    aiSessionId: instance.aiSessionId,
+    aiProvider,
+  };
+}
+
+/**
+ * Spawn a fresh pane from a closed-pane snapshot. Tries the AI-resume
+ * path first when the snapshot has an aiSessionId+aiProvider; falls
+ * back to a plain createTerminal if the AI session has rotated out of
+ * the live list. Patches the resulting pane with the snapshot's title,
+ * color, and workspaceId. Used by both pane and workspace restore.
+ */
+async function restorePaneFromSnapshot(
+  snap: ClosedPaneSnapshot,
+  get: () => TerminalStore,
+  set: (partial: Partial<TerminalStore> | ((s: TerminalStore) => Partial<TerminalStore>)) => void,
+): Promise<void> {
+  const beforeSize = get().terminals.size;
+  let restoredAsAi = false;
+
+  if (snap.aiSessionId && snap.aiProvider) {
+    if (snap.aiProvider === 'copilot') {
+      await get().openCopilotSession(snap.aiSessionId);
+    } else {
+      await get().openClaudeCodeSession(snap.aiSessionId);
+    }
+    restoredAsAi = get().terminals.size > beforeSize;
+  }
+
+  if (!restoredAsAi) {
+    await get().createTerminal(snap.shellProfileId, snap.cwd);
+  }
+
+  const { focusedTerminalId, terminals, workspaces, activeWorkspaceId } = get();
+  if (!focusedTerminalId) return;
+  const fresh = terminals.get(focusedTerminalId);
+  if (!fresh) return;
+
+  const targetWs = snap.workspaceId && workspaces.has(snap.workspaceId)
+    ? snap.workspaceId
+    : activeWorkspaceId;
+
+  const newTerminals = new Map(terminals);
+  newTerminals.set(focusedTerminalId, {
+    ...fresh,
+    title: snap.title,
+    customTitle: snap.customTitle,
+    tabColor: snap.tabColor,
+    workspaceId: targetWs,
+  });
+  set({ terminals: newTerminals });
+}
 
 function buildResumeCommand(config: AppConfig, provider: SessionProvider, sessionId: string): string {
   const cmd = provider === 'copilot'
@@ -622,6 +704,12 @@ interface TerminalStore {
   claudeCodeSessionsLimit: number;
   sessionNameOverrides: Record<string, string>;
   sessionLifecycleOverrides: Record<string, import('../../shared/copilot-types').SessionLifecycle>;
+  /**
+   * Stack of recently closed panes for browser-style undo close
+   * (Ctrl+Shift+T, TASK-112). Most recent at the END. Capped at 10
+   * entries; older entries are evicted from the front.
+   */
+  closedTerminals: ClosedTerminalEntry[];
   /** Session IDs the user has pinned to the top of the AI sessions list */
   sessionPinned: Record<string, true>;
   toastNotifications: Array<{ id: string; message: string; timestamp: number }>;
@@ -647,6 +735,12 @@ interface TerminalStore {
   loadConfig: () => Promise<void>;
   createTerminal: (shellProfileId?: string, cwdOverride?: string) => Promise<void>;
   closeTerminal: (id: TerminalId) => Promise<void>;
+  /**
+   * Browser-style undo close (TASK-112). Pops the most recent entry off
+   * closedTerminals and creates a fresh pane reusing its shellProfileId,
+   * cwd, title, color, and workspace. No-op when the stack is empty.
+   */
+  restoreClosedTerminal: () => Promise<void>;
   setFocus: (id: TerminalId) => void;
   splitTerminal: (
     targetId: TerminalId,
@@ -885,6 +979,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   sessionNameOverrides: {},
   sessionLifecycleOverrides: {},
   sessionPinned: {},
+  closedTerminals: [],
   toastNotifications: [],
   copilotSearchQuery: '',
   selectedCopilotSessionId: null,
@@ -1036,9 +1131,26 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   closeTerminal: async (id: TerminalId) => {
     const t0 = performance.now();
-    const { terminals, layout, focusedTerminalId } = get();
+    const { terminals, layout, focusedTerminalId, closedTerminals, copilotSessions, claudeCodeSessions } = get();
     const instance = terminals.get(id);
     if (!instance) return;
+
+    // Snapshot pane identity for browser-style undo close (TASK-112).
+    // Capture BEFORE the PTY is killed so the metadata is intact even if
+    // killPty surfaces an error. Cap at 10 - older entries fall off the
+    // front so memory stays bounded across long sessions.
+    //
+    // For AI sessions, also capture the provider by looking the session
+    // id up in the live session lists. The provider isn't stored on
+    // TerminalInstance, so we have to derive it now while the lists
+    // still contain the session.
+    const paneSnapshot = snapshotPaneForRestore(instance, copilotSessions, claudeCodeSessions);
+    const closedEntry: ClosedTerminalEntry = {
+      kind: 'pane',
+      closedAt: Date.now(),
+      ...paneSnapshot,
+    };
+    const newClosedTerminals = [...closedTerminals, closedEntry].slice(-10);
 
     if (instance.mode === 'detached') {
       await window.terminalAPI.closeDetached(id);
@@ -1090,6 +1202,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       layout: { tilingRoot: newRoot, floatingPanels: newFloating },
       focusedTerminalId: newFocus,
       preGridRoot: newPreGridRoot,
+      closedTerminals: newClosedTerminals,
     });
 
     // After React processes the layout change, force-focus the new terminal.
@@ -1114,6 +1227,82 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     window.terminalAPI.diagLog('renderer:close-terminal', {
       id,
       remaining: newTerminals.size,
+    });
+  },
+
+  restoreClosedTerminal: async () => {
+    const { closedTerminals } = get();
+    if (closedTerminals.length === 0) return;
+
+    // Peek before popping - confirm both pane and workspace restores so an
+    // accidental Ctrl+Shift+T does not silently re-spawn a PTY (or N PTYs
+    // for a workspace). Decline = entry stays on the stack to retry.
+    const top = closedTerminals[closedTerminals.length - 1];
+    if (top.kind === 'workspace') {
+      const paneCount = top.panes.length;
+      const paneWord = paneCount === 1 ? 'pane' : 'panes';
+      const ok = await confirmDialog({
+        title: 'Restore workspace?',
+        message: `Restore workspace "${top.name}" with ${paneCount} ${paneWord}?`,
+        confirmText: 'Restore',
+      });
+      if (!ok) return;
+    } else {
+      const label = top.title || top.cwd;
+      const ok = await confirmDialog({
+        title: 'Restore pane?',
+        message: `Restore pane "${label}"?`,
+        confirmText: 'Restore',
+      });
+      if (!ok) return;
+    }
+
+    const stack = [...closedTerminals];
+    const entry = stack.pop()!;
+    set({ closedTerminals: stack });
+
+    if (entry.kind === 'pane') {
+      await restorePaneFromSnapshot(entry, get, set);
+      window.terminalAPI.diagLog('renderer:restore-terminal', {
+        kind: 'pane',
+        shellProfileId: entry.shellProfileId,
+        cwd: entry.cwd,
+        aiProvider: entry.aiProvider,
+        remaining: stack.length,
+      });
+      return;
+    }
+
+    // Workspace restore: recreate the workspace shell, then restore each
+    // pane into it. Use the original workspaceId so the panes' captured
+    // workspaceId still points at a real workspace; if a workspace with
+    // that id has reappeared somehow, leave it alone and reuse it.
+    const { workspaces } = get();
+    if (!workspaces.has(entry.workspaceId)) {
+      const restoredWs: Workspace = {
+        id: entry.workspaceId,
+        name: entry.name,
+        color: entry.color,
+        layout: { tilingRoot: null, floatingPanels: [] },
+      };
+      const newWorkspaces = new Map(workspaces);
+      newWorkspaces.set(entry.workspaceId, restoredWs);
+      set({ workspaces: newWorkspaces });
+    }
+    // Switch to the restored workspace BEFORE spawning panes so
+    // createTerminal places them in the right place. setActiveWorkspace
+    // handles the layout swap.
+    get().setActiveWorkspace(entry.workspaceId);
+
+    for (const pane of entry.panes) {
+      await restorePaneFromSnapshot(pane, get, set);
+    }
+
+    window.terminalAPI.diagLog('renderer:restore-terminal', {
+      kind: 'workspace',
+      workspaceId: entry.workspaceId,
+      paneCount: entry.panes.length,
+      remaining: stack.length,
     });
   },
 
@@ -2892,12 +3081,34 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   closeWorkspace: (id: WorkspaceId) => {
-    const { workspaces, activeWorkspaceId, terminals, layout } = get();
+    const { workspaces, activeWorkspaceId, terminals, layout, closedTerminals, copilotSessions, claudeCodeSessions } = get();
     if (!workspaces.has(id)) return;
+    const closingWs = workspaces.get(id)!;
     // Collect terminal ids to kill: all terminals belonging to this workspace.
     const terminalIdsToClose: TerminalId[] = [];
+    const paneSnapshots: ClosedPaneSnapshot[] = [];
     for (const [tid, inst] of terminals) {
-      if ((inst.workspaceId ?? DEFAULT_WORKSPACE_ID) === id) terminalIdsToClose.push(tid);
+      if ((inst.workspaceId ?? DEFAULT_WORKSPACE_ID) === id) {
+        terminalIdsToClose.push(tid);
+        paneSnapshots.push(snapshotPaneForRestore(inst, copilotSessions, claudeCodeSessions));
+      }
+    }
+    // TASK-112: push the whole workspace as a single restore entry, but
+    // only if it had panes - restoring an empty workspace shell is
+    // meaningless. The user will see a confirm prompt before the
+    // workspace gets recreated, since spawning N PTYs from one keypress
+    // is heavier than the silent single-pane restore.
+    let newClosedTerminals = closedTerminals;
+    if (paneSnapshots.length > 0) {
+      const wsEntry: ClosedTerminalEntry = {
+        kind: 'workspace',
+        closedAt: Date.now(),
+        workspaceId: id,
+        name: closingWs.name,
+        color: closingWs.color,
+        panes: paneSnapshots,
+      };
+      newClosedTerminals = [...closedTerminals, wsEntry].slice(-10);
     }
     // Drop the workspace.
     const newWorkspaces = new Map(workspaces);
@@ -2930,6 +3141,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       layout: newLayout,
       terminals: newTerminals,
       focusedTerminalId: newFocus,
+      closedTerminals: newClosedTerminals,
     });
     // Tell the main process to kill those PTYs after state has settled.
     for (const tid of terminalIdsToClose) {

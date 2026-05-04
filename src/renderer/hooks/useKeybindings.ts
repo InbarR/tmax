@@ -121,7 +121,11 @@ const DEFAULT_BINDINGS: Record<string, string> = {
   'Ctrl+Shift+Alt+ArrowRight': 'resizeRight',
   'Ctrl+Shift+M': 'tabMenu',
   'Ctrl+Shift+C': 'copilotPanel',
-  'Ctrl+Shift+T': 'worktreePanel',
+  // Ctrl+Shift+T: browser-style undo close (TASK-112). Reused from the
+  // worktree panel because undo-close is the more frequent action; the
+  // worktree panel still opens via the command palette and the
+  // StatusBar button.
+  'Ctrl+Shift+T': 'restoreClosedTerminal',
   'Ctrl+Shift+K': 'showPrompts',
   'Ctrl+Shift+Y': 'searchPrompts',
   'Ctrl+Shift+B': 'hideTabBar',
@@ -191,6 +195,9 @@ function dispatchAction(action: string): void {
       break;
     case 'closeTerminal':
       if (focusedId) store.closeTerminal(focusedId);
+      break;
+    case 'restoreClosedTerminal':
+      store.restoreClosedTerminal();
       break;
     case 'focusNext':
       store.focusNext();

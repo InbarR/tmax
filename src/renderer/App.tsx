@@ -30,6 +30,7 @@ import FloatingRenameInput from './components/FloatingRenameInput';
 import Toast from './components/Toast';
 import SessionSummary from './components/SessionSummary';
 import MarkdownPreviewOverlay from './components/MarkdownPreviewOverlay';
+import AppDialogHost from './components/AppDialog';
 
 const App: React.FC = () => {
   const loadConfig = useTerminalStore((s) => s.loadConfig);
@@ -284,6 +285,7 @@ const App: React.FC = () => {
         <SessionSummary />
         <MarkdownPreviewOverlay />
         <Toast />
+        <AppDialogHost />
       </div>
     </DndContext>
   );

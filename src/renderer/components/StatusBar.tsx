@@ -104,6 +104,17 @@ const ChangelogModal: React.FC<{ content: string; loading: boolean; onClose: () 
           )}
         </div>
         <div className="update-modal-actions">
+          <a
+            className="update-modal-link"
+            href="https://github.com/InbarR/tmax/releases"
+            onClick={(e) => {
+              e.preventDefault();
+              window.open('https://github.com/InbarR/tmax/releases', '_blank');
+            }}
+            title="Open releases page in your default browser"
+          >
+            View on GitHub →
+          </a>
           <button className="update-modal-btn" onClick={onClose}>Close</button>
         </div>
       </div>
@@ -290,7 +301,7 @@ const StatusBar: React.FC = () => {
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleWorktreePanel()}
-            title={formatKeyForPlatform("Git Worktrees (Ctrl+Shift+T)")}
+            title="Git Worktrees"
           >
             &#127793; Worktrees
           </button>

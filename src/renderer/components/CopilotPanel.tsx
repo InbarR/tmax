@@ -721,13 +721,30 @@ const CopilotPanel: React.FC = () => {
             const disabled = allKeys.length === 0;
             return (
               <button
-                className="dir-panel-close"
+                className="dir-panel-close ai-session-collapse-toggle"
                 onClick={() => setCollapsedGroups(allCollapsed ? new Set() : new Set(allKeys))}
                 disabled={disabled}
                 data-tooltip={allCollapsed ? 'Expand all groups' : 'Collapse all groups'}
                 aria-label={allCollapsed ? 'Expand all groups' : 'Collapse all groups'}
               >
-                {allCollapsed ? '▸' : '▾'}
+                {/* Two stacked chevrons make the all-toggle visually distinct
+                    from the per-group chevron next to each repo header. */}
+                <svg
+                  className="ai-session-collapse-icon"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  style={{ transform: allCollapsed ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.15s ease' }}
+                >
+                  <path d="M3 5 L7 9 L11 5" />
+                  <path d="M3 1 L7 5 L11 1" />
+                </svg>
               </button>
             );
           })()}
@@ -952,7 +969,11 @@ const CopilotPanel: React.FC = () => {
                   title={headerLabel}
                   onClick={() => toggleGroupCollapsed(currentRepo)}
                 >
-                  <span className="ai-session-group-chevron">{isCollapsed ? '▸' : '▾'}</span>
+                  <span className="ai-session-group-chevron" style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' }}>
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M2 4 L5 7 L8 4" />
+                    </svg>
+                  </span>
                   <span className="ai-session-group-name">{headerLabel}</span>
                   <span className="ai-session-group-count">{groupSizes.get(currentRepo) || 0}</span>
                 </div>

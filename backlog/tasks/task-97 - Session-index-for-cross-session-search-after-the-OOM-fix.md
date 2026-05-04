@@ -4,9 +4,11 @@ title: Session index for cross-session search after the OOM fix
 status: To Do
 assignee: []
 created_date: '2026-05-04 07:15'
+updated_date: '2026-05-04 20:29'
 labels:
   - perf
   - workspaces
+  - major-version
 dependencies: []
 ---
 
