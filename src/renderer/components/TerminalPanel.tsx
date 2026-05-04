@@ -1565,6 +1565,39 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     containerRef.current.addEventListener('mousedown', handleRightMouseButton, true);
     containerRef.current.addEventListener('mouseup', handleRightMouseButton, true);
 
+    // Track recent left-button drag attempts. When mouse reporting is on,
+    // xterm forwards the drag to the pty instead of creating a selection.
+    // We detect this "failed selection" so the right-click handler can avoid
+    // auto-pasting when the user clearly intended to copy, not paste.
+    let recentDragWithoutSelection = false;
+    let dragStartPos: { x: number; y: number } | null = null;
+    const DRAG_THRESHOLD = 5; // pixels to count as a drag vs. a click
+
+    const handleLeftMouseDown = (e: MouseEvent) => {
+      if (e.button === 0) {
+        dragStartPos = { x: e.clientX, y: e.clientY };
+        recentDragWithoutSelection = false;
+      }
+    };
+    const handleLeftMouseUp = (e: MouseEvent) => {
+      if (e.button === 0 && dragStartPos) {
+        const dx = e.clientX - dragStartPos.x;
+        const dy = e.clientY - dragStartPos.y;
+        const wasDrag = Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD;
+        if (wasDrag && mouseTrackingOn && !term.hasSelection()) {
+          recentDragWithoutSelection = true;
+          // Auto-clear after a timeout — if the user doesn't right-click
+          // within 3s, the drag was probably intentional TUI interaction.
+          setTimeout(() => { recentDragWithoutSelection = false; }, 3000);
+        } else {
+          recentDragWithoutSelection = false;
+        }
+        dragStartPos = null;
+      }
+    };
+    containerRef.current.addEventListener('mousedown', handleLeftMouseDown, true);
+    containerRef.current.addEventListener('mouseup', handleLeftMouseUp, true);
+
     // Right-click: copy if selection, paste if no selection.
     // Skip the implicit paste when the clipboard is image-only (issue #84):
     // a TUI with mouse reporting on (e.g. Claude Code) consumes drag events
@@ -1579,6 +1612,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       if (term.hasSelection()) {
         window.terminalAPI.clipboardWrite(smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current));
         term.clearSelection();
+        return;
+      }
+      // When mouse tracking consumed a recent drag (user tried to select but
+      // the TUI swallowed it), suppress paste. The user clearly intended to
+      // copy, not paste. Ctrl+V still pastes explicitly.
+      if (recentDragWithoutSelection) {
+        recentDragWithoutSelection = false;
         return;
       }
       const hasImage = window.terminalAPI.clipboardHasImage();
@@ -1637,6 +1677,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       containerEl.removeEventListener('copy', handleCopyEvent, true);
       containerEl.removeEventListener('mousedown', handleRightMouseButton, true);
       containerEl.removeEventListener('mouseup', handleRightMouseButton, true);
+      containerEl.removeEventListener('mousedown', handleLeftMouseDown, true);
+      containerEl.removeEventListener('mouseup', handleLeftMouseUp, true);
       wheelRecoveryEl?.removeEventListener('wheel', wheelPreSyncHandler, true);
       wheelRecoveryEl?.removeEventListener('wheel', wheelRecoveryHandler);
       wheelRecoveryEl?.removeEventListener('dblclick', manualSyncHandler);
