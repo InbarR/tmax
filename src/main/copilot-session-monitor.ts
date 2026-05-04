@@ -37,7 +37,7 @@ export class CopilotSessionMonitor {
     return this.basePath;
   }
 
-  async scanSessions(limit = 50): Promise<CopilotSessionSummary[]> {
+  async scanSessions(limit = 314): Promise<CopilotSessionSummary[]> {
     const summaries: CopilotSessionSummary[] = [];
 
     // Phase 1: build or reuse cached candidate list

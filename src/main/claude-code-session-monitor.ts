@@ -45,7 +45,7 @@ export class ClaudeCodeSessionMonitor {
 
   // ── Full scan ────────────────────────────────────────────────────────
 
-  async scanSessions(limit = 50): Promise<CopilotSessionSummary[]> {
+  async scanSessions(limit = 314): Promise<CopilotSessionSummary[]> {
     const summaries: CopilotSessionSummary[] = [];
 
     // Phase 1: build or reuse cached candidate list
