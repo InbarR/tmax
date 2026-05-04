@@ -715,6 +715,22 @@ const CopilotPanel: React.FC = () => {
       <div className="dir-panel-header">
         <span>✨ AI Sessions</span>
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center', position: 'relative' }}>
+          {groupByRepo && (() => {
+            const allKeys = Array.from(groupSizes.keys());
+            const allCollapsed = allKeys.length > 0 && allKeys.every((k) => collapsedGroups.has(k));
+            const disabled = allKeys.length === 0;
+            return (
+              <button
+                className="dir-panel-close"
+                onClick={() => setCollapsedGroups(allCollapsed ? new Set() : new Set(allKeys))}
+                disabled={disabled}
+                data-tooltip={allCollapsed ? 'Expand all groups' : 'Collapse all groups'}
+                aria-label={allCollapsed ? 'Expand all groups' : 'Collapse all groups'}
+              >
+                {allCollapsed ? '▸' : '▾'}
+              </button>
+            );
+          })()}
           <button
             className="dir-panel-close"
             onClick={handleRefresh}
@@ -760,19 +776,6 @@ const CopilotPanel: React.FC = () => {
                   <span style={{ display: 'inline-block', width: 16, color: showRunningOnly ? 'var(--focus-border, #89b4fa)' : 'transparent' }}>✓</span>
                   Show running only
                 </button>
-                {groupByRepo && (() => {
-                  const allKeys = Array.from(groupSizes.keys());
-                  const allCollapsed = allKeys.length > 0 && allKeys.every((k) => collapsedGroups.has(k));
-                  return (
-                    <button
-                      className="context-menu-item"
-                      onClick={() => { setCollapsedGroups(allCollapsed ? new Set() : new Set(allKeys)); setHeaderMenuOpen(false); }}
-                    >
-                      <span style={{ display: 'inline-block', width: 16 }}>{allCollapsed ? '▸' : '▾'}</span>
-                      {allCollapsed ? 'Expand all groups' : 'Collapse all groups'}
-                    </button>
-                  );
-                })()}
                 <div className="context-menu-separator" />
                 <button
                   className="context-menu-item"
