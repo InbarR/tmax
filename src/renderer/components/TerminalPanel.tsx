@@ -580,17 +580,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             },
             text: m[0],
             activate(_e, uri) {
-              // TASK-58 diagnostic: trace duplicate activations
-              try {
-                (window as unknown as { __tmaxLinkActivates?: number }).__tmaxLinkActivates =
-                  ((window as unknown as { __tmaxLinkActivates?: number }).__tmaxLinkActivates || 0) + 1;
-                console.warn('[tmax TASK-58] URL activate', {
-                  uri,
-                  count: (window as unknown as { __tmaxLinkActivates: number }).__tmaxLinkActivates,
-                  providers: ((term as unknown as { _core: { _linkProviderService: { linkProviders?: unknown[] } } })
-                    ._core?._linkProviderService?.linkProviders || []).length,
-                });
-              } catch { /* noop */ }
+              // Dedupe rapid duplicate fires of the same URL. xterm's
+              // linkifier sometimes invokes our activate multiple times
+              // for what is logically one click (observed: 5 fires per
+              // click on a wrapped URL). Without dedupe, Chromium's
+              // popup-block heuristic kicks in after the first window.open
+              // and silently swallows the rest, leaving the user with
+              // "first click works, second click does nothing" because
+              // the second click is actually click N+1 of a previous burst.
+              const win = window as unknown as { __tmaxLinkLast?: { uri: string; ts: number } };
+              const now = Date.now();
+              if (win.__tmaxLinkLast && win.__tmaxLinkLast.uri === uri && now - win.__tmaxLinkLast.ts < 500) {
+                return;
+              }
+              win.__tmaxLinkLast = { uri, ts: now };
               window.open(uri, '_blank');
             },
             decorations: { underline: true, pointerCursor: true },
