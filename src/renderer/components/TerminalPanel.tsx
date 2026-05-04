@@ -11,6 +11,7 @@ import { isMac } from '../utils/platform';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { prepareClipboardPaste, resolveClipboardPaste } from '../utils/paste';
 import { smartUnwrapForCopy } from '../utils/smart-unwrap';
+import { MD_PATH_PATTERN } from '../utils/md-link-parser';
 import type { AppConfig } from '../state/types';
 import '@xterm/xterm/css/xterm.css';
 
@@ -603,8 +604,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         const line = term.buffer.active.getLine(bufferLineNumber - 1);
         if (!line) { callback(undefined); return; }
         const text = line.translateToString();
-        // Match file paths ending in .md (absolute or relative)
-        const mdPathRegex = /(?:[a-zA-Z]:[\\/]|[\/~.])?[^\s"'`<>|:*?]*\.md\b/gi;
+        // Single source of truth for the .md path pattern lives in
+        // utils/md-link-parser. Build a fresh stateful instance per call so
+        // `lastIndex` is never shared across providers.
+        const mdPathRegex = new RegExp(MD_PATH_PATTERN, 'gi');
         const links: Array<{ range: { start: { x: number; y: number }; end: { x: number; y: number } }; text: string; activate: () => void; tooltip: string }> = [];
         let match: RegExpExecArray | null;
         while ((match = mdPathRegex.exec(text)) !== null) {
