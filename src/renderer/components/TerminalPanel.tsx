@@ -1247,6 +1247,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         const shouldHide = cursorHideSignalsRef.current.bracketedPaste || cursorHideSignalsRef.current.altScreen;
         term.write(shouldHide ? '\x1b[?25l' : '\x1b[?25h');
       }
+      flushMouseModeReset();
     };
 
     // #67: Ink-based CLIs (Claude Code, Copilot CLI) enable bracketed paste
@@ -1261,6 +1262,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // xterm's cursor back on. The per-terminal state refs persist across
     // data chunks; the actual cursor write happens in flushPendingData so
     // it runs AFTER any alt-screen switch in the same data chunk.
+    // Track whether any mouse-tracking mode is currently active. Set when a
+    // TUI enables it; checked when we see alt-screen exit (TASK: drag-select
+    // stops working after Ctrl+C kills a TUI). The TUI never gets to send
+    // the matching ?1000l/?1006l reset on abrupt death, so we force them
+    // off ourselves when the app signals it's leaving alt-screen.
+    let mouseTrackingOn = false;
+    let mouseResetPending = false;
+
     const syncCursorVisibility = (chunk: string) => {
       for (let i = 0; i < chunk.length; i++) {
         if (chunk.charCodeAt(i) !== 0x1b) continue;
@@ -1271,6 +1280,28 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         }
         else if (chunk.startsWith('\x1b[?1049l', i) || chunk.startsWith('\x1b[?1047l', i)) {
           cursorHideSignalsRef.current.altScreen = false; cursorSyncDirty = true;
+          // Alt-screen exit + any mouse tracking still on = leftover from a
+          // TUI that died without resetting. Queue a forced reset so xterm
+          // stops forwarding mouse events to the (now-dead) child process
+          // and drag-select starts working again.
+          if (mouseTrackingOn) mouseResetPending = true;
+        }
+        // Mouse tracking mode toggles - any of ?1000/?1002/?1003/?1006/?1015
+        // (X10, button-event, any-event, SGR, urxvt). Track on/off so the
+        // alt-screen-exit handler above knows whether to force-reset.
+        else if (
+          chunk.startsWith('\x1b[?1000h', i) || chunk.startsWith('\x1b[?1002h', i) ||
+          chunk.startsWith('\x1b[?1003h', i) || chunk.startsWith('\x1b[?1006h', i) ||
+          chunk.startsWith('\x1b[?1015h', i)
+        ) {
+          mouseTrackingOn = true;
+        }
+        else if (
+          chunk.startsWith('\x1b[?1000l', i) || chunk.startsWith('\x1b[?1002l', i) ||
+          chunk.startsWith('\x1b[?1003l', i) || chunk.startsWith('\x1b[?1006l', i) ||
+          chunk.startsWith('\x1b[?1015l', i)
+        ) {
+          mouseTrackingOn = false;
         }
         // If the app tries to flip the hardware cursor while either of our
         // hide signals is on, queue a re-hide for after this chunk lands.
@@ -1282,6 +1313,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           }
         }
       }
+    };
+
+    // Flush any pending mouse-mode reset after the chunk has been written.
+    // Ordering matters: write reset sequences AFTER the alt-screen exit
+    // sequence has been processed by xterm so the modes are reset on the
+    // normal-screen state, not the about-to-be-dropped alt buffer.
+    const flushMouseModeReset = () => {
+      if (!mouseResetPending) return;
+      mouseResetPending = false;
+      mouseTrackingOn = false;
+      term.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l');
     };
 
     const unsubscribePtyData = window.terminalAPI.onPtyData(
