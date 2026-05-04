@@ -1853,6 +1853,57 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     if (update.terminal?.fontSize) {
       extra.fontSize = update.terminal.fontSize;
     }
+    // tabMode flip: rebuild the layout for the new mode so the user
+    // doesn't have to manually toggle focus<->grid to see the right
+    // pane set (TASK-101). Three cases:
+    //   1. viewMode === 'grid': rebuild the grid with the new mode's
+    //      pane scope (flat = all panes, workspaces = active ws only).
+    //   2. flat -> workspaces while NOT in grid: restore the active
+    //      workspace's saved layout (the flat layout had panes from
+    //      every workspace, which doesn't fit the workspaces model).
+    //   3. workspaces -> flat while NOT in grid: snapshot the leaving
+    //      workspace's layout first, then keep the current tilingRoot
+    //      so the focused pane stays visible.
+    const oldTabMode = (config as { tabMode?: 'flat' | 'workspaces' }).tabMode ?? 'flat';
+    const newTabMode = (update as { tabMode?: 'flat' | 'workspaces' }).tabMode;
+    if (newTabMode && newTabMode !== oldTabMode) {
+      const { viewMode, terminals, activeWorkspaceId, gridColumns, workspaces, layout } = get();
+      if (viewMode === 'grid') {
+        const ids = Array.from(terminals.entries())
+          .filter(([, t]) => {
+            if (t.mode !== 'tiled') return false;
+            if (newTabMode === 'workspaces') {
+              return (t.workspaceId ?? activeWorkspaceId) === activeWorkspaceId;
+            }
+            return true;
+          })
+          .map(([id]) => id);
+        const newGrid = ids.length > 0 ? buildGridTree(ids, gridColumns || undefined) : null;
+        extra.layout = { ...layout, tilingRoot: newGrid };
+        // Stale preGridRoot from the old tab mode would point at panes
+        // that may no longer be in scope; drop it so grid->focus just
+        // returns to the rebuilt grid's first pane.
+        extra.preGridRoot = null;
+      } else if (newTabMode === 'workspaces') {
+        // Restore active workspace's saved layout if we have one.
+        const ws = workspaces.get(activeWorkspaceId);
+        if (ws?.layout?.tilingRoot) {
+          extra.layout = { ...layout, tilingRoot: ws.layout.tilingRoot };
+        }
+      } else {
+        // workspaces -> flat, non-grid view. Save the leaving workspace's
+        // current layout so we can restore it on the way back.
+        const ws = workspaces.get(activeWorkspaceId);
+        if (ws) {
+          const newWorkspaces = new Map(workspaces);
+          newWorkspaces.set(activeWorkspaceId, {
+            ...ws,
+            layout: { ...ws.layout, tilingRoot: layout.tilingRoot },
+          });
+          extra.workspaces = newWorkspaces;
+        }
+      }
+    }
     set(extra);
   },
 
