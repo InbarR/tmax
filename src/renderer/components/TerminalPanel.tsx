@@ -11,6 +11,7 @@ import { isMac } from '../utils/platform';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { prepareClipboardPaste, resolveClipboardPaste } from '../utils/paste';
 import { smartUnwrapForCopy } from '../utils/smart-unwrap';
+import { MD_PATH_PATTERN } from '../utils/md-link-parser';
 import type { AppConfig } from '../state/types';
 import '@xterm/xterm/css/xterm.css';
 
@@ -613,20 +614,81 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       },
     });
 
-    // Register link provider for .md file paths (Ctrl+Click to preview)
+    // Link provider for .md file paths (TASK-107).
+    //
+    // Walks soft-wrap continuations like the URL provider above so a path that
+    // visually spans multiple rows (e.g. a long Windows path with spaces in
+    // `OneDrive - Microsoft` after the user shrinks the pane) reconstructs to
+    // its full logical form before the regex runs. Without this walk, xterm's
+    // per-row provideLinks call sees only a head row (no `.md`, no match) or
+    // only a tail row (matches as a bare filename - which then fails to open
+    // because the drive/folders are missing).
+    //
+    // No hard-newline stitch here - paths, unlike URLs from `gh auth login`,
+    // do not get hard-wrapped by CLIs at fixed column counts.
     term.registerLinkProvider({
       provideLinks(bufferLineNumber, callback) {
-        const line = term.buffer.active.getLine(bufferLineNumber - 1);
-        if (!line) { callback(undefined); return; }
-        const text = line.translateToString();
-        // Match file paths ending in .md (absolute or relative)
-        const mdPathRegex = /(?:[a-zA-Z]:[\\/]|[\/~.])?[^\s"'`<>|:*?]*\.md\b/gi;
+        const buf = term.buffer.active;
+        const lineIdx0 = bufferLineNumber - 1;
+        if (lineIdx0 < 0 || lineIdx0 >= buf.length) { callback(undefined); return; }
+
+        let softStart = lineIdx0;
+        while (softStart > 0) {
+          const cur = buf.getLine(softStart);
+          if (!cur?.isWrapped) break;
+          softStart--;
+        }
+        let softEnd = softStart;
+        while (softEnd + 1 < buf.length) {
+          const next = buf.getLine(softEnd + 1);
+          if (!next?.isWrapped) break;
+          softEnd++;
+        }
+
+        const cols = term.cols;
+        interface Seg { rowIdx: number; logicalStart: number }
+        const segs: Seg[] = [];
+        let logical = '';
+        for (let i = softStart; i <= softEnd; i++) {
+          const line = buf.getLine(i);
+          if (!line) continue;
+          // Middle rows are exactly `cols`-wide content (no trim) so the
+          // reverse offset->col math stays simple modulo. The trailing row
+          // is the only one that may not be cols-wide - trim it.
+          const text = i < softEnd ? line.translateToString(false) : line.translateToString(true);
+          segs.push({ rowIdx: i, logicalStart: logical.length });
+          logical += text;
+        }
+
+        function offsetToRowCol(offset: number): { row: number; col: number } {
+          for (let s = segs.length - 1; s >= 0; s--) {
+            const seg = segs[s];
+            if (offset >= seg.logicalStart) {
+              const within = offset - seg.logicalStart;
+              if (s < segs.length - 1 && within >= cols) {
+                return { row: seg.rowIdx + Math.floor(within / cols), col: within % cols };
+              }
+              return { row: seg.rowIdx, col: within };
+            }
+          }
+          return { row: segs[0]?.rowIdx ?? 0, col: 0 };
+        }
+
+        const mdRegex = new RegExp(MD_PATH_PATTERN, 'gi');
         const links: Array<{ range: { start: { x: number; y: number }; end: { x: number; y: number } }; text: string; activate: () => void; tooltip: string }> = [];
         let match: RegExpExecArray | null;
-        while ((match = mdPathRegex.exec(text)) !== null) {
-          const startX = match.index + 1;
-          const endX = match.index + match[0].length;
+        while ((match = mdRegex.exec(logical)) !== null) {
           const matchedPath = match[0];
+          const a = offsetToRowCol(match.index);
+          const b = offsetToRowCol(match.index + matchedPath.length - 1);
+          // Only emit if this link visually touches the queried row. Clip the
+          // x range to that row (matches the URL provider's per-row clipping
+          // - emitting a multi-row range causes xterm to fire activate once
+          // per row).
+          if (lineIdx0 < a.row || lineIdx0 > b.row) continue;
+          const startX = lineIdx0 === a.row ? a.col + 1 : 1;
+          const endX = lineIdx0 === b.row ? b.col + 1 : term.cols;
+
           links.push({
             range: {
               start: { x: startX, y: bufferLineNumber },
@@ -637,7 +699,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             activate() {
               const termInst = useTerminalStore.getState().terminals.get(terminalId);
               const cwd = termInst?.cwd || '';
-              // Resolve relative paths against terminal cwd
               let fullPath = matchedPath;
               if (!/^[a-zA-Z]:/.test(matchedPath) && !matchedPath.startsWith('/') && !matchedPath.startsWith('~')) {
                 const sep = cwd.includes('\\') ? '\\' : '/';
