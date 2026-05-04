@@ -24,6 +24,8 @@ _restart.cmd
 
 # Release build artifacts (used as input to `gh release create --notes-file`)
 release-notes-v*.md
+release-body-preview.md
+release-body.md
 
 # Personal scratch / drafts
 geektime-post.md
