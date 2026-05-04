@@ -2283,10 +2283,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               <button
                 className="context-menu-item"
                 onClick={(e) => {
-                  // Open submenu anchored to this row's right edge so it
-                  // hangs alongside the parent menu without overlapping.
+                  // Anchor submenu alongside the parent menu. Default is
+                  // right of the trigger row; if that would overflow the
+                  // viewport (parent menu is right-aligned), flip to the
+                  // left side instead. Without the flip the submenu lands
+                  // off-screen and looks like the click did nothing.
                   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  setMoveToWsSubmenuPos({ x: r.right, y: r.top });
+                  const SUBMENU_W = 240;
+                  const x = r.right + 4 + SUBMENU_W > window.innerWidth
+                    ? Math.max(4, r.left - 4 - SUBMENU_W)
+                    : r.right + 4;
+                  setMoveToWsSubmenuPos({ x, y: r.top });
                 }}
                 title="Move this pane into a different workspace"
               >
@@ -2359,7 +2366,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               className="context-menu"
               style={{
                 position: 'fixed',
-                left: moveToWsSubmenuPos.x + 4,
+                left: moveToWsSubmenuPos.x,
                 top: moveToWsSubmenuPos.y,
                 zIndex: 1001,
               }}
