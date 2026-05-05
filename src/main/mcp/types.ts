@@ -98,7 +98,7 @@ export interface PaneRegistryAPI {
   list(): PaneInfo[];
   get(paneId: string): PaneInfo | undefined;
   /** Renderer-driven snapshot push. */
-  update(snapshot: import('./mcp-pane-registry').PaneSnapshot): void;
+  update(snapshot: import('./pane-registry').PaneSnapshot): void;
   /** Out-of-band agent binding (e.g. cwd-matched session detection). */
   setAgentBinding(paneId: string, provider: AgentProvider, aiSessionId: string): void;
   onChange(cb: () => void): () => void;

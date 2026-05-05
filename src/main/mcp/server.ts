@@ -6,10 +6,10 @@ import {
   type PermissionsAPI,
   type ToolCallContext,
   type ToolDefinition,
-} from './mcp-types';
-import { allMcpTools, findTool } from './mcp-tools';
-import { audit as writeAudit } from './mcp-audit';
-import { diagLog } from './diag-logger';
+} from './types';
+import { allMcpTools, findTool } from './tools';
+import { audit as writeAudit } from './audit';
+import { diagLog } from '../diag-logger';
 
 /**
  * Cross-pane MCP server (v1).

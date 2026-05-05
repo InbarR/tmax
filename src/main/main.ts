@@ -19,12 +19,12 @@ import { initDiagLogger, getDiagLogPath, diagLog, sanitize } from './diag-logger
 import { GitDiffService, resolveGitRoot } from './git-diff-service';
 import { listWorktrees, createWorktree, deleteWorktree, getBranches } from './git-worktree-service';
 import type { DiffMode } from '../shared/diff-types';
-import { McpServer } from './mcp-server';
-import { installTmaxEntry, uninstallTmaxEntry, buildReloadKeystroke } from './mcp-copilot-autoreg';
-import { PermissionsStore } from './mcp-permissions';
-import { paneRegistry, type PaneSnapshot } from './mcp-pane-registry';
-import { setAuditPath, readRecentAudit } from './mcp-audit';
-import type { GrantLevel } from './mcp-types';
+import { McpServer } from './mcp/server';
+import { installTmaxEntry, uninstallTmaxEntry, buildReloadKeystroke } from './mcp/copilot-autoreg';
+import { PermissionsStore } from './mcp/permissions';
+import { paneRegistry, type PaneSnapshot } from './mcp/pane-registry';
+import { setAuditPath, readRecentAudit } from './mcp/audit';
+import type { GrantLevel } from './mcp/types';
 
 // Handle Squirrel.Windows lifecycle events (install, update, uninstall)
 // Must be at the top before any other initialization

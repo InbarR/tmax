@@ -1,5 +1,5 @@
-import type { AgentProvider, PaneInfo, PaneRegistryAPI } from './mcp-types';
-import { paneBufferStore } from './mcp-buffer-store';
+import type { AgentProvider, PaneInfo, PaneRegistryAPI } from './types';
+import { paneBufferStore } from './buffer-store';
 
 /**
  * Pane registry — main-process source of truth that the MCP server consults

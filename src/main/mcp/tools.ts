@@ -6,8 +6,8 @@ import {
   type ToolResult,
   type ToolCallContext,
   type GrantLevel,
-} from './mcp-types';
-import { paneBufferStore, PaneBufferStore } from './mcp-buffer-store';
+} from './types';
+import { paneBufferStore, PaneBufferStore } from './buffer-store';
 
 /**
  * Tool registry for the cross-pane MCP server (v1, read-only).

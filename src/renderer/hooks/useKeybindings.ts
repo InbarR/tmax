@@ -109,7 +109,6 @@ const DEFAULT_BINDINGS: Record<string, string> = {
   'Ctrl+Shift+J': 'switchTerminal',
   'Ctrl+Shift+D': 'dirPicker',
   'Ctrl+Shift+P': 'commandPalette',
-  'Ctrl+Shift+M': 'mcpGrants',
   'Ctrl+Tab': 'focusNext',
   'Ctrl+Shift+Tab': 'focusPrev',
   'Ctrl+Alt+ArrowUp': 'splitVerticalUp',
@@ -290,6 +289,9 @@ function dispatchAction(action: string): void {
       store.toggleCommandPalette();
       break;
     case 'mcpGrants':
+      // Reachable only via the tab right-click menu and the pane ⋯ menu;
+      // the case is kept so Action types stay valid even if a future
+      // dispatcher path emits it programmatically.
       store.toggleMcpGrants();
       break;
     case 'tabMenu':

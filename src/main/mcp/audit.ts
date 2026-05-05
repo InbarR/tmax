@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { AuditEntry } from './mcp-types';
+import type { AuditEntry } from './types';
 
 /**
  * Append-only NDJSON audit log of every MCP tool call.

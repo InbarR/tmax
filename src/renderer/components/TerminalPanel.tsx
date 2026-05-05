@@ -2474,7 +2474,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             <button className="context-menu-item" onClick={() => {
               setPaneMenuPos(null);
               useTerminalStore.getState().toggleMcpGrants();
-            }}>👁 Share with agent… <span className="context-menu-shortcut">Ctrl+Shift+M</span></button>
+            }}>👁 Share with agent…</button>
             <div className="context-menu-separator" />
             <button className="context-menu-item danger" onClick={() => {
               setPaneMenuPos(null);

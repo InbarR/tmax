@@ -416,7 +416,7 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
             onClose();
             store().toggleMcpGrants();
           }}>
-            Share with agent… <span className="shortcut">{formatKeyForPlatform('Ctrl+Shift+M')}</span>
+            Share with agent…
           </button>
           <div className="context-menu-separator" />
           {config && config.shells.length > 0 && (

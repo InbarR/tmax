@@ -1,4 +1,4 @@
-import { MCP_LIMITS } from './mcp-types';
+import { MCP_LIMITS } from './types';
 
 /**
  * Per-pane PTY ring buffer (main process).

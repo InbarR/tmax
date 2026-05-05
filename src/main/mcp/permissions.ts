@@ -1,4 +1,4 @@
-import type { Grant, GrantLevel, PermissionsAPI } from './mcp-types';
+import type { Grant, GrantLevel, PermissionsAPI } from './types';
 
 /**
  * Default-deny in-memory grants store.

@@ -3,8 +3,8 @@ import { existsSync, statSync, writeFileSync } from 'fs';
 import { homedir, tmpdir } from 'os';
 import { join } from 'path';
 import { diagLog, sanitize } from './diag-logger';
-import { paneBufferStore } from './mcp-buffer-store';
-import { paneRegistry } from './mcp-pane-registry';
+import { paneBufferStore } from './mcp/buffer-store';
+import { paneRegistry } from './mcp/pane-registry';
 
 // Dot-sourced by each pwsh session so the full snippet isn't echoed into the terminal.
 // Rewritten once per app launch (stable filename, overwrite).
