@@ -11,6 +11,7 @@ import { isMac } from '../utils/platform';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { prepareClipboardPaste, resolveClipboardPaste } from '../utils/paste';
 import { smartUnwrapForCopy } from '../utils/smart-unwrap';
+import { MD_PATH_PATTERN } from '../utils/md-link-parser';
 import type { AppConfig } from '../state/types';
 import '@xterm/xterm/css/xterm.css';
 
@@ -468,12 +469,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           if (!nextTextRaw) break;
           // Allow an indented continuation: gh and similar CLIs hard-wrap
           // long URLs with the continuation indented under the start of the
-          // line. Trim the leading whitespace and remember it for the
-          // offset->visual-col mapping. To avoid false-positives where an
-          // indented prose paragraph follows a URL ("    bar for more info"),
-          // require the trimmed line to be a SINGLE whitespace-free token —
-          // wrapped URLs look like long opaque token chains, prose doesn't.
-          const wsMatch = nextTextRaw.match(/^(\s*)(\S+)\s*$/);
+          // line. Trim leading whitespace + table-border chars (`|`, `│`)
+          // and remember the visual offset for the offset->col mapping. To
+          // avoid false-positives where an indented prose paragraph follows
+          // a URL ("    bar for more info"), require the meaningful payload
+          // to be a SINGLE non-whitespace, non-pipe token between optional
+          // table-noise borders. Markdown tables that wrap a long URL onto
+          // the next row would otherwise look like `|   |   4)   |` and the
+          // older /^(\s*)(\S+)\s*$/ check rejected them, leaving the URL
+          // truncated at the wrap point.
+          const wsMatch = nextTextRaw.match(/^([\s|│]*)([^\s|│]+)[\s|│]*$/);
           if (!wsMatch) break;
           const leadingWS = wsMatch[1].length;
           const nextText = wsMatch[2];
@@ -576,17 +581,29 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             },
             text: m[0],
             activate(_e, uri) {
-              // TASK-58 diagnostic: trace duplicate activations
+              // Diagnostic counter (kept for ongoing repro of TASK-104/106).
+              // Increments on every fire, even ones the dedupe drops, so
+              // users can tell from DevTools whether the handler is reaching
+              // us at all.
               try {
                 (window as unknown as { __tmaxLinkActivates?: number }).__tmaxLinkActivates =
                   ((window as unknown as { __tmaxLinkActivates?: number }).__tmaxLinkActivates || 0) + 1;
-                console.warn('[tmax TASK-58] URL activate', {
-                  uri,
-                  count: (window as unknown as { __tmaxLinkActivates: number }).__tmaxLinkActivates,
-                  providers: ((term as unknown as { _core: { _linkProviderService: { linkProviders?: unknown[] } } })
-                    ._core?._linkProviderService?.linkProviders || []).length,
-                });
               } catch { /* noop */ }
+
+              // Dedupe rapid duplicate fires of the same URL. xterm's
+              // linkifier sometimes invokes our activate multiple times
+              // for what is logically one click (observed: 5 fires per
+              // click on a wrapped URL). Without dedupe, Chromium's
+              // popup-block heuristic kicks in after the first window.open
+              // and silently swallows the rest, leaving the user with
+              // "first click works, second click does nothing" because
+              // the second click is actually click N+1 of a previous burst.
+              const win = window as unknown as { __tmaxLinkLast?: { uri: string; ts: number } };
+              const now = Date.now();
+              if (win.__tmaxLinkLast && win.__tmaxLinkLast.uri === uri && now - win.__tmaxLinkLast.ts < 500) {
+                return;
+              }
+              win.__tmaxLinkLast = { uri, ts: now };
               window.open(uri, '_blank');
             },
             decorations: { underline: true, pointerCursor: true },
@@ -597,20 +614,81 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       },
     });
 
-    // Register link provider for .md file paths (Ctrl+Click to preview)
+    // Link provider for .md file paths (TASK-107).
+    //
+    // Walks soft-wrap continuations like the URL provider above so a path that
+    // visually spans multiple rows (e.g. a long Windows path with spaces in
+    // `OneDrive - Microsoft` after the user shrinks the pane) reconstructs to
+    // its full logical form before the regex runs. Without this walk, xterm's
+    // per-row provideLinks call sees only a head row (no `.md`, no match) or
+    // only a tail row (matches as a bare filename - which then fails to open
+    // because the drive/folders are missing).
+    //
+    // No hard-newline stitch here - paths, unlike URLs from `gh auth login`,
+    // do not get hard-wrapped by CLIs at fixed column counts.
     term.registerLinkProvider({
       provideLinks(bufferLineNumber, callback) {
-        const line = term.buffer.active.getLine(bufferLineNumber - 1);
-        if (!line) { callback(undefined); return; }
-        const text = line.translateToString();
-        // Match file paths ending in .md (absolute or relative)
-        const mdPathRegex = /(?:[a-zA-Z]:[\\/]|[\/~.])?[^\s"'`<>|:*?]*\.md\b/gi;
+        const buf = term.buffer.active;
+        const lineIdx0 = bufferLineNumber - 1;
+        if (lineIdx0 < 0 || lineIdx0 >= buf.length) { callback(undefined); return; }
+
+        let softStart = lineIdx0;
+        while (softStart > 0) {
+          const cur = buf.getLine(softStart);
+          if (!cur?.isWrapped) break;
+          softStart--;
+        }
+        let softEnd = softStart;
+        while (softEnd + 1 < buf.length) {
+          const next = buf.getLine(softEnd + 1);
+          if (!next?.isWrapped) break;
+          softEnd++;
+        }
+
+        const cols = term.cols;
+        interface Seg { rowIdx: number; logicalStart: number }
+        const segs: Seg[] = [];
+        let logical = '';
+        for (let i = softStart; i <= softEnd; i++) {
+          const line = buf.getLine(i);
+          if (!line) continue;
+          // Middle rows are exactly `cols`-wide content (no trim) so the
+          // reverse offset->col math stays simple modulo. The trailing row
+          // is the only one that may not be cols-wide - trim it.
+          const text = i < softEnd ? line.translateToString(false) : line.translateToString(true);
+          segs.push({ rowIdx: i, logicalStart: logical.length });
+          logical += text;
+        }
+
+        function offsetToRowCol(offset: number): { row: number; col: number } {
+          for (let s = segs.length - 1; s >= 0; s--) {
+            const seg = segs[s];
+            if (offset >= seg.logicalStart) {
+              const within = offset - seg.logicalStart;
+              if (s < segs.length - 1 && within >= cols) {
+                return { row: seg.rowIdx + Math.floor(within / cols), col: within % cols };
+              }
+              return { row: seg.rowIdx, col: within };
+            }
+          }
+          return { row: segs[0]?.rowIdx ?? 0, col: 0 };
+        }
+
+        const mdRegex = new RegExp(MD_PATH_PATTERN, 'gi');
         const links: Array<{ range: { start: { x: number; y: number }; end: { x: number; y: number } }; text: string; activate: () => void; tooltip: string }> = [];
         let match: RegExpExecArray | null;
-        while ((match = mdPathRegex.exec(text)) !== null) {
-          const startX = match.index + 1;
-          const endX = match.index + match[0].length;
+        while ((match = mdRegex.exec(logical)) !== null) {
           const matchedPath = match[0];
+          const a = offsetToRowCol(match.index);
+          const b = offsetToRowCol(match.index + matchedPath.length - 1);
+          // Only emit if this link visually touches the queried row. Clip the
+          // x range to that row (matches the URL provider's per-row clipping
+          // - emitting a multi-row range causes xterm to fire activate once
+          // per row).
+          if (lineIdx0 < a.row || lineIdx0 > b.row) continue;
+          const startX = lineIdx0 === a.row ? a.col + 1 : 1;
+          const endX = lineIdx0 === b.row ? b.col + 1 : term.cols;
+
           links.push({
             range: {
               start: { x: startX, y: bufferLineNumber },
@@ -621,7 +699,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             activate() {
               const termInst = useTerminalStore.getState().terminals.get(terminalId);
               const cwd = termInst?.cwd || '';
-              // Resolve relative paths against terminal cwd
               let fullPath = matchedPath;
               if (!/^[a-zA-Z]:/.test(matchedPath) && !matchedPath.startsWith('/') && !matchedPath.startsWith('~')) {
                 const sep = cwd.includes('\\') ? '\\' : '/';
@@ -1243,6 +1320,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         const shouldHide = cursorHideSignalsRef.current.bracketedPaste || cursorHideSignalsRef.current.altScreen;
         term.write(shouldHide ? '\x1b[?25l' : '\x1b[?25h');
       }
+      flushMouseModeReset();
     };
 
     // #67: Ink-based CLIs (Claude Code, Copilot CLI) enable bracketed paste
@@ -1257,6 +1335,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // xterm's cursor back on. The per-terminal state refs persist across
     // data chunks; the actual cursor write happens in flushPendingData so
     // it runs AFTER any alt-screen switch in the same data chunk.
+    // Track whether any mouse-tracking mode is currently active. Set when a
+    // TUI enables it; checked when we see alt-screen exit (TASK: drag-select
+    // stops working after Ctrl+C kills a TUI). The TUI never gets to send
+    // the matching ?1000l/?1006l reset on abrupt death, so we force them
+    // off ourselves when the app signals it's leaving alt-screen.
+    let mouseTrackingOn = false;
+    let mouseResetPending = false;
+
     const syncCursorVisibility = (chunk: string) => {
       for (let i = 0; i < chunk.length; i++) {
         if (chunk.charCodeAt(i) !== 0x1b) continue;
@@ -1267,6 +1353,28 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         }
         else if (chunk.startsWith('\x1b[?1049l', i) || chunk.startsWith('\x1b[?1047l', i)) {
           cursorHideSignalsRef.current.altScreen = false; cursorSyncDirty = true;
+          // Alt-screen exit + any mouse tracking still on = leftover from a
+          // TUI that died without resetting. Queue a forced reset so xterm
+          // stops forwarding mouse events to the (now-dead) child process
+          // and drag-select starts working again.
+          if (mouseTrackingOn) mouseResetPending = true;
+        }
+        // Mouse tracking mode toggles - any of ?1000/?1002/?1003/?1006/?1015
+        // (X10, button-event, any-event, SGR, urxvt). Track on/off so the
+        // alt-screen-exit handler above knows whether to force-reset.
+        else if (
+          chunk.startsWith('\x1b[?1000h', i) || chunk.startsWith('\x1b[?1002h', i) ||
+          chunk.startsWith('\x1b[?1003h', i) || chunk.startsWith('\x1b[?1006h', i) ||
+          chunk.startsWith('\x1b[?1015h', i)
+        ) {
+          mouseTrackingOn = true;
+        }
+        else if (
+          chunk.startsWith('\x1b[?1000l', i) || chunk.startsWith('\x1b[?1002l', i) ||
+          chunk.startsWith('\x1b[?1003l', i) || chunk.startsWith('\x1b[?1006l', i) ||
+          chunk.startsWith('\x1b[?1015l', i)
+        ) {
+          mouseTrackingOn = false;
         }
         // If the app tries to flip the hardware cursor while either of our
         // hide signals is on, queue a re-hide for after this chunk lands.
@@ -1278,6 +1386,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           }
         }
       }
+    };
+
+    // Flush any pending mouse-mode reset after the chunk has been written.
+    // Ordering matters: write reset sequences AFTER the alt-screen exit
+    // sequence has been processed by xterm so the modes are reset on the
+    // normal-screen state, not the about-to-be-dropped alt buffer.
+    const flushMouseModeReset = () => {
+      if (!mouseResetPending) return;
+      mouseResetPending = false;
+      mouseTrackingOn = false;
+      term.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l');
     };
 
     const unsubscribePtyData = window.terminalAPI.onPtyData(
@@ -1510,8 +1629,27 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // doesn't forward SGR mouse events to the pty. Otherwise TUI apps with
     // mouse reporting enabled (e.g. Claude Code) receive the right-click on
     // top of our own paste, causing a visible double-paste.
+    //
+    // We also snapshot any active xterm selection on right-button mousedown.
+    // Selections made via double-click (word) or triple-click (line) don't
+    // go through our left-mouse drag logic, so they never get into
+    // pendingTuiCopyText. Worse, the right-click mousedown can clear the
+    // selection before contextmenu fires - by which point both
+    // hasSelection() and pendingTuiCopyText are empty and we'd fall through
+    // to paste. Capturing on mousedown(button=2) closes that gap.
     const handleRightMouseButton = (e: MouseEvent) => {
       if (e.button === 2) {
+        if (e.type === 'mousedown') {
+          rightClickInFlight = true;
+          if (term.hasSelection()) {
+            const sel = term.getSelection().replace(/\s+$/u, '');
+            if (sel) {
+              pendingTuiCopyText = sel;
+              if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
+              pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
+            }
+          }
+        }
         e.preventDefault();
         e.stopPropagation();
       }
@@ -1519,20 +1657,135 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     containerRef.current.addEventListener('mousedown', handleRightMouseButton, true);
     containerRef.current.addEventListener('mouseup', handleRightMouseButton, true);
 
+    // Track left-button drag attempts. When mouse reporting is on, xterm
+    // forwards the drag to the pty instead of creating a selection - so
+    // term.hasSelection() is false even though the user dragged across
+    // visible text. We capture the buffer text at the drag rectangle on
+    // mouseup so right-click can copy it (TASK-120). Without this, the
+    // right-click handler has nothing to copy and the previous clipboard
+    // contents leak into the next paste.
+    let pendingTuiCopyText: string | null = null;
+    let pendingTuiCopyClearTimer: ReturnType<typeof setTimeout> | null = null;
+    let dragStartPos: { x: number; y: number } | null = null;
+    // Set true on right-button mousedown so the onSelectionChange listener
+    // doesn't wipe our snapshot when xterm clears its native selection in
+    // response to the right-click - which is exactly the case we're trying
+    // to defend against for double-click + right-click.
+    let rightClickInFlight = false;
+    const DRAG_THRESHOLD = 5; // pixels to count as a drag vs. a click
+
+    const clearPendingTuiCopy = () => {
+      pendingTuiCopyText = null;
+      if (pendingTuiCopyClearTimer) {
+        clearTimeout(pendingTuiCopyClearTimer);
+        pendingTuiCopyClearTimer = null;
+      }
+    };
+
+    // Convert a clientX/clientY pair to (col, row) in the visible viewport,
+    // then offset by viewportY to get an absolute buffer row. Returns null
+    // if cell dimensions aren't available yet (very early after mount).
+    const pixelToCell = (clientX: number, clientY: number): { col: number; row: number } | null => {
+      const screen = containerRef.current?.querySelector('.xterm-screen') as HTMLElement | null;
+      if (!screen) return null;
+      const rect = screen.getBoundingClientRect();
+      const dim = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } }; actualCellWidth?: number; actualCellHeight?: number } } } })._core?._renderService?.dimensions;
+      const cellW = dim?.css?.cell?.width ?? dim?.actualCellWidth ?? 0;
+      const cellH = dim?.css?.cell?.height ?? dim?.actualCellHeight ?? 0;
+      if (!cellW || !cellH) return null;
+      const viewportCol = Math.max(0, Math.min(term.cols - 1, Math.floor((clientX - rect.left) / cellW)));
+      const viewportRow = Math.max(0, Math.min(term.rows - 1, Math.floor((clientY - rect.top) / cellH)));
+      return { col: viewportCol, row: viewportRow + term.buffer.active.viewportY };
+    };
+
+    const readBufferRange = (start: { col: number; row: number }, end: { col: number; row: number }): string => {
+      let s = start;
+      let e = end;
+      if (s.row > e.row || (s.row === e.row && s.col > e.col)) {
+        const tmp = s; s = e; e = tmp;
+      }
+      const buf = term.buffer.active;
+      if (s.row === e.row) {
+        return buf.getLine(s.row)?.translateToString(true, s.col, e.col) ?? '';
+      }
+      const parts: string[] = [];
+      parts.push(buf.getLine(s.row)?.translateToString(true, s.col) ?? '');
+      for (let r = s.row + 1; r < e.row; r++) {
+        parts.push(buf.getLine(r)?.translateToString(true) ?? '');
+      }
+      parts.push(buf.getLine(e.row)?.translateToString(true, 0, e.col) ?? '');
+      return parts.join('\n');
+    };
+
+    const handleLeftMouseDown = (e: MouseEvent) => {
+      if (e.button === 0) {
+        dragStartPos = { x: e.clientX, y: e.clientY };
+      }
+    };
+    const handleLeftMouseUp = (e: MouseEvent) => {
+      if (e.button === 0 && dragStartPos) {
+        const dx = e.clientX - dragStartPos.x;
+        const dy = e.clientY - dragStartPos.y;
+        const wasDrag = Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD;
+        // Native xterm selections (drag, double/triple-click) are captured
+        // via onSelectionChange below. The only path that needs explicit
+        // mouseup handling is a drag while a TUI has mouse reporting on -
+        // xterm never gets a selection there, so we read the cells under
+        // the drag rectangle directly from the buffer.
+        if (wasDrag && mouseTrackingOn && !term.hasSelection()) {
+          const startCell = pixelToCell(dragStartPos.x, dragStartPos.y);
+          const endCell = pixelToCell(e.clientX, e.clientY);
+          if (startCell && endCell) {
+            const snapshot = readBufferRange(startCell, endCell).replace(/\s+$/u, '');
+            if (snapshot) {
+              pendingTuiCopyText = snapshot;
+              if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
+              pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
+            }
+          }
+        }
+        dragStartPos = null;
+      }
+    };
+    containerRef.current.addEventListener('mousedown', handleLeftMouseDown, true);
+    containerRef.current.addEventListener('mouseup', handleLeftMouseUp, true);
+
     // Right-click: copy if selection, paste if no selection.
-    // Skip the implicit paste when the clipboard is image-only (issue #84):
-    // a TUI with mouse reporting on (e.g. Claude Code) consumes drag events
-    // so xterm has no selection even though the user thinks they're
-    // selecting text. Auto-pasting a saved-PNG file path on right-click in
-    // that state is almost never what the user wanted. Ctrl+V still pastes
-    // images explicitly.
+    // When mouse reporting is on (Copilot CLI, Claude Code) drag-select is
+    // consumed by the pty so xterm has no native selection. We capture the
+    // dragged text from the buffer at mouseup time (TASK-120), so right-click
+    // here copies that text - matching the natural Windows Terminal flow and
+    // closing the gap left by the TASK-66/#84 fix.
+    let lastCopyAt = 0;
+    const POST_COPY_PASTE_GUARD_MS = 600;
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
+      // Always release the in-flight flag once contextmenu fires, so the
+      // next user-driven empty-selection event clears the snapshot normally.
+      rightClickInFlight = false;
       if (term.hasSelection()) {
         window.terminalAPI.clipboardWrite(smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current));
         term.clearSelection();
+        clearPendingTuiCopy();
+        lastCopyAt = Date.now();
+        return;
+      }
+      // Mouse reporting consumed a drag: copy the text we snapshotted from
+      // the buffer, suppress paste. User clearly intended to copy.
+      if (pendingTuiCopyText) {
+        const text = pendingTuiCopyText;
+        clearPendingTuiCopy();
+        window.terminalAPI.clipboardWrite(smartUnwrapForCopy(text, smartUnwrapRef.current));
+        lastCopyAt = Date.now();
+        return;
+      }
+      // Suppress paste right after a copy: a second quick right-click is
+      // almost always a user double-tapping to confirm the copy worked, not
+      // an immediate paste-back. Without this guard the just-copied text
+      // would land in the prompt below.
+      if (Date.now() - lastCopyAt < POST_COPY_PASTE_GUARD_MS) {
         return;
       }
       const hasImage = window.terminalAPI.clipboardHasImage();
@@ -1573,6 +1826,29 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     };
     containerRef.current.addEventListener('copy', handleCopyEvent, true);
 
+    // Mirror every xterm selection into pendingTuiCopyText. This is the most
+    // reliable capture point: it covers drag, double-click word selection,
+    // triple-click line selection, and term.select() API calls - all in a
+    // single hook fired by xterm itself the moment the selection changes.
+    // The right-click handler then has authoritative text even if a
+    // subsequent mousedown(2) clears the visible selection before contextmenu
+    // fires. When the selection becomes empty (user clicked elsewhere), we
+    // drop the cache so a follow-up right-click on empty space pastes as
+    // expected. (Our own copy-and-clear path in handleContextMenu calls
+    // clearPendingTuiCopy first, so this path is a no-op for that case.)
+    const selectionDisposable = term.onSelectionChange(() => {
+      if (term.hasSelection()) {
+        const sel = term.getSelection().replace(/\s+$/u, '');
+        if (sel) {
+          pendingTuiCopyText = sel;
+          if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
+          pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
+        }
+      } else if (pendingTuiCopyText && !rightClickInFlight) {
+        clearPendingTuiCopy();
+      }
+    });
+
     const containerEl = containerRef.current;
 
     return () => {
@@ -1589,8 +1865,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       }
       containerEl.removeEventListener('contextmenu', handleContextMenu, true);
       containerEl.removeEventListener('copy', handleCopyEvent, true);
+      selectionDisposable.dispose();
       containerEl.removeEventListener('mousedown', handleRightMouseButton, true);
       containerEl.removeEventListener('mouseup', handleRightMouseButton, true);
+      containerEl.removeEventListener('mousedown', handleLeftMouseDown, true);
+      containerEl.removeEventListener('mouseup', handleLeftMouseUp, true);
       wheelRecoveryEl?.removeEventListener('wheel', wheelPreSyncHandler, true);
       wheelRecoveryEl?.removeEventListener('wheel', wheelRecoveryHandler);
       wheelRecoveryEl?.removeEventListener('dblclick', manualSyncHandler);
@@ -2122,10 +2401,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               <button
                 className="context-menu-item"
                 onClick={(e) => {
-                  // Open submenu anchored to this row's right edge so it
-                  // hangs alongside the parent menu without overlapping.
+                  // Anchor submenu alongside the parent menu. Default is
+                  // right of the trigger row; if that would overflow the
+                  // viewport (parent menu is right-aligned), flip to the
+                  // left side instead. Without the flip the submenu lands
+                  // off-screen and looks like the click did nothing.
                   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  setMoveToWsSubmenuPos({ x: r.right, y: r.top });
+                  const SUBMENU_W = 240;
+                  const x = r.right + 4 + SUBMENU_W > window.innerWidth
+                    ? Math.max(4, r.left - 4 - SUBMENU_W)
+                    : r.right + 4;
+                  setMoveToWsSubmenuPos({ x, y: r.top });
                 }}
                 title="Move this pane into a different workspace"
               >
@@ -2203,7 +2489,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               className="context-menu"
               style={{
                 position: 'fixed',
-                left: moveToWsSubmenuPos.x + 4,
+                left: moveToWsSubmenuPos.x,
                 top: moveToWsSubmenuPos.y,
                 zIndex: 1001,
               }}

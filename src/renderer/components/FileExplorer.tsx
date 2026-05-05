@@ -4,6 +4,7 @@ import { useTerminalStore } from '../state/terminal-store';
 import MarkdownPreview from './MarkdownPreview';
 import ZoomControls from './ZoomControls';
 import { useZoom } from '../hooks/useZoom';
+import { confirmDialog, alertDialog } from './AppDialog';
 
 interface FileEntry {
   name: string;
@@ -150,7 +151,10 @@ const FileExplorer: React.FC = () => {
     if (!newName || newName === entry.name) return;
     const res = await (window.terminalAPI as any).fileRename(entry.path, newName, wslDistro);
     if (!res?.ok) {
-      window.alert(`Rename failed: ${res?.error || 'unknown error'}`);
+      await alertDialog({
+        title: 'Rename failed',
+        message: res?.error || 'unknown error',
+      });
       return;
     }
     await reloadDir(parentDirOf(entry.path));
@@ -158,10 +162,19 @@ const FileExplorer: React.FC = () => {
 
   const deleteEntry = useCallback(async (entry: FileEntry) => {
     const what = entry.isDirectory ? 'folder' : 'file';
-    if (!window.confirm(`Move ${what} "${entry.name}" to the Recycle Bin?`)) return;
+    const ok = await confirmDialog({
+      title: `Delete ${what}?`,
+      message: `Move ${what} "${entry.name}" to the Recycle Bin?`,
+      confirmText: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
     const res = await (window.terminalAPI as any).fileDelete(entry.path, wslDistro);
     if (!res?.ok) {
-      window.alert(`Delete failed: ${res?.error || 'unknown error'}`);
+      await alertDialog({
+        title: 'Delete failed',
+        message: res?.error || 'unknown error',
+      });
       return;
     }
     await reloadDir(parentDirOf(entry.path));

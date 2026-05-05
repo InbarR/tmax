@@ -51,9 +51,16 @@ export interface CopilotSession {
   messageCount: number;
   toolCallCount: number;
   lastActivityTime: number;
-  timeline: CopilotActivityEntry[];
   pendingToolCalls: number;
   totalTokens: number;
   latestPrompt?: string;
   latestPromptTime?: number;
+  /**
+   * Optional event-by-event timeline for the session. The aggregate parser
+   * does NOT populate this field on the hot path (would re-introduce the
+   * unbounded-cache OOM that the perf refactor fixed); callers who need a
+   * full timeline should fetch it lazily on demand. Field is kept on the
+   * shared type so consumers can opt in without a breaking change.
+   */
+  timeline?: CopilotActivityEntry[];
 }

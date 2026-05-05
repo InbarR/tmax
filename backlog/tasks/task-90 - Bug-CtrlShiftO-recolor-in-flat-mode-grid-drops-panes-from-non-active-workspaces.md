@@ -3,9 +3,10 @@ id: TASK-90
 title: >-
   Bug: Ctrl+Shift+O recolor in flat-mode grid drops panes from non-active
   workspaces
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-03 15:32'
+updated_date: '2026-05-04 13:46'
 labels:
   - regression
   - bug

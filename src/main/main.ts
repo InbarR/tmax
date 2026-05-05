@@ -199,6 +199,12 @@ function sweepStaleClipboardDirs(): void {
 const sessionStore = new Store({ name: 'tmax-session' });
 const detachedWindows = new Map<string, BrowserWindow>();
 
+// Fresh-launch mode: when set, SESSION_LOAD returns null and SESSION_SAVE
+// no-ops, so a second tmax launched for live testing never restores the
+// running instance's panes and never overwrites its saved state on exit.
+// Set via TMAX_NO_RESTORE=1 env var or `--no-restore` argv flag.
+const NO_RESTORE = process.env.TMAX_NO_RESTORE === '1' || process.argv.includes('--no-restore');
+
 function broadcastPtyEvent(channel: string, id: string, ...args: unknown[]) {
   mainWindow?.webContents.send(channel, id, ...args);
   const detachedWin = detachedWindows.get(id);
@@ -228,6 +234,10 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: false,
       preload: path.join(__dirname, 'preload.js'),
+      // Surface dev-vs-packaged to the renderer through preload. process.defaultApp
+      // proved unreliable under electron-forge in some setups; the main process is
+      // authoritative via app.isPackaged.
+      additionalArguments: [`--tmax-is-dev=${!app.isPackaged}`],
     },
   });
 
@@ -331,15 +341,20 @@ function createWindow(): void {
   task58Log('LOG INIT - clicks below this line', { logPath: task58LogPath });
 
   // External link handling. Returning {action: 'deny'} cancels the new
-  // BrowserWindow. The earlier implementation ALSO called shell.openExternal
-  // here, which produced TWO browser tabs per click: empirically, when our
-  // handler denies a new window for an http(s) URL, another navigation
-  // handler in the stack still opens that URL externally on its own, so the
-  // explicit call was a duplicate. The TASK-58 e2e test only spied on
-  // window.open in the renderer (which correctly fired once), so the
-  // main-process double never registered.
+  // BrowserWindow; we then route http(s) URLs to the default browser via
+  // shell.openExternal. An older comment claimed Electron auto-fell-through
+  // to external open after deny, making the explicit call a double-open -
+  // diagnostic logging (tmax-task58.log) showed that's no longer true: in
+  // Electron 30 a denied window.open fires neither will-navigate nor
+  // did-create-window, so without this call the URL is silently dropped.
+  // That manifested as "click does nothing" inside Claude Code panes
+  // (TASK-106). Guard the scheme to keep file:// / mailto: / custom-scheme
+  // links from triggering an unintended browser open.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     task58Log('setWindowOpenHandler fired', { url });
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url);
+    }
     return { action: 'deny' };
   });
 
@@ -405,6 +420,7 @@ function setupConfigStore(): void {
 // chance to send SESSION_NAME_OVERRIDES_SYNC) would still show the auto-
 // derived name even for previously-renamed sessions.
 function seedSessionNameOverridesFromDisk(): void {
+  if (NO_RESTORE) return;
   try {
     const session = sessionStore.get('session') as Record<string, unknown> | undefined;
     const raw = session?.sessionNameOverrides;
@@ -627,6 +643,7 @@ function registerIpcHandlers(): void {
   );
 
   ipcMain.handle(IPC.SESSION_SAVE, (_event, data: unknown) => {
+    if (NO_RESTORE) return;
     sessionStore.set('session', data);
   });
 
@@ -699,6 +716,7 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle(IPC.SESSION_LOAD, () => {
+    if (NO_RESTORE) return null;
     return sessionStore.get('session', null);
   });
 
@@ -724,6 +742,7 @@ function registerIpcHandlers(): void {
         nodeIntegration: false,
         sandbox: false,
         preload: path.join(__dirname, 'preload.js'),
+        additionalArguments: [`--tmax-is-dev=${!app.isPackaged}`],
       },
     });
 
@@ -738,11 +757,13 @@ function registerIpcHandlers(): void {
     detachedWindows.set(terminalId, detachedWin);
 
     // Open external links in the default browser for detached windows too.
-    // See main-window setWindowOpenHandler above for why we don't call
-    // shell.openExternal explicitly: another handler in the stack already
-    // routes denied http(s) URLs to the default browser, so an explicit
-    // call here would double-open.
-    detachedWin.webContents.setWindowOpenHandler(() => {
+    // Mirror the main-window handler: deny the new BrowserWindow, then call
+    // shell.openExternal explicitly for http(s) - Electron 30's deny path
+    // does not auto-fall-through to will-navigate.
+    detachedWin.webContents.setWindowOpenHandler(({ url }) => {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        shell.openExternal(url);
+      }
       return { action: 'deny' };
     });
 
@@ -782,10 +803,17 @@ function registerIpcHandlers(): void {
   });
 
   // ── Copilot IPC handlers ────────────────────────────────────────────
-  ipcMain.handle(IPC.COPILOT_LIST_SESSIONS, () => {
-    const native = copilotMonitor?.scanSessions() ?? [];
-    const wsl = wslSessionManager?.scanCopilotSessions() ?? [];
-    return [...native, ...wsl];
+  ipcMain.handle(IPC.COPILOT_LIST_SESSIONS, async (_event, limit?: number) => {
+    const cap = limit ?? 50;
+    const native = await copilotMonitor?.scanSessions(cap) ?? [];
+    const wsl = await wslSessionManager?.scanCopilotSessions(cap) ?? [];
+    // Apply the cap to the combined (native + WSL) list, sorted by recency,
+    // so the user-facing limit is honored across both sources.
+    const combined = [...native, ...wsl]
+      .sort((a, b) => (b.lastActivityTime ?? 0) - (a.lastActivityTime ?? 0))
+      .slice(0, cap);
+    const totalEligible = (copilotMonitor?.lastTotalEligible ?? 0) + wsl.length;
+    return { sessions: combined, totalEligible };
   });
 
   ipcMain.handle(IPC.COPILOT_GET_SESSION, (_event, id: string) => {
@@ -816,11 +844,23 @@ function registerIpcHandlers(): void {
     return wslSessionManager?.getCopilotPrompts(id) ?? [];
   });
 
+  ipcMain.handle(IPC.AI_INVALIDATE_CACHES, () => {
+    copilotMonitor?.invalidateCache();
+    claudeCodeMonitor?.invalidateCache();
+  });
+
   // ── Claude Code IPC handlers ──────────────────────────────────────────
-  ipcMain.handle(IPC.CLAUDE_CODE_LIST_SESSIONS, () => {
-    const native = claudeCodeMonitor?.scanSessions() ?? [];
-    const wsl = wslSessionManager?.scanClaudeCodeSessions() ?? [];
-    return [...native, ...wsl];
+  ipcMain.handle(IPC.CLAUDE_CODE_LIST_SESSIONS, async (_event, limit?: number) => {
+    const cap = limit ?? 50;
+    const native = await claudeCodeMonitor?.scanSessions(cap) ?? [];
+    const wsl = await wslSessionManager?.scanClaudeCodeSessions(cap) ?? [];
+    // Apply the cap to the combined (native + WSL) list, sorted by recency,
+    // so the user-facing limit is honored across both sources.
+    const combined = [...native, ...wsl]
+      .sort((a, b) => (b.lastActivityTime ?? 0) - (a.lastActivityTime ?? 0))
+      .slice(0, cap);
+    const totalEligible = (claudeCodeMonitor?.lastTotalEligible ?? 0) + wsl.length;
+    return { sessions: combined, totalEligible };
   });
 
   ipcMain.handle(IPC.CLAUDE_CODE_GET_SESSION, (_event, id: string) => {
@@ -1215,8 +1255,8 @@ function setupCopilotMonitor(): void {
   });
 
   copilotWatcher.setStaleCheckCallback(() => {
-    // Re-scan all sessions periodically to catch stale states
-    copilotMonitor!.scanSessions();
+    // Only refresh already-loaded sessions — no full directory re-scan
+    copilotMonitor!.refreshLoadedSessions();
   });
 }
 
@@ -1255,7 +1295,7 @@ function setupClaudeCodeMonitor(): void {
   });
 
   claudeCodeWatcher.setStaleCheckCallback(() => {
-    claudeCodeMonitor!.scanSessions();
+    claudeCodeMonitor!.refreshLoadedSessions();
   });
 }
 
@@ -1380,7 +1420,13 @@ async function setupWslSessionManager(): Promise<void> {
     },
   });
 
-  await wslSessionManager.start();
+  // Pass the user's aiSessionLoadLimit so the boot-time WSL scan honors it.
+  // Without this, an uncapped initial scan fires onSessionAdded for every
+  // WSL session and the renderer's load-with-cap result gets swamped by
+  // the side-channel events (TASK-3 / TASK-104).
+  const cfgLimit = (configStore?.getAll() as any)?.aiSessionLoadLimit;
+  const initialLimit = typeof cfgLimit === 'number' && cfgLimit >= 0 ? cfgLimit : 314;
+  await wslSessionManager.start(initialLimit);
 }
 
 process.on('uncaughtException', (error) => {

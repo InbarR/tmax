@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.7.2
+
+A small patch focused on the startup experience.
+
+### New Features
+
+- **"Restoring session..." loading indicator** - on launch, while tmax is rebuilding your saved layout, you now see a neutral spinner instead of the empty-state hero. Previously the hero rendered for 1-3 seconds during restore and looked like the panes had been lost. The hero only shows now when restore actually completes with nothing to display.
+
+### Performance
+
+- **Faster session restore** - PTY spawns during session restore now run in parallel via `Promise.all` rather than sequentially. With N panes the startup time is roughly bounded by the slowest spawn instead of the sum of all spawns.
+- **One less disk read at startup** - favoriteDirs / recentDirs now hydrate from the same `loadSession` payload that `restoreSession` reads, instead of duplicating the read.
+
+## v1.7.1
+
+A patch release focused on fixing URL clicks in Claude Code, polishing the empty state, and adding browser-style undo close.
+
+### New Features
+
+- **Undo close pane / workspace** - Ctrl+Shift+T pops the most recently closed pane (or whole workspace) back. Restores cwd, title, color, and resumes the AI session if it's still in the live list. 10-deep stack so you can walk back through closures. Confirms before restoring so an accidental keypress doesn't spawn PTYs unexpectedly. Ctrl+Shift+T was previously bound to the worktree panel - the panel still opens via the command palette and the StatusBar button.
+- **Empty state hero** - the bare "Press Ctrl+Shift+N" page now renders the tmax logo, a "New terminal" button, and a "Resume recent session" list with your last 5 Copilot + Claude Code sessions. One-click resume.
+- **tmax-styled message boxes** - the native white Windows confirm/alert dialogs are gone. New `AppDialog` component matches the dark theme: chevron logo header, accent-colored confirm, danger style for destructive actions (delete, reset). Used by pane restore, workspace restore, file delete, reset keybindings.
+- **Changelog modal: View on GitHub** - the version dialog now has a footer link that opens `github.com/InbarR/tmax/releases` in your default browser.
+
+### Bug Fixes
+
+- **URL clicks now actually open in your browser from Claude Code panes** - the deny-then-implicit-fall-through assumption broke in newer Electron, so URLs were silently dropped. Now we call `shell.openExternal` explicitly. Affected every `https://` URL inside a Claude Code session output.
+- **Move-to-workspace submenu** no longer renders off-screen when the parent menu is right-anchored. Detects right-overflow and flips the submenu to the left of the trigger row.
+
+### Polish
+
+- **AI Sessions list**: SVG chevrons replace the unicode triangles for the collapse-all toggle and per-group headers - crisper at any DPI, smooth rotation on toggle.
+
 ## v1.7.0
 
 A big release - **workspaces** lands as the headline feature, plus a deep round of paste / scroll / link / notification fixes and polish.

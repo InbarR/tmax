@@ -1616,15 +1616,227 @@ html.transparency-active .input-dialog {
   border: 2px dashed var(--focus-border);
 }
 
-/* ===== Empty State ===== */
-.empty-state {
+/* ===== Session Loading (TASK-117) ===== */
+/* Shown by TilingLayout while restoreSession is in flight, in place of the
+   empty-state hero. Keeps users from thinking their panes were lost during
+   the ~serial pty spawn time on launch. */
+.session-loading {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 16px;
   width: 100%;
   height: 100%;
   color: var(--text-secondary);
-  font-size: 1.2em;
+}
+
+.session-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color, rgba(205, 214, 244, 0.18));
+  border-top-color: var(--accent, #89b4fa);
+  animation: session-loading-spin 0.8s linear infinite;
+}
+
+.session-loading-text {
+  font-size: 13px;
+  letter-spacing: 0.3px;
+}
+
+@keyframes session-loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== Empty State ===== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  width: 100%;
+  height: 100%;
+  padding: 40px 24px;
+  color: var(--text-secondary);
+  overflow: auto;
+}
+
+.empty-state-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.empty-state-logo {
+  width: 132px;
+  height: 60px;
+  display: block;
+}
+
+.empty-state-chevron {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+}
+.empty-state-chevron-0 { fill: #a6e22e; opacity: 0.95; }
+.empty-state-chevron-1 { fill: #7caf2a; opacity: 0.85; }
+.empty-state-chevron-2 { fill: #5b6b34; opacity: 0.75; }
+.empty-state-chevron-3 { fill: #555a5f; opacity: 0.65; }
+
+.empty-state-wordmark {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.empty-state-primary-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px 10px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+}
+.empty-state-primary-action:hover {
+  background: var(--bg-elevated, var(--bg-secondary));
+  border-color: var(--accent, #7aa2f7);
+}
+.empty-state-primary-action:active {
+  transform: scale(0.98);
+}
+
+.empty-state-primary-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--accent, #7aa2f7);
+  color: var(--bg-primary, #1e1e2e);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.empty-state-primary-label {
+  font-weight: 500;
+}
+
+.empty-state-primary-kbd {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  padding: 2px 6px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+
+.empty-state-recents {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empty-state-recents-header {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 0 4px;
+}
+
+.empty-state-recents-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.empty-state-recent-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.1s, border-color 0.1s;
+}
+.empty-state-recent-item:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+.empty-state-recent-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.empty-state-recent-badge-claude-code {
+  background: rgba(214, 124, 76, 0.18);
+  color: #d67c4c;
+}
+.empty-state-recent-badge-copilot {
+  background: rgba(122, 162, 247, 0.18);
+  color: #7aa2f7;
+}
+
+.empty-state-recent-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.empty-state-recent-title {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.empty-state-recent-prompt {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-style: italic;
+}
+
+.empty-state-recent-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ===== Scrollbar Styles ===== */
@@ -1928,6 +2140,148 @@ html.transparency-active .input-dialog {
   text-decoration: underline;
 }
 
+.status-dev-pill {
+  color: #ffb84d;
+  background: rgba(255, 184, 77, 0.12);
+  border: 1px solid rgba(255, 184, 77, 0.45);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  cursor: default;
+  user-select: none;
+}
+
+/* ===== App Dialog (TASK-115: replaces native window.confirm/alert) ===== */
+.app-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  animation: app-dialog-fade 0.12s ease;
+}
+
+@keyframes app-dialog-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.app-dialog {
+  min-width: 360px;
+  max-width: 520px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: app-dialog-pop 0.14s ease;
+}
+
+@keyframes app-dialog-pop {
+  from { transform: translateY(6px) scale(0.98); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.app-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px 0 16px;
+}
+
+.app-dialog-logo {
+  width: 36px;
+  height: 16px;
+  display: block;
+  flex-shrink: 0;
+}
+
+.app-dialog-chevron {
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+}
+.app-dialog-chevron-0 { fill: #a6e22e; opacity: 0.95; }
+.app-dialog-chevron-1 { fill: #7caf2a; opacity: 0.85; }
+.app-dialog-chevron-2 { fill: #5b6b34; opacity: 0.75; }
+.app-dialog-chevron-3 { fill: #555a5f; opacity: 0.65; }
+
+.app-dialog-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+
+.app-dialog-message {
+  padding: 12px 16px 4px 16px;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.app-dialog-message p {
+  margin: 0;
+  padding: 0;
+}
+.app-dialog-message p + p {
+  margin-top: 8px;
+}
+
+.app-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 16px 14px 16px;
+}
+
+.app-dialog-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  transition: background 0.1s, border-color 0.1s;
+  min-width: 72px;
+}
+.app-dialog-btn:focus {
+  outline: 2px solid var(--accent, #7aa2f7);
+  outline-offset: 1px;
+}
+
+.app-dialog-btn-cancel {
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+.app-dialog-btn-cancel:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.app-dialog-btn-confirm {
+  background: var(--accent, #7aa2f7);
+  color: var(--bg-primary, #1e1e2e);
+  font-weight: 600;
+}
+.app-dialog-btn-confirm:hover {
+  filter: brightness(1.08);
+}
+
+.app-dialog-btn-danger {
+  background: #f38ba8;
+  color: #1e1e2e;
+}
+.app-dialog-btn-danger:hover {
+  filter: brightness(1.08);
+}
+
 /* Update modal */
 .update-modal-overlay {
   position: fixed;
@@ -2038,6 +2392,20 @@ html.transparency-active .input-dialog {
   padding: 12px 20px 16px;
   border-top: 1px solid var(--border-color);
   justify-content: flex-end;
+  align-items: center;
+}
+
+.update-modal-link {
+  margin-right: auto;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 12px;
+  padding: 6px 4px;
+  cursor: pointer;
+  transition: color 0.1s;
+}
+.update-modal-link:hover {
+  color: var(--accent, #7aa2f7);
 }
 
 .update-modal-btn {
@@ -2348,6 +2716,11 @@ body.broadcast-on .terminal-panel {
   margin-left: auto;
   color: var(--text-secondary);
   opacity: 0.7;
+}
+.prompt-search-meta-label {
+  color: var(--text-secondary);
+  opacity: 0.6;
+  font-weight: 400;
 }
 .prompt-search-mark {
   background: rgba(249, 226, 175, 0.35);
@@ -3947,10 +4320,19 @@ select.settings-input {
 }
 
 .ai-session-group-chevron {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 10px;
-  font-size: 9px;
+  height: 10px;
   color: var(--dim-text, #a6adc8);
+}
+
+.ai-session-collapse-toggle .ai-session-collapse-icon {
+  color: var(--text-secondary);
+}
+.ai-session-collapse-toggle:hover .ai-session-collapse-icon {
+  color: var(--text-primary);
 }
 
 .ai-session-group-name {

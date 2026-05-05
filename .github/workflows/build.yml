@@ -113,19 +113,21 @@ jobs:
           cd out
           7z a -tzip tmax-win32-${{ matrix.arch }}-portable.zip tmax-win32-${{ matrix.arch }}
 
+      # Upload only the artifacts we ship: arch-specific Squirrel trio + Windows
+      # portable zip + platform installers. Globs are scoped narrowly so a stray
+      # un-renamed Setup.exe (or any future MakerZIP zip) can't sneak in.
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: tmax-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
-            out/make/**/*.exe
-            out/make/**/*.zip
+            out/make/squirrel.windows/${{ matrix.arch }}/tmax-*-${{ matrix.arch }}-Setup.exe
+            out/make/squirrel.windows/${{ matrix.arch }}/tmax-*-${{ matrix.arch }}-full.nupkg
+            out/make/squirrel.windows/${{ matrix.arch }}/RELEASES-${{ matrix.arch }}
+            out/tmax-win32-${{ matrix.arch }}-portable.zip
             out/make/**/*.dmg
             out/make/**/*.deb
             out/make/**/*.rpm
-            out/make/**/*.nupkg
-            out/make/**/RELEASES*
-            out/*.zip
           if-no-files-found: warn
 
   release:
@@ -137,6 +139,9 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -158,9 +163,33 @@ jobs:
             done
           done
 
+      # Render the curated release body from the template, then append GitHub's
+      # auto-generated "What's Changed" PR list. body_path replaces the default
+      # auto-notes so we control framing; the appended block keeps the PR log.
+      - name: Generate release body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          export VERSION="${TAG#v}"
+          export BASE="https://github.com/${{ github.repository }}/releases/download/${TAG}"
+          envsubst '${VERSION} ${BASE}' < .github/release-body.md.template > release-body.md
+
+          AUTO_NOTES=$(gh api -X POST "repos/${{ github.repository }}/releases/generate-notes" \
+            -f tag_name="${TAG}" \
+            --jq '.body' 2>/dev/null || true)
+          if [ -n "$AUTO_NOTES" ]; then
+            printf '\n%s\n' "$AUTO_NOTES" >> release-body.md
+          fi
+
+          echo "::group::Rendered release body"
+          cat release-body.md
+          echo "::endgroup::"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release-body.md
           files: |
             artifacts/**/*.exe
             artifacts/**/*.zip
@@ -170,7 +199,9 @@ jobs:
             artifacts/**/*.nupkg
             artifacts/**/RELEASES*
           draft: false
-          prerelease: false
-          generate_release_notes: true
+          # Hyphenated tags (e.g. v1.7.1-rc1, v2.0.0-beta) are flagged as
+          # prereleases so they don't surface via /releases/latest and trigger
+          # auto-updates for stable users.
+          prerelease: ${{ contains(github.ref_name, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

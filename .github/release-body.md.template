@@ -1,0 +1,22 @@
+## Download
+
+| Platform | Recommended | Alternative |
+|---|---|---|
+| **Windows** (x64) | [Installer](${BASE}/tmax-${VERSION}-x64-Setup.exe) | [Portable zip](${BASE}/tmax-win32-x64-portable.zip) |
+| **Windows** (ARM) | [Installer](${BASE}/tmax-${VERSION}-arm64-Setup.exe) | [Portable zip](${BASE}/tmax-win32-arm64-portable.zip) |
+| **macOS** (Apple Silicon) | [.dmg](${BASE}/tmax-${VERSION}-arm64.dmg) | - |
+| **macOS** (Intel) | [.dmg](${BASE}/tmax-${VERSION}-x64.dmg) | - |
+| **Linux** | [.deb](${BASE}/tmax_${VERSION}_amd64.deb) | [.rpm](${BASE}/tmax-${VERSION}-1.x86_64.rpm) |
+
+Need something else? [Clone and build from source.](https://github.com/InbarR/tmax#building-from-source)
+
+<details>
+<summary>Auto-update files (you don't need these manually)</summary>
+
+The Squirrel auto-updater fetches these from inside tmax. Ignore unless you're debugging an update issue.
+
+- `RELEASES-x64`, `RELEASES-arm64` - update manifests
+- `tmax-${VERSION}-x64-full.nupkg`, `tmax-${VERSION}-arm64-full.nupkg` - update payloads
+
+</details>
+

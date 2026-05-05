@@ -1,8 +1,24 @@
 import React from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 
-// Regex matching file paths ending in .md
-const MD_PATH_REGEX = /(?:[a-zA-Z]:[\\/]|[\/~.])?[^\s"'`<>|:*?]*\.md\b/g;
+// Regex matching file paths ending in .md.
+//
+// Two alternatives at each position:
+//   1. Anchored at a real path prefix (drive `C:\`, UNC `\\`, leading `/`, `~/`,
+//      `./`, `../`). Body allows spaces so paths like
+//      `C:\Users\you\OneDrive - Microsoft\Vault\note.md` match end-to-end.
+//      Lazy `+?` stops at the first `.md\b` so adjacent paths on the same line
+//      stay separate. `:` is excluded from the body because no real path has
+//      a colon after the drive letter, which keeps the match from running
+//      across URL fragments.
+//   2. Bare filename (e.g. `README.md`) - no spaces allowed, otherwise we'd
+//      eat surrounding prose.
+//
+// Single source of truth - imported by TerminalPanel's xterm link provider so
+// the in-chat parser and the in-terminal provider can never drift. Exposed as
+// a string via `.source` (no regex flags) so consumers always build a fresh
+// stateful instance and `lastIndex` is never shared across callers.
+export const MD_PATH_PATTERN = /(?:[A-Za-z]:[\\/]|~[\\/]|\.{1,2}[\\/]|[\\/])[^"'`<>|:*?\r\n]+?\.md\b|[^\s"'`<>|:*?\r\n]+\.md\b/.source;
 
 function isAbsolutePath(p: string): boolean {
   return /^[a-zA-Z]:/.test(p) || p.startsWith('/') || p.startsWith('~');
@@ -23,7 +39,7 @@ export function renderWithMdLinks(text: string, cwd?: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
-  const regex = new RegExp(MD_PATH_REGEX.source, 'g');
+  const regex = new RegExp(MD_PATH_PATTERN, 'gi');
 
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIndex) {

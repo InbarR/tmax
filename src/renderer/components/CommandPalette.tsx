@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useTerminalStore } from '../state/terminal-store';
 import { formatKeyForPlatform } from '../utils/platform';
 import InputDialog from './InputDialog';
+import { confirmDialog } from './AppDialog';
 
 interface Command {
   id: string;
@@ -25,6 +26,7 @@ const CommandPalette: React.FC = () => {
     return [
       { id: 'newTerminal', label: 'New Terminal', shortcut: 'Ctrl+Shift+N', action: () => store().createTerminal() },
       { id: 'closeTerminal', label: 'Close Terminal', shortcut: 'Ctrl+Shift+W', action: () => { const id = focusedId(); if (id) store().closeTerminal(id); } },
+      { id: 'restoreClosedTerminal', label: 'Reopen Closed Pane', shortcut: 'Ctrl+Shift+T', action: () => store().restoreClosedTerminal() },
       { id: 'renameTerminal', label: 'Rename Terminal', shortcut: 'Ctrl+Shift+R', action: () => { const id = focusedId(); if (id) store().startRenaming(id); } },
       { id: 'jumpToTerminal', label: 'Jump to Terminal', shortcut: 'Ctrl+Shift+G', action: () => store().toggleSwitcher() },
       { id: 'paneHints', label: 'Jump to Terminal by Hint', shortcut: 'Ctrl+Shift+J', action: () => store().togglePaneHints() },
@@ -69,7 +71,7 @@ const CommandPalette: React.FC = () => {
         }});
       }},
       { id: 'copilotSessions', label: 'Copilot Sessions Panel', shortcut: 'Ctrl+Shift+C', action: () => store().toggleCopilotPanel() },
-      { id: 'worktreePanel', label: 'Git Worktree Panel', shortcut: 'Ctrl+Shift+T', action: () => store().toggleWorktreePanel() },
+      { id: 'worktreePanel', label: 'Git Worktree Panel', action: () => store().toggleWorktreePanel() },
       { id: 'dirPicker', label: 'Go to Directory (Favorites & Recent)', shortcut: 'Ctrl+Shift+D', action: () => store().toggleDirPicker() },
       { id: 'colorizeAllTabs', label: 'Toggle Tab Colors', shortcut: 'Ctrl+Shift+O', action: () => store().colorizeAllTabs() },
       { id: 'toggleTabBar', label: 'Toggle Tab Bar: Top / Left', action: () => store().toggleTabBarPosition() },
@@ -135,10 +137,14 @@ const CommandPalette: React.FC = () => {
       { id: 'openKeybindings', label: 'Keybindings: Open File', action: () => {
         (window.terminalAPI as any).openKeybindingsFile?.();
       }},
-      { id: 'resetKeybindings', label: 'Keybindings: Reset to Defaults', action: () => {
-        if (window.confirm('Overwrite keybindings.json with the default bindings? Your customizations will be lost.')) {
-          (window.terminalAPI as any).resetKeybindings?.();
-        }
+      { id: 'resetKeybindings', label: 'Keybindings: Reset to Defaults', action: async () => {
+        const ok = await confirmDialog({
+          title: 'Reset keybindings?',
+          message: 'Overwrite keybindings.json with the default bindings?\nYour customizations will be lost.',
+          confirmText: 'Reset',
+          danger: true,
+        });
+        if (ok) (window.terminalAPI as any).resetKeybindings?.();
       }},
       { id: 'checkForUpdates', label: 'Check for Updates', action: () => {
         window.terminalAPI.checkForUpdates();

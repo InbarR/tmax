@@ -1,9 +1,10 @@
 ---
 id: TASK-67
 title: 'Triage: task-61 image-only Ctrl+V test fails on main (no pty write)'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-03 07:09'
+updated_date: '2026-05-04 06:41'
 labels: []
 dependencies: []
 ---
@@ -21,3 +22,15 @@ Pre-existing failure surfaced while working TASK-66 (issue #84). tests/e2e/task-
 - [ ] #3 Either fix the root cause or update the test to match observed behavior (with a clear note explaining why)
 - [ ] #4 Re-run the full task-61 spec and assert all five tests pass
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Closed 2026-05-03: deprioritised. The e2e suite is run on demand for releases, not blocking other work; a single flaky spec isn't worth chasing right now. Re-open when test stability becomes a release-cadence problem.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Won't do for now - flaky spec deferred. Re-open if it becomes load-bearing.
+<!-- SECTION:FINAL_SUMMARY:END -->

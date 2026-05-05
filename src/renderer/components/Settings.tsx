@@ -101,10 +101,6 @@ const TerminalSettings: React.FC = () => {
 
   return (
     <div className="settings-section">
-      <SettingRow label="Scrollback" description="Number of lines to keep in scroll buffer">
-        <input type="number" className="settings-input small" value={config.terminal.scrollback}
-          onChange={(e) => update({ terminal: { ...config.terminal, scrollback: parseInt(e.target.value) || 5000 } })} />
-      </SettingRow>
       <SettingRow label="Smart unwrap on copy" description="Stitch CLI-rendered hard newlines + indent continuations back into single paragraphs when copying. Skips code blocks, bullets, and headings.">
         <label className="toggle-switch">
           <input type="checkbox"
@@ -141,6 +137,15 @@ const TerminalSettings: React.FC = () => {
             onChange={(e) => update({ aiSessionNotifications: e.target.checked } as any)} />
           <span className="toggle-track" />
         </label>
+      </SettingRow>
+      <SettingRow label="AI session load limit" description="Cap on recent sessions loaded per provider (Copilot and Claude Code each). Lower it for faster boot or less memory; set 0 to disable session loading entirely.">
+        <input type="number" className="settings-input small" min={0} step={1}
+          value={(config as any).aiSessionLoadLimit ?? 314}
+          onChange={(e) => {
+            const n = parseInt(e.target.value, 10);
+            const clamped = Number.isFinite(n) && n >= 0 ? n : 0;
+            update({ aiSessionLoadLimit: clamped } as any);
+          }} />
       </SettingRow>
       <SettingRow label="Old Session Threshold" description="Days of inactivity before a session is marked as Old">
         <input type="number" className="settings-input small" value={(config as any).oldSessionDays ?? 30}

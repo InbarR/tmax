@@ -114,8 +114,21 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
         window.terminalAPI.writePty(terminalId, data);
       });
 
+      let mouseTrackingOn = false;
       const unsubscribePtyData = window.terminalAPI.onPtyData((id, data) => {
-        if (id === terminalId) term.write(data);
+        if (id !== terminalId) return;
+        // Track mouse reporting modes so handleContextMenu can suppress paste
+        for (let i = 0; i < data.length; i++) {
+          if (data.charCodeAt(i) !== 0x1b) continue;
+          if (data.startsWith('\x1b[?1000h', i) || data.startsWith('\x1b[?1002h', i) ||
+              data.startsWith('\x1b[?1003h', i)) {
+            mouseTrackingOn = true;
+          } else if (data.startsWith('\x1b[?1000l', i) || data.startsWith('\x1b[?1002l', i) ||
+                     data.startsWith('\x1b[?1003l', i)) {
+            mouseTrackingOn = false;
+          }
+        }
+        term.write(data);
       });
 
       const unsubscribePtyExit = window.terminalAPI.onPtyExit((id) => {
@@ -140,13 +153,110 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
       // TerminalPanel so detached windows match main window behaviour.
       // Skip the implicit paste when clipboard is image-only (issue #84) -
       // see TerminalPanel.handleContextMenu for the rationale.
+
+      // Track left-button drags. With mouse reporting on the TUI swallows
+      // the drag and xterm has no native selection - so we snapshot the text
+      // under the drag rectangle from the buffer for the right-click handler
+      // to copy (TASK-120). Mirrors TerminalPanel.
+      let pendingTuiCopyText: string | null = null;
+      let pendingTuiCopyClearTimer: ReturnType<typeof setTimeout> | null = null;
+      let dragStartPos: { x: number; y: number } | null = null;
+      let rightClickInFlight = false;
+      const DRAG_THRESHOLD = 5;
+
+      const clearPendingTuiCopy = () => {
+        pendingTuiCopyText = null;
+        if (pendingTuiCopyClearTimer) {
+          clearTimeout(pendingTuiCopyClearTimer);
+          pendingTuiCopyClearTimer = null;
+        }
+      };
+
+      const pixelToCell = (clientX: number, clientY: number): { col: number; row: number } | null => {
+        const screen = containerRef.current?.querySelector('.xterm-screen') as HTMLElement | null;
+        if (!screen) return null;
+        const rect = screen.getBoundingClientRect();
+        const dim = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } }; actualCellWidth?: number; actualCellHeight?: number } } } })._core?._renderService?.dimensions;
+        const cellW = dim?.css?.cell?.width ?? dim?.actualCellWidth ?? 0;
+        const cellH = dim?.css?.cell?.height ?? dim?.actualCellHeight ?? 0;
+        if (!cellW || !cellH) return null;
+        const viewportCol = Math.max(0, Math.min(term.cols - 1, Math.floor((clientX - rect.left) / cellW)));
+        const viewportRow = Math.max(0, Math.min(term.rows - 1, Math.floor((clientY - rect.top) / cellH)));
+        return { col: viewportCol, row: viewportRow + term.buffer.active.viewportY };
+      };
+
+      const readBufferRange = (start: { col: number; row: number }, end: { col: number; row: number }): string => {
+        let s = start;
+        let e = end;
+        if (s.row > e.row || (s.row === e.row && s.col > e.col)) {
+          const tmp = s; s = e; e = tmp;
+        }
+        const buf = term.buffer.active;
+        if (s.row === e.row) {
+          return buf.getLine(s.row)?.translateToString(true, s.col, e.col) ?? '';
+        }
+        const parts: string[] = [];
+        parts.push(buf.getLine(s.row)?.translateToString(true, s.col) ?? '');
+        for (let r = s.row + 1; r < e.row; r++) {
+          parts.push(buf.getLine(r)?.translateToString(true) ?? '');
+        }
+        parts.push(buf.getLine(e.row)?.translateToString(true, 0, e.col) ?? '');
+        return parts.join('\n');
+      };
+
+      const handleLeftMouseDown = (e: MouseEvent) => {
+        if (e.button === 0) {
+          dragStartPos = { x: e.clientX, y: e.clientY };
+        }
+      };
+      const handleLeftMouseUp = (e: MouseEvent) => {
+        if (e.button === 0 && dragStartPos) {
+          const dx = e.clientX - dragStartPos.x;
+          const dy = e.clientY - dragStartPos.y;
+          const wasDrag = Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD;
+          // Native xterm selections covered by onSelectionChange below; this
+          // handler only catches the TUI mouse-reporting case where xterm
+          // never sees a selection.
+          if (wasDrag && mouseTrackingOn && !term.hasSelection()) {
+            const startCell = pixelToCell(dragStartPos.x, dragStartPos.y);
+            const endCell = pixelToCell(e.clientX, e.clientY);
+            if (startCell && endCell) {
+              const snapshot = readBufferRange(startCell, endCell).replace(/\s+$/u, '');
+              if (snapshot) {
+                pendingTuiCopyText = snapshot;
+                if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
+                pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
+              }
+            }
+          }
+          dragStartPos = null;
+        }
+      };
+
+      let lastCopyAt = 0;
+      const POST_COPY_PASTE_GUARD_MS = 600;
       const handleContextMenu = (e: MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
+        rightClickInFlight = false;
         if (term.hasSelection()) {
           window.terminalAPI.clipboardWrite(term.getSelection());
           term.clearSelection();
+          clearPendingTuiCopy();
+          lastCopyAt = Date.now();
+          return;
+        }
+        // Mouse reporting consumed a drag - copy the captured buffer text.
+        if (pendingTuiCopyText) {
+          const text = pendingTuiCopyText;
+          clearPendingTuiCopy();
+          window.terminalAPI.clipboardWrite(text);
+          lastCopyAt = Date.now();
+          return;
+        }
+        // Guard against a quick second right-click pasting the just-copied text.
+        if (Date.now() - lastCopyAt < POST_COPY_PASTE_GUARD_MS) {
           return;
         }
         const hasImage = window.terminalAPI.clipboardHasImage();
@@ -166,8 +276,24 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
       // forward SGR mouse events to the pty. Otherwise a TUI with mouse
       // reporting on would see the right-click on top of our paste and the
       // user would see a double paste (issue #72 variant).
+      //
+      // Also snapshot the active selection on right-button mousedown - this
+      // covers double-click word selection and triple-click line selection,
+      // which don't go through our left-mouse drag logic and can be cleared
+      // by the right-click mousedown before contextmenu fires.
       const handleRightMouseButton = (e: MouseEvent) => {
         if (e.button === 2) {
+          if (e.type === 'mousedown') {
+            rightClickInFlight = true;
+            if (term.hasSelection()) {
+              const sel = term.getSelection().replace(/\s+$/u, '');
+              if (sel) {
+                pendingTuiCopyText = sel;
+                if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
+                pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
+              }
+            }
+          }
           e.preventDefault();
           e.stopPropagation();
         }
@@ -176,6 +302,25 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
       containerEl.addEventListener('contextmenu', handleContextMenu, true);
       containerEl.addEventListener('mousedown', handleRightMouseButton, true);
       containerEl.addEventListener('mouseup', handleRightMouseButton, true);
+      containerEl.addEventListener('mousedown', handleLeftMouseDown, true);
+      containerEl.addEventListener('mouseup', handleLeftMouseUp, true);
+
+      // Mirror native xterm selections into pendingTuiCopyText (drag, double-
+      // click word, triple-click line, term.select API). Skip the empty-
+      // selection clear during a right-click so xterm clearing the selection
+      // mid-right-click can't wipe our just-captured snapshot.
+      const selectionDisposable = term.onSelectionChange(() => {
+        if (term.hasSelection()) {
+          const sel = term.getSelection().replace(/\s+$/u, '');
+          if (sel) {
+            pendingTuiCopyText = sel;
+            if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
+            pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
+          }
+        } else if (pendingTuiCopyText && !rightClickInFlight) {
+          clearPendingTuiCopy();
+        }
+      });
 
       term.focus();
 
@@ -188,6 +333,9 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
         containerEl.removeEventListener('contextmenu', handleContextMenu, true);
         containerEl.removeEventListener('mousedown', handleRightMouseButton, true);
         containerEl.removeEventListener('mouseup', handleRightMouseButton, true);
+        containerEl.removeEventListener('mousedown', handleLeftMouseDown, true);
+        containerEl.removeEventListener('mouseup', handleLeftMouseUp, true);
+        selectionDisposable.dispose();
         term.dispose();
       };
     })();

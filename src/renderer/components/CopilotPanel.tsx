@@ -141,6 +141,28 @@ const CopilotPanel: React.FC = () => {
     }
     return m;
   }, [terminals, tabGroups, defaultTabColor]);
+  const copilotSessionsTotal = useTerminalStore((s) => s.copilotSessionsTotal);
+  const claudeCodeSessionsTotal = useTerminalStore((s) => s.claudeCodeSessionsTotal);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [renderLimit, setRenderLimit] = useState(200);
+
+  const totalLoaded = copilotSessions.length + claudeCodeSessions.length;
+  const totalEligible = copilotSessionsTotal + claudeCodeSessionsTotal;
+  const hasMore = totalEligible > totalLoaded;
+
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    try { await useTerminalStore.getState().loadMoreSessions(100); } finally { setLoadingMore(false); }
+  };
+  const handleLoadAll = async () => {
+    if (totalEligible > 1000) {
+      const ok = confirm(`Loading all ${totalEligible.toLocaleString()} sessions may use significant memory. Continue?`);
+      if (!ok) return;
+    }
+    setLoadingMore(true);
+    try { await useTerminalStore.getState().loadAllSessions(); } finally { setLoadingMore(false); }
+  };
+
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
@@ -528,7 +550,8 @@ const CopilotPanel: React.FC = () => {
     setCtxMenu(null);
   }, [summaryOverrides]);
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = useCallback(async () => {
+    await (window.terminalAPI as any).invalidateSessionCaches?.();
     const store = useTerminalStore.getState();
     store.loadCopilotSessions();
     store.loadClaudeCodeSessions();
@@ -692,6 +715,39 @@ const CopilotPanel: React.FC = () => {
       <div className="dir-panel-header">
         <span>✨ AI Sessions</span>
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center', position: 'relative' }}>
+          {groupByRepo && (() => {
+            const allKeys = Array.from(groupSizes.keys());
+            const allCollapsed = allKeys.length > 0 && allKeys.every((k) => collapsedGroups.has(k));
+            const disabled = allKeys.length === 0;
+            return (
+              <button
+                className="dir-panel-close ai-session-collapse-toggle"
+                onClick={() => setCollapsedGroups(allCollapsed ? new Set() : new Set(allKeys))}
+                disabled={disabled}
+                data-tooltip={allCollapsed ? 'Expand all groups' : 'Collapse all groups'}
+                aria-label={allCollapsed ? 'Expand all groups' : 'Collapse all groups'}
+              >
+                {/* Two stacked chevrons make the all-toggle visually distinct
+                    from the per-group chevron next to each repo header. */}
+                <svg
+                  className="ai-session-collapse-icon"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  style={{ transform: allCollapsed ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.15s ease' }}
+                >
+                  <path d="M3 5 L7 9 L11 5" />
+                  <path d="M3 1 L7 5 L11 1" />
+                </svg>
+              </button>
+            );
+          })()}
           <button
             className="dir-panel-close"
             onClick={handleRefresh}
@@ -737,19 +793,6 @@ const CopilotPanel: React.FC = () => {
                   <span style={{ display: 'inline-block', width: 16, color: showRunningOnly ? 'var(--focus-border, #89b4fa)' : 'transparent' }}>✓</span>
                   Show running only
                 </button>
-                {groupByRepo && (() => {
-                  const allKeys = Array.from(groupSizes.keys());
-                  const allCollapsed = allKeys.length > 0 && allKeys.every((k) => collapsedGroups.has(k));
-                  return (
-                    <button
-                      className="context-menu-item"
-                      onClick={() => { setCollapsedGroups(allCollapsed ? new Set() : new Set(allKeys)); setHeaderMenuOpen(false); }}
-                    >
-                      <span style={{ display: 'inline-block', width: 16 }}>{allCollapsed ? '▸' : '▾'}</span>
-                      {allCollapsed ? 'Expand all groups' : 'Collapse all groups'}
-                    </button>
-                  );
-                })()}
                 <div className="context-menu-separator" />
                 <button
                   className="context-menu-item"
@@ -876,8 +919,31 @@ const CopilotPanel: React.FC = () => {
         onKeyDown={handleKeyDown}
       />
 
+      {hasMore && !query && (
+        <div style={{ display: 'flex', gap: '6px', padding: '4px 8px', fontSize: '11px', alignItems: 'center' }}>
+          <span style={{ opacity: 0.6 }}>Loaded {totalLoaded} of {totalEligible}</span>
+          <button
+            className="dir-panel-close"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            style={{ fontSize: '11px', padding: '1px 6px', cursor: loadingMore ? 'wait' : 'pointer' }}
+          >
+            {loadingMore ? '…' : '+100'}
+          </button>
+          <button
+            className="dir-panel-close"
+            onClick={handleLoadAll}
+            disabled={loadingMore}
+            title={totalEligible > 1000 ? `Load all ${totalEligible.toLocaleString()} sessions (may use significant memory)` : `Load all ${totalEligible.toLocaleString()} sessions`}
+            style={{ fontSize: '11px', padding: '1px 6px', cursor: loadingMore ? 'wait' : 'pointer' }}
+          >
+            {loadingMore ? '…' : 'All'}
+          </button>
+        </div>
+      )}
+
       <div className="dir-panel-list" ref={listRef}>
-        {displayList.map((session, index) => {
+        {displayList.slice(0, renderLimit).map((session, index) => {
           const title = getTitle(session);
           const subtitle = getSubtitle(session);
           const active = isActiveStatus(session.status);
@@ -903,7 +969,11 @@ const CopilotPanel: React.FC = () => {
                   title={headerLabel}
                   onClick={() => toggleGroupCollapsed(currentRepo)}
                 >
-                  <span className="ai-session-group-chevron">{isCollapsed ? '▸' : '▾'}</span>
+                  <span className="ai-session-group-chevron" style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' }}>
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M2 4 L5 7 L8 4" />
+                    </svg>
+                  </span>
                   <span className="ai-session-group-name">{headerLabel}</span>
                   <span className="ai-session-group-count">{groupSizes.get(currentRepo) || 0}</span>
                 </div>
@@ -1031,6 +1101,14 @@ const CopilotPanel: React.FC = () => {
             </React.Fragment>
           );
         })}
+        {displayList.length > renderLimit && (
+          <div
+            style={{ padding: '8px', textAlign: 'center', fontSize: '11px', opacity: 0.7, cursor: 'pointer' }}
+            onClick={() => setRenderLimit(r => r + 200)}
+          >
+            Showing {renderLimit} of {displayList.length} — click to show more
+          </div>
+        )}
         {displayList.length === 0 && (
           <div className="dir-panel-empty">
             {lifecycleTab === 'active' && allCount === 0

@@ -113,6 +113,47 @@ export interface TabGroup {
   collapsed: boolean;
 }
 
+/**
+ * Snapshot of a pane's identity captured on close so Ctrl+Shift+T can
+ * recreate a fresh pane with the same shell profile, cwd, name, and
+ * workspace. PID and scrollback are deliberately NOT carried over - the
+ * underlying PTY is gone by the time we restore.
+ */
+export interface ClosedPaneSnapshot {
+  title: string;
+  customTitle: boolean;
+  shellProfileId: string;
+  cwd: string;
+  tabColor?: string;
+  workspaceId?: WorkspaceId;
+  /**
+   * If the closed pane was running an AI session, capture enough to
+   * resume it on restore. Provider is captured at close time by looking
+   * the session up in copilotSessions / claudeCodeSessions, since the
+   * provider is not stored on TerminalInstance directly. If the session
+   * no longer exists by the time the user hits Ctrl+Shift+T, restore
+   * falls back to a plain shell pane in the same cwd.
+   */
+  aiSessionId?: string;
+  aiProvider?: 'copilot' | 'claude-code';
+}
+
+/**
+ * Top-level entry on the undo-close stack. Discriminated by `kind` so a
+ * single Ctrl+Shift+T handler can either pop a pane or pop a whole
+ * workspace (which carries all its panes inside).
+ */
+export type ClosedTerminalEntry =
+  | ({ kind: 'pane'; closedAt: number } & ClosedPaneSnapshot)
+  | {
+      kind: 'workspace';
+      closedAt: number;
+      workspaceId: WorkspaceId;
+      name: string;
+      color?: string;
+      panes: ClosedPaneSnapshot[];
+    };
+
 // ── Configuration ────────────────────────────────────────────────────
 
 export interface ShellProfile {
