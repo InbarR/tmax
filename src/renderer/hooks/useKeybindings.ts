@@ -109,6 +109,7 @@ const DEFAULT_BINDINGS: Record<string, string> = {
   'Ctrl+Shift+J': 'switchTerminal',
   'Ctrl+Shift+D': 'dirPicker',
   'Ctrl+Shift+P': 'commandPalette',
+  'Ctrl+Shift+M': 'mcpGrants',
   'Ctrl+Tab': 'focusNext',
   'Ctrl+Shift+Tab': 'focusPrev',
   'Ctrl+Alt+ArrowUp': 'splitVerticalUp',
@@ -280,6 +281,9 @@ function dispatchAction(action: string): void {
       break;
     case 'commandPalette':
       store.toggleCommandPalette();
+      break;
+    case 'mcpGrants':
+      store.toggleMcpGrants();
       break;
     case 'tabMenu':
       store.openTabMenu();

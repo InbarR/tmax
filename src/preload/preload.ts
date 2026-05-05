@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, clipboard } from 'electron';
 import { IPC } from '../shared/ipc-channels';
 import type { DiffMode, DiffResult, AnnotatedFile } from '../shared/diff-types';
 import type { RepoWorktrees } from '../shared/worktree-types';
+import type { McpGrant, McpGrantLevel, McpServerStatus } from '../shared/mcp-types';
 
 export interface PtyDiag {
   pid: number;
@@ -73,6 +74,19 @@ export interface TerminalAPI {
   getBranches(repoPath: string): Promise<string[]>;
   // ── Session name overrides sync (TASK-71) ─────────────────────────
   syncSessionNameOverrides(overrides: Record<string, string>): void;
+  // ── Cross-pane MCP (v1) ───────────────────────────────────────────
+  mcpGetStatus(): Promise<McpServerStatus>;
+  mcpSetEnabled(enabled: boolean): Promise<{ enabled: boolean; url: string | null }>;
+  mcpListPanes(): Promise<unknown[]>;
+  mcpListGrants(): Promise<McpGrant[]>;
+  mcpGrant(granteePane: string, targetPane: string, level: McpGrantLevel): Promise<McpGrant | null>;
+  mcpRevoke(granteePane: string, targetPane: string): Promise<void>;
+  mcpRevokeAll(): Promise<void>;
+  mcpUpdatePane(snapshot: { id: string; title?: string; cwd?: string; lastProcess?: string; aiSessionId?: string; provider?: 'copilot' | 'claude-code'; wsl?: boolean; wslDistro?: string }): Promise<void>;
+  mcpGetAudit(limit?: number): Promise<unknown[]>;
+  mcpIssueToken(paneId: string): Promise<{ url: string; token: string; paneId: string } | null>;
+  onMcpGrantsChanged(cb: (grants: McpGrant[]) => void): () => void;
+  onMcpPanesChanged(cb: (panes: unknown[]) => void): () => void;
 }
 
 const terminalAPI: TerminalAPI = {
@@ -421,6 +435,51 @@ const terminalAPI: TerminalAPI = {
   // ── Session name overrides sync (TASK-71) ─────────────────────────
   syncSessionNameOverrides(overrides: Record<string, string>) {
     ipcRenderer.send(IPC.SESSION_NAME_OVERRIDES_SYNC, overrides);
+  },
+
+  // ── Cross-pane MCP (v1) ───────────────────────────────────────────
+  // Renderer-side bindings for the cross-pane MCP feature. Default-deny
+  // grants live in main; the renderer drives the matrix dialog through
+  // these IPC calls.
+  mcpGetStatus() {
+    return ipcRenderer.invoke(IPC.MCP_GET_STATUS);
+  },
+  mcpSetEnabled(enabled: boolean) {
+    return ipcRenderer.invoke(IPC.MCP_SET_ENABLED, enabled);
+  },
+  mcpListPanes() {
+    return ipcRenderer.invoke(IPC.MCP_LIST_PANES);
+  },
+  mcpListGrants() {
+    return ipcRenderer.invoke(IPC.MCP_LIST_GRANTS);
+  },
+  mcpGrant(granteePane: string, targetPane: string, level: McpGrantLevel) {
+    return ipcRenderer.invoke(IPC.MCP_GRANT, granteePane, targetPane, level);
+  },
+  mcpRevoke(granteePane: string, targetPane: string) {
+    return ipcRenderer.invoke(IPC.MCP_REVOKE, granteePane, targetPane);
+  },
+  mcpRevokeAll() {
+    return ipcRenderer.invoke(IPC.MCP_REVOKE_ALL);
+  },
+  mcpUpdatePane(snapshot) {
+    return ipcRenderer.invoke(IPC.MCP_UPDATE_PANE, snapshot);
+  },
+  mcpGetAudit(limit?: number) {
+    return ipcRenderer.invoke(IPC.MCP_GET_AUDIT, limit);
+  },
+  mcpIssueToken(paneId: string) {
+    return ipcRenderer.invoke(IPC.MCP_ISSUE_TOKEN, paneId);
+  },
+  onMcpGrantsChanged(cb: (grants: McpGrant[]) => void) {
+    const listener = (_e: Electron.IpcRendererEvent, grants: McpGrant[]) => cb(grants);
+    ipcRenderer.on(IPC.MCP_GRANTS_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.MCP_GRANTS_CHANGED, listener);
+  },
+  onMcpPanesChanged(cb: (panes: unknown[]) => void) {
+    const listener = (_e: Electron.IpcRendererEvent, panes: unknown[]) => cb(panes);
+    ipcRenderer.on(IPC.MCP_PANES_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.MCP_PANES_CHANGED, listener);
   },
 
 };
