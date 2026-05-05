@@ -72,8 +72,28 @@ export function extractStandaloneLinkFromHtml(html: string): string | null {
 
   const visibleText = stripHtmlVisibleText(html);
   const linkInner = stripHtmlVisibleText(inner);
-  if (visibleText !== linkInner && visibleText !== href) return null;
-  return unwrapSafelinks(href);
+
+  // Case A: HTML is exactly the link (no surrounding prose).
+  // ADO PR title "Copy to clipboard", Outlook safelinks-as-bare-URL.
+  if (visibleText === linkInner || visibleText === href) {
+    return unwrapSafelinks(href);
+  }
+
+  // Case B: link is at the start of the visible text and the trailing prose
+  // begins with a separator (`:`, `-`, `|`, `(`, etc.) - the "label : description"
+  // pattern emitted by ADO / IcM / GitHub copy buttons (e.g. `<a>Incident 12345</a>
+  // : Service is down`). Trailing description has no clickable URL, so users
+  // expect the URL to be pasted. Differs from prose-with-embedded-link
+  // ("Click here for details") because that has a continuation word, not a
+  // separator, after the link.
+  if (linkInner && visibleText.startsWith(linkInner)) {
+    const tail = visibleText.slice(linkInner.length);
+    if (tail === '' || /^\s*[:\-–—|()/.,;]/.test(tail)) {
+      return unwrapSafelinks(href);
+    }
+  }
+
+  return null;
 }
 
 export type ClipboardPasteDecision =
