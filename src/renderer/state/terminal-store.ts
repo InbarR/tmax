@@ -3072,6 +3072,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         activeWorkspaceId: id,
         layout: { tilingRoot: null, floatingPanels: [] },
         focusedTerminalId: null,
+        // Clear multi-pane selection when switching to a new workspace,
+        // matching the behavior in setActiveWorkspace (TASK-72).
+        selectedTerminalIds: {} as Record<TerminalId, true>,
       };
     });
     get().saveSession();

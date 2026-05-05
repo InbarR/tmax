@@ -193,6 +193,9 @@ test('showSelectedPanes is a no-op when fewer than 2 panes are selected', async 
     const [t0, t1, t2] = await spawnThreePanes(window);
     await window.waitForTimeout(300);
 
+    // Capture viewMode before the no-op call so we can assert it's unchanged.
+    const vmBefore = await window.evaluate(() => (window as any).__terminalStore.getState().viewMode);
+
     // Select just one pane, then try to filter.
     await window.evaluate((id) => (window as any).__terminalStore.getState().toggleSelectTerminal(id), t0);
     await window.evaluate(() => (window as any).__terminalStore.getState().showSelectedPanes());
@@ -202,7 +205,7 @@ test('showSelectedPanes is a no-op when fewer than 2 panes are selected', async 
     const ids = await leafIds(window);
     expect(ids.sort()).toEqual([t0, t1, t2].sort());
     const vm = await window.evaluate(() => (window as any).__terminalStore.getState().viewMode);
-    expect(vm).not.toBe('grid');
+    expect(vm).toBe(vmBefore);
   } finally {
     await close();
   }
