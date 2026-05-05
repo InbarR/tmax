@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.7.3
+
+A patch focused on copy/paste fixes for AI-CLI users.
+
+### Bug Fixes
+
+- **Drag-select copy in Copilot CLI / Claude Code** - dragging across text in a TUI with mouse reporting on, then right-clicking, now copies the highlighted text. Previously the right-click was a no-op (the v1.7.1 fix to stop image-only auto-paste accidentally left this gap), so the next paste leaked the previous clipboard contents.
+- **ADO / IcM "Copy to clipboard" pastes the URL again** - when copying a PR title, work item, or incident link with ADO/IcM's "Copy to clipboard" button, tmax once more pastes the URL instead of just the title text. This regressed in v1.7.0 when the rich-text paste rules tightened to stop Teams "Click here for more" pastes from over-firing - the strict equality check rejected the realistic ADO HTML shape (`<a>label</a> : description`) where the description sits outside the link tag.
+- **Multi-row copy no longer drops trailing-space gaps** - copying multi-row text from Claude Code output and pasting into a wrap-on-display editor used to render giant mid-line gaps where the rows joined. tmax now strips the row-padding trailing whitespace at copy time.
+- **A second right-click after copying does not paste the just-copied text** - holdover from the drag-select fix; an immediate second right-click within 600ms of a copy is now a no-op instead of pasting the clipboard right back into the prompt.
+
+### Polish
+
+- **Dev-build indicator** - when tmax is launched via `npm start` (dev mode), the status bar shows a small orange "DEV" pill so you can tell at a glance which build is in front of you. The packaged build doesn't render it.
+- **Fresh-launch escape hatch for dev** - set `TMAX_NO_RESTORE=1` (or pass `--no-restore`) and the dev instance starts empty AND skips saving on exit, so a second tmax for live-testing never clobbers the running packaged tmax's saved layout.
+- **GitHub repo landing page** - extracted the contributing guidelines into a top-level `CONTRIBUTING.md`, and known issues + workarounds into `SUPPORT.md`. The README now points to both.
+
+### Known Issues
+
+- **Right-click copy after a *double-click* word selection in Copilot CLI / Claude Code** still falls through to paste-the-old-clipboard. The double-click is forwarded to the pty as a mouse event and never produces an xterm selection that tmax can read. Workarounds: drag-select instead, use `Ctrl+Shift+C`, or hold Shift while clicking. See `SUPPORT.md`.
+
 ## v1.7.2
 
 A small patch focused on the startup experience.
