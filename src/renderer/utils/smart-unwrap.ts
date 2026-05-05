@@ -49,6 +49,16 @@ export function smartUnwrapForCopy(text: string, enabled: boolean = true): strin
   const out: string[] = [];
   let inFence = false;
 
+  // Strip horizontal trailing whitespace (including any stray CR from
+  // CRLF-terminated rows that survived the LF split) before emitting. Rows
+  // inside a fenced code block are kept verbatim - trailing spaces can
+  // matter inside code (e.g. markdown line-break, intentional padding).
+  // Outside code, xterm's selection / buffer-snapshot can carry row-pad
+  // trailing spaces that look fine in the terminal but cause visible
+  // mid-line gaps when pasted into a wrap-on-display editor (TASK-125).
+  const trimRowEnd = (row: string): string =>
+    inFence ? row : row.replace(/[ \t\r]+$/u, '');
+
   for (let i = 0; i < lines.length; i++) {
     const cur = lines[i];
 
@@ -82,12 +92,12 @@ export function smartUnwrapForCopy(text: string, enabled: boolean = true): strin
         prevTrimmed !== '' &&
         !CODE_FENCE_RE.test(prev)
       ) {
-        out[out.length - 1] = prev.trimEnd() + ' ' + cur.trimStart();
+        out[out.length - 1] = trimRowEnd(prev.trimEnd() + ' ' + cur.trimStart());
         continue;
       }
     }
 
-    out.push(cur);
+    out.push(trimRowEnd(cur));
   }
 
   return out.join('\n');
