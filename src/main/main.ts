@@ -225,6 +225,10 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: false,
       preload: path.join(__dirname, 'preload.js'),
+      // Surface dev-vs-packaged to the renderer through preload. process.defaultApp
+      // proved unreliable under electron-forge in some setups; the main process is
+      // authoritative via app.isPackaged.
+      additionalArguments: [`--tmax-is-dev=${!app.isPackaged}`],
     },
   });
 
@@ -708,6 +712,7 @@ function registerIpcHandlers(): void {
         nodeIntegration: false,
         sandbox: false,
         preload: path.join(__dirname, 'preload.js'),
+        additionalArguments: [`--tmax-is-dev=${!app.isPackaged}`],
       },
     });
 

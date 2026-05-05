@@ -433,7 +433,8 @@ contextBridge.exposeInMainWorld('terminalAPI', terminalAPI);
 contextBridge.exposeInMainWorld('platformInfo', {
   platform: process.platform,
   homeDir: require('os').homedir(),
-  // process.defaultApp is true when running via `electron .` (npm start) and
-  // undefined in packaged builds.
-  isDev: !!(process as any).defaultApp,
+  // Main passes --tmax-is-dev=true|false via webPreferences.additionalArguments.
+  // This is authoritative (main has app.isPackaged) where process.defaultApp
+  // can vary depending on how electron is launched.
+  isDev: process.argv.includes('--tmax-is-dev=true'),
 });
