@@ -1629,8 +1629,27 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // doesn't forward SGR mouse events to the pty. Otherwise TUI apps with
     // mouse reporting enabled (e.g. Claude Code) receive the right-click on
     // top of our own paste, causing a visible double-paste.
+    //
+    // We also snapshot any active xterm selection on right-button mousedown.
+    // Selections made via double-click (word) or triple-click (line) don't
+    // go through our left-mouse drag logic, so they never get into
+    // pendingTuiCopyText. Worse, the right-click mousedown can clear the
+    // selection before contextmenu fires - by which point both
+    // hasSelection() and pendingTuiCopyText are empty and we'd fall through
+    // to paste. Capturing on mousedown(button=2) closes that gap.
     const handleRightMouseButton = (e: MouseEvent) => {
       if (e.button === 2) {
+        if (e.type === 'mousedown') {
+          rightClickInFlight = true;
+          if (term.hasSelection()) {
+            const sel = term.getSelection().replace(/\s+$/u, '');
+            if (sel) {
+              pendingTuiCopyText = sel;
+              if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
+              pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
+            }
+          }
+        }
         e.preventDefault();
         e.stopPropagation();
       }
@@ -1638,18 +1657,69 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     containerRef.current.addEventListener('mousedown', handleRightMouseButton, true);
     containerRef.current.addEventListener('mouseup', handleRightMouseButton, true);
 
-    // Track recent left-button drag attempts. When mouse reporting is on,
-    // xterm forwards the drag to the pty instead of creating a selection.
-    // We detect this "failed selection" so the right-click handler can avoid
-    // auto-pasting when the user clearly intended to copy, not paste.
-    let recentDragWithoutSelection = false;
+    // Track left-button drag attempts. When mouse reporting is on, xterm
+    // forwards the drag to the pty instead of creating a selection - so
+    // term.hasSelection() is false even though the user dragged across
+    // visible text. We capture the buffer text at the drag rectangle on
+    // mouseup so right-click can copy it (TASK-120). Without this, the
+    // right-click handler has nothing to copy and the previous clipboard
+    // contents leak into the next paste.
+    let pendingTuiCopyText: string | null = null;
+    let pendingTuiCopyClearTimer: ReturnType<typeof setTimeout> | null = null;
     let dragStartPos: { x: number; y: number } | null = null;
+    // Set true on right-button mousedown so the onSelectionChange listener
+    // doesn't wipe our snapshot when xterm clears its native selection in
+    // response to the right-click - which is exactly the case we're trying
+    // to defend against for double-click + right-click.
+    let rightClickInFlight = false;
     const DRAG_THRESHOLD = 5; // pixels to count as a drag vs. a click
+
+    const clearPendingTuiCopy = () => {
+      pendingTuiCopyText = null;
+      if (pendingTuiCopyClearTimer) {
+        clearTimeout(pendingTuiCopyClearTimer);
+        pendingTuiCopyClearTimer = null;
+      }
+    };
+
+    // Convert a clientX/clientY pair to (col, row) in the visible viewport,
+    // then offset by viewportY to get an absolute buffer row. Returns null
+    // if cell dimensions aren't available yet (very early after mount).
+    const pixelToCell = (clientX: number, clientY: number): { col: number; row: number } | null => {
+      const screen = containerRef.current?.querySelector('.xterm-screen') as HTMLElement | null;
+      if (!screen) return null;
+      const rect = screen.getBoundingClientRect();
+      const dim = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } }; actualCellWidth?: number; actualCellHeight?: number } } } })._core?._renderService?.dimensions;
+      const cellW = dim?.css?.cell?.width ?? dim?.actualCellWidth ?? 0;
+      const cellH = dim?.css?.cell?.height ?? dim?.actualCellHeight ?? 0;
+      if (!cellW || !cellH) return null;
+      const viewportCol = Math.max(0, Math.min(term.cols - 1, Math.floor((clientX - rect.left) / cellW)));
+      const viewportRow = Math.max(0, Math.min(term.rows - 1, Math.floor((clientY - rect.top) / cellH)));
+      return { col: viewportCol, row: viewportRow + term.buffer.active.viewportY };
+    };
+
+    const readBufferRange = (start: { col: number; row: number }, end: { col: number; row: number }): string => {
+      let s = start;
+      let e = end;
+      if (s.row > e.row || (s.row === e.row && s.col > e.col)) {
+        const tmp = s; s = e; e = tmp;
+      }
+      const buf = term.buffer.active;
+      if (s.row === e.row) {
+        return buf.getLine(s.row)?.translateToString(true, s.col, e.col) ?? '';
+      }
+      const parts: string[] = [];
+      parts.push(buf.getLine(s.row)?.translateToString(true, s.col) ?? '');
+      for (let r = s.row + 1; r < e.row; r++) {
+        parts.push(buf.getLine(r)?.translateToString(true) ?? '');
+      }
+      parts.push(buf.getLine(e.row)?.translateToString(true, 0, e.col) ?? '');
+      return parts.join('\n');
+    };
 
     const handleLeftMouseDown = (e: MouseEvent) => {
       if (e.button === 0) {
         dragStartPos = { x: e.clientX, y: e.clientY };
-        recentDragWithoutSelection = false;
       }
     };
     const handleLeftMouseUp = (e: MouseEvent) => {
@@ -1657,13 +1727,22 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         const dx = e.clientX - dragStartPos.x;
         const dy = e.clientY - dragStartPos.y;
         const wasDrag = Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD;
+        // Native xterm selections (drag, double/triple-click) are captured
+        // via onSelectionChange below. The only path that needs explicit
+        // mouseup handling is a drag while a TUI has mouse reporting on -
+        // xterm never gets a selection there, so we read the cells under
+        // the drag rectangle directly from the buffer.
         if (wasDrag && mouseTrackingOn && !term.hasSelection()) {
-          recentDragWithoutSelection = true;
-          // Auto-clear after a timeout — if the user doesn't right-click
-          // within 3s, the drag was probably intentional TUI interaction.
-          setTimeout(() => { recentDragWithoutSelection = false; }, 3000);
-        } else {
-          recentDragWithoutSelection = false;
+          const startCell = pixelToCell(dragStartPos.x, dragStartPos.y);
+          const endCell = pixelToCell(e.clientX, e.clientY);
+          if (startCell && endCell) {
+            const snapshot = readBufferRange(startCell, endCell).replace(/\s+$/u, '');
+            if (snapshot) {
+              pendingTuiCopyText = snapshot;
+              if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
+              pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
+            }
+          }
         }
         dragStartPos = null;
       }
@@ -1672,26 +1751,41 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     containerRef.current.addEventListener('mouseup', handleLeftMouseUp, true);
 
     // Right-click: copy if selection, paste if no selection.
-    // Skip the implicit paste when the clipboard is image-only (issue #84):
-    // a TUI with mouse reporting on (e.g. Claude Code) consumes drag events
-    // so xterm has no selection even though the user thinks they're
-    // selecting text. Auto-pasting a saved-PNG file path on right-click in
-    // that state is almost never what the user wanted. Ctrl+V still pastes
-    // images explicitly.
+    // When mouse reporting is on (Copilot CLI, Claude Code) drag-select is
+    // consumed by the pty so xterm has no native selection. We capture the
+    // dragged text from the buffer at mouseup time (TASK-120), so right-click
+    // here copies that text - matching the natural Windows Terminal flow and
+    // closing the gap left by the TASK-66/#84 fix.
+    let lastCopyAt = 0;
+    const POST_COPY_PASTE_GUARD_MS = 600;
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
+      // Always release the in-flight flag once contextmenu fires, so the
+      // next user-driven empty-selection event clears the snapshot normally.
+      rightClickInFlight = false;
       if (term.hasSelection()) {
         window.terminalAPI.clipboardWrite(smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current));
         term.clearSelection();
+        clearPendingTuiCopy();
+        lastCopyAt = Date.now();
         return;
       }
-      // When mouse tracking consumed a recent drag (user tried to select but
-      // the TUI swallowed it), suppress paste. The user clearly intended to
-      // copy, not paste. Ctrl+V still pastes explicitly.
-      if (recentDragWithoutSelection) {
-        recentDragWithoutSelection = false;
+      // Mouse reporting consumed a drag: copy the text we snapshotted from
+      // the buffer, suppress paste. User clearly intended to copy.
+      if (pendingTuiCopyText) {
+        const text = pendingTuiCopyText;
+        clearPendingTuiCopy();
+        window.terminalAPI.clipboardWrite(smartUnwrapForCopy(text, smartUnwrapRef.current));
+        lastCopyAt = Date.now();
+        return;
+      }
+      // Suppress paste right after a copy: a second quick right-click is
+      // almost always a user double-tapping to confirm the copy worked, not
+      // an immediate paste-back. Without this guard the just-copied text
+      // would land in the prompt below.
+      if (Date.now() - lastCopyAt < POST_COPY_PASTE_GUARD_MS) {
         return;
       }
       const hasImage = window.terminalAPI.clipboardHasImage();
@@ -1732,6 +1826,29 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     };
     containerRef.current.addEventListener('copy', handleCopyEvent, true);
 
+    // Mirror every xterm selection into pendingTuiCopyText. This is the most
+    // reliable capture point: it covers drag, double-click word selection,
+    // triple-click line selection, and term.select() API calls - all in a
+    // single hook fired by xterm itself the moment the selection changes.
+    // The right-click handler then has authoritative text even if a
+    // subsequent mousedown(2) clears the visible selection before contextmenu
+    // fires. When the selection becomes empty (user clicked elsewhere), we
+    // drop the cache so a follow-up right-click on empty space pastes as
+    // expected. (Our own copy-and-clear path in handleContextMenu calls
+    // clearPendingTuiCopy first, so this path is a no-op for that case.)
+    const selectionDisposable = term.onSelectionChange(() => {
+      if (term.hasSelection()) {
+        const sel = term.getSelection().replace(/\s+$/u, '');
+        if (sel) {
+          pendingTuiCopyText = sel;
+          if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
+          pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
+        }
+      } else if (pendingTuiCopyText && !rightClickInFlight) {
+        clearPendingTuiCopy();
+      }
+    });
+
     const containerEl = containerRef.current;
 
     return () => {
@@ -1748,6 +1865,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       }
       containerEl.removeEventListener('contextmenu', handleContextMenu, true);
       containerEl.removeEventListener('copy', handleCopyEvent, true);
+      selectionDisposable.dispose();
       containerEl.removeEventListener('mousedown', handleRightMouseButton, true);
       containerEl.removeEventListener('mouseup', handleRightMouseButton, true);
       containerEl.removeEventListener('mousedown', handleLeftMouseDown, true);
