@@ -190,6 +190,12 @@ function sweepStaleClipboardDirs(): void {
 const sessionStore = new Store({ name: 'tmax-session' });
 const detachedWindows = new Map<string, BrowserWindow>();
 
+// Fresh-launch mode: when set, SESSION_LOAD returns null and SESSION_SAVE
+// no-ops, so a second tmax launched for live testing never restores the
+// running instance's panes and never overwrites its saved state on exit.
+// Set via TMAX_NO_RESTORE=1 env var or `--no-restore` argv flag.
+const NO_RESTORE = process.env.TMAX_NO_RESTORE === '1' || process.argv.includes('--no-restore');
+
 function broadcastPtyEvent(channel: string, id: string, ...args: unknown[]) {
   mainWindow?.webContents.send(channel, id, ...args);
   const detachedWin = detachedWindows.get(id);
@@ -401,6 +407,7 @@ function setupConfigStore(): void {
 // chance to send SESSION_NAME_OVERRIDES_SYNC) would still show the auto-
 // derived name even for previously-renamed sessions.
 function seedSessionNameOverridesFromDisk(): void {
+  if (NO_RESTORE) return;
   try {
     const session = sessionStore.get('session') as Record<string, unknown> | undefined;
     const raw = session?.sessionNameOverrides;
@@ -602,6 +609,7 @@ function registerIpcHandlers(): void {
   );
 
   ipcMain.handle(IPC.SESSION_SAVE, (_event, data: unknown) => {
+    if (NO_RESTORE) return;
     sessionStore.set('session', data);
   });
 
@@ -674,6 +682,7 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle(IPC.SESSION_LOAD, () => {
+    if (NO_RESTORE) return null;
     return sessionStore.get('session', null);
   });
 
