@@ -236,7 +236,7 @@ const sessionSummary: ToolDefinition = {
     }
     // Lazy-import the parsers so we don't pay their cost at module load.
     if (info.provider === 'copilot') {
-      const { parseSessionEvents } = await import('./copilot-events-parser');
+      const { parseSessionEvents } = await import('../copilot-events-parser');
       const eventsPath = path.join(copilotSessionDir(info.aiSessionId), 'events.jsonl');
       const parsed = parseSessionEvents(eventsPath);
       if (!parsed) return txt(`error: could not parse session at ${eventsPath}`, true);
@@ -254,7 +254,7 @@ const sessionSummary: ToolDefinition = {
         latestPromptTime: parsed.latestPromptTime,
       }, null, 2));
     } else {
-      const { parseClaudeCodeSession } = await import('./claude-code-events-parser');
+      const { parseClaudeCodeSession } = await import('../claude-code-events-parser');
       const target = findClaudeCodeSessionFile(info.aiSessionId);
       if (!target) return txt(`error: could not find Claude Code session file for ${info.aiSessionId}`, true);
       const parsed = parseClaudeCodeSession(target);
@@ -296,7 +296,7 @@ const sessionEvents: ToolDefinition = {
       return txt('error: panes.session.events is Copilot CLI only in v1', true);
     }
     const n = Math.max(1, Math.min(500, Number(args.n ?? 50) | 0));
-    const { parseSessionEvents } = await import('./copilot-events-parser');
+    const { parseSessionEvents } = await import('../copilot-events-parser');
     const eventsPath = path.join(copilotSessionDir(info.aiSessionId), 'events.jsonl');
     const parsed = parseSessionEvents(eventsPath);
     if (!parsed) return txt(`error: could not parse session at ${eventsPath}`, true);
