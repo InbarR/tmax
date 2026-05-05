@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 import { getLeafOrder } from '../state/terminal-store';
-import { formatKeyForPlatform } from '../utils/platform';
+import { formatKeyForPlatform, isDev } from '../utils/platform';
 import InputDialog from './InputDialog';
 
 interface UpdateInfoState {
@@ -369,6 +369,11 @@ const StatusBar: React.FC = () => {
           >
             {Math.round((fontSize / (config?.terminal?.fontSize ?? 14)) * 100)}%
           </button>
+          {isDev && (
+            <span className="status-dev-pill" title="Running from npm start (dev build, not the packaged app)">
+              DEV
+            </span>
+          )}
           {updateInfo && updateInfo.status === 'downloading' ? (
             <span
               className="status-update-downloading"

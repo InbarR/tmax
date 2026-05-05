@@ -2,6 +2,8 @@
 const platform = (window as any).platformInfo?.platform as string | undefined;
 export const isMac = platform === 'darwin' || /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 
+export const isDev = !!(window as any).platformInfo?.isDev;
+
 /** Check if the platform primary modifier is pressed (Cmd on Mac, Ctrl elsewhere) */
 export function hasPrimaryMod(event: { ctrlKey: boolean; metaKey: boolean }): boolean {
   return isMac ? event.metaKey : event.ctrlKey;

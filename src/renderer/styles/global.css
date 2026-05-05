@@ -2140,6 +2140,19 @@ html.transparency-active .input-dialog {
   text-decoration: underline;
 }
 
+.status-dev-pill {
+  color: #ffb84d;
+  background: rgba(255, 184, 77, 0.12);
+  border: 1px solid rgba(255, 184, 77, 0.45);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  cursor: default;
+  user-select: none;
+}
+
 /* ===== App Dialog (TASK-115: replaces native window.confirm/alert) ===== */
 .app-dialog-overlay {
   position: fixed;

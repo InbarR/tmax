@@ -433,4 +433,7 @@ contextBridge.exposeInMainWorld('terminalAPI', terminalAPI);
 contextBridge.exposeInMainWorld('platformInfo', {
   platform: process.platform,
   homeDir: require('os').homedir(),
+  // process.defaultApp is true when running via `electron .` (npm start) and
+  // undefined in packaged builds.
+  isDev: !!(process as any).defaultApp,
 });
