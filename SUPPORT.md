@@ -4,13 +4,15 @@ Need help with tmax? Open an issue on the [GitHub tracker](https://github.com/In
 
 ## Known Issues
 
-### Right-click copy after double-click in TUIs with mouse reporting
+### Double-clicking a word in Copilot CLI / Claude Code, then right-clicking, doesn't copy
 
-In TUI apps that enable SGR mouse reporting (notably **Copilot CLI**, sometimes **Claude Code**), a double-click is forwarded to the pty as a mouse event rather than producing an xterm selection. The TUI may show its own visual highlight, but tmax has no selection to copy - so a follow-up right-click pastes the previous clipboard contents instead of copying the highlighted word.
+In **Copilot CLI** (and sometimes **Claude Code**), if you double-click a word to select it and then right-click, tmax pastes whatever was previously on your clipboard instead of copying the highlighted word.
 
-**Workarounds:**
-- **Drag-select** (left-click and drag across the text) instead of double-clicking. tmax snapshots the dragged text directly from the terminal buffer; right-click then copies it as expected.
-- **`Ctrl+Shift+C` to copy** when you do have an xterm-native selection (the keyboard shortcut isn't subject to the same right-click timing).
-- **Hold Shift while clicking/dragging** - this bypasses mouse reporting in xterm and forces a native selection.
+This happens because those tools take over the mouse to power their own UI, so when you double-click, tmax never actually sees a selection to copy from - even though the word looks highlighted on screen.
 
-This only affects double-click / triple-click word and line selection in TUIs that capture mouse events. Drag-select copy works in all modes.
+**What works instead:**
+- **Drag across the text** with the left mouse button (instead of double-clicking), then right-click. This works correctly.
+- **Press `Ctrl+Shift+C`** to copy when you've already made a selection.
+- **Hold `Shift`** while you click or drag - this forces a normal text selection that tmax can copy.
+
+Triple-click line selection has the same limitation. Plain drag-select copy works everywhere.
