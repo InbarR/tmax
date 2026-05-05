@@ -228,6 +228,9 @@ const terminalAPI: TerminalAPI = {
   getCopilotPrompts(id: string) {
     return ipcRenderer.invoke(IPC.COPILOT_GET_PROMPTS, id);
   },
+  searchCopilotPrompts(query: string) {
+    return ipcRenderer.invoke(IPC.COPILOT_SEARCH_PROMPTS, query);
+  },
 
   invalidateSessionCaches() {
     return ipcRenderer.invoke(IPC.AI_INVALIDATE_CACHES);

@@ -6,6 +6,7 @@ export default defineConfig({
       external: [
         "node-pty",
         "chokidar",
+        "better-sqlite3",
       ],
     },
   },

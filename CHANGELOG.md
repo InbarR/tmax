@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.7.3
+
+A performance release that leverages Copilot CLI's local SQLite database for session loading and search.
+
+### Performance
+
+- **SQLite-backed session loading** - Copilot CLI sessions now load from `~/.copilot/session-store.db` instead of scanning thousands of filesystem directories. Initial session list loads in ~200ms vs ~3-4s previously. Gracefully falls back to filesystem scanning when the DB is unavailable (e.g. Claude Code sessions, fresh installs, old CLI versions).
+
+### New Features
+
+- **Full-text search across all sessions** - session search now uses SQLite FTS5 to search ALL sessions (6,000+), not just the 314 loaded in memory. Supports AND/OR operators (e.g. `Swetha AND throttling`, `deploy OR rollback`).
+- **Prompt search across all sessions** - the prompt search dialog (Ctrl+Shift+Y) now searches prompts across all historical sessions via SQLite when typing 4+ characters, with AND/OR support.
+- **Search syntax hints** - search box placeholder and tooltip show AND/OR usage examples when SQLite is active.
+- **Load-more hidden** - the "Loaded X of Y / +100 / All" bar is hidden when SQLite is active (all sessions are queryable instantly).
+- **Search ignores lifecycle tabs** - when searching, results show across Active/Completed/Archived instead of being filtered by the selected tab.
+
+### Bug Fixes
+
+- **Archived tooltip corrected** - tooltip now accurately reflects auto-archive criteria: "inactive 14+ days, or <2 prompts after 1+ day" (was incorrectly showing 30+ days).
+- **Search debounce increased** - debounce increased from 200ms to 500ms to avoid overwhelming the IPC with intermediate keystrokes during SQLite queries.
+
 ## v1.7.2
 
 A small patch focused on the startup experience.
