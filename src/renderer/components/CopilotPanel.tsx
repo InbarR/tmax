@@ -143,6 +143,8 @@ const CopilotPanel: React.FC = () => {
   }, [terminals, tabGroups, defaultTabColor]);
   const copilotSessionsTotal = useTerminalStore((s) => s.copilotSessionsTotal);
   const claudeCodeSessionsTotal = useTerminalStore((s) => s.claudeCodeSessionsTotal);
+  const copilotSearching = useTerminalStore((s) => s.copilotSearching);
+  const copilotSqliteActive = useTerminalStore((s) => s.copilotSqliteActive);
   const [loadingMore, setLoadingMore] = useState(false);
   const [renderLimit, setRenderLimit] = useState(200);
 
@@ -291,9 +293,11 @@ const CopilotPanel: React.FC = () => {
       }
     }
 
-    // Filter by lifecycle tab
+    // Filter by lifecycle tab (skip when searching — show all matching results)
     const deduped = Array.from(byId.values());
-    const lifecycleFiltered = deduped.filter((s) => getSessionLifecycle(s) === lifecycleTab);
+    const lifecycleFiltered = query.trim()
+      ? deduped
+      : deduped.filter((s) => getSessionLifecycle(s) === lifecycleTab);
 
     return sortSessions(lifecycleFiltered, openSessionIds, pinnedSessions);
   }, [copilotSessions, claudeCodeSessions, query, filterTab, showRunningOnly, summaryOverrides, lifecycleTab, getSessionLifecycle, openSessionIds, pinnedSessions]);
@@ -635,7 +639,7 @@ const CopilotPanel: React.FC = () => {
       const store = useTerminalStore.getState();
       store.searchCopilotSessions(value);
       store.searchClaudeCodeSessions(value);
-    }, 200);
+    }, 500);
   }, []);
 
   // Listen for keybinding-triggered prompts dialog request
@@ -896,14 +900,14 @@ const CopilotPanel: React.FC = () => {
         <button
           className={`ai-session-tab${lifecycleTab === 'completed' ? ' active' : ''}`}
           onClick={() => setLifecycleTab('completed')}
-          title="Sessions you marked as done"
+          title="Sessions you manually marked as done"
         >
           Completed{lifecycleCounts.completed > 0 ? ` (${lifecycleCounts.completed})` : ''}
         </button>
         <button
           className={`ai-session-tab${lifecycleTab === 'old' ? ' active' : ''}`}
           onClick={() => setLifecycleTab('old')}
-          title={`Sessions inactive for ${oldSessionDays}+ days`}
+          title="Auto-archived: inactive 14+ days, or <2 prompts after 1+ day"
         >
           Archived{lifecycleCounts.old > 0 ? ` (${lifecycleCounts.old})` : ''}
         </button>
@@ -913,13 +917,14 @@ const CopilotPanel: React.FC = () => {
         ref={inputRef}
         className="dir-panel-search"
         type="text"
-        placeholder="Search sessions..."
+        placeholder={copilotSqliteActive ? "Search all sessions... (AND, OR supported)" : "Search sessions..."}
+        title={copilotSqliteActive ? "Full-text search across all sessions.\nExamples: auth bug, deploy AND fail, cathy OR ralph" : undefined}
         value={query}
         onChange={(e) => handleSearch(e.target.value)}
         onKeyDown={handleKeyDown}
       />
 
-      {hasMore && !query && (
+      {hasMore && !query && !copilotSqliteActive && (
         <div style={{ display: 'flex', gap: '6px', padding: '4px 8px', fontSize: '11px', alignItems: 'center' }}>
           <span style={{ opacity: 0.6 }}>Loaded {totalLoaded} of {totalEligible}</span>
           <button
@@ -1111,7 +1116,11 @@ const CopilotPanel: React.FC = () => {
         )}
         {displayList.length === 0 && (
           <div className="dir-panel-empty">
-            {lifecycleTab === 'active' && allCount === 0
+            {copilotSearching
+              ? 'Searching...'
+              : query.trim()
+              ? 'No matching sessions'
+              : lifecycleTab === 'active' && allCount === 0
               ? 'No AI sessions found'
               : lifecycleTab === 'completed'
               ? 'No completed sessions'

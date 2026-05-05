@@ -714,6 +714,8 @@ interface TerminalStore {
   sessionPinned: Record<string, true>;
   toastNotifications: Array<{ id: string; message: string; timestamp: number }>;
   copilotSearchQuery: string;
+  copilotSearching: boolean;
+  copilotSqliteActive: boolean;
   selectedCopilotSessionId: string | null;
   // Prompts dialog state. Either terminalId (for the per-pane Ctrl+Shift+K
   // shortcut) or sessionId (for opening from the session summary popover).
@@ -994,6 +996,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   closedTerminals: [],
   toastNotifications: [],
   copilotSearchQuery: '',
+  copilotSearching: false,
+  copilotSqliteActive: false,
   selectedCopilotSessionId: null,
   tabGroups: new Map(),
   markdownPreview: null,
@@ -3321,7 +3325,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     // Handle both new { sessions, totalEligible } shape and legacy array
     const sessions = Array.isArray(result) ? result : (result?.sessions ?? []);
     const totalEligible = Array.isArray(result) ? sessions.length : (result?.totalEligible ?? sessions.length);
-    set({ copilotSessions: sessions, copilotSessionsTotal: totalEligible });
+    const sqliteActive = !Array.isArray(result) && result?.sqliteActive === true;
+    set({ copilotSessions: sessions, copilotSessionsTotal: totalEligible, copilotSqliteActive: sqliteActive });
     get().autoArchiveStaleSessions();
   },
 
@@ -3358,6 +3363,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   searchCopilotSessions: async (query: string) => {
     set({ copilotSearchQuery: query });
     if (!query.trim()) {
+      set({ copilotSearching: false });
       const limit = get().copilotSessionsLimit;
       const result = await (window.terminalAPI as any).listCopilotSessions(limit);
       const sessions = Array.isArray(result) ? result : (result?.sessions ?? []);
@@ -3365,8 +3371,13 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       set({ copilotSessions: sessions, copilotSessionsTotal: totalEligible });
       return;
     }
-    const sessions = await (window.terminalAPI as any).searchCopilotSessions(query);
-    set({ copilotSessions: sessions ?? [] });
+    set({ copilotSearching: true });
+    try {
+      const sessions = await (window.terminalAPI as any).searchCopilotSessions(query);
+      set({ copilotSessions: sessions ?? [], copilotSearching: false });
+    } catch {
+      set({ copilotSearching: false });
+    }
   },
 
   openCopilotSession: async (sessionId: string) => {

@@ -61,16 +61,15 @@ const PromptSearchDialog: React.FC = () => {
   const copilotSessions = useTerminalStore((s) => s.copilotSessions);
   const terminals = useTerminalStore((s) => s.terminals);
 
-  // Reset and fetch when opening. Each open re-fetches (cheap for unchanged
-  // sessions thanks to the mtime-keyed cache in extractClaudeCodePrompts /
-  // extractCopilotPrompts). TASK-85: render progressively - each session's
-  // prompts land as they arrive instead of waiting for Promise.all to settle,
-  // so the dialog is usable within a frame or two even with 50+ sessions.
+  // Reset and fetch when opening. Uses file-based prompt loading for the
+  // initial view (loaded sessions only — fast). SQLite search is triggered
+  // separately when the user types a query (see debounced search below).
   useEffect(() => {
     if (!show) return;
     setQuery('');
     setSelectedIndex(0);
     setEntries([]);
+    setSqliteResults(null);
     setLoading(true);
     requestAnimationFrame(() => inputRef.current?.focus());
 
@@ -94,7 +93,6 @@ const PromptSearchDialog: React.FC = () => {
         .then((prompts: string[] | undefined) => {
           if (cancelled) return;
           const list = Array.isArray(prompts) ? prompts : [];
-          // Resolve linked pane once per session, not once per prompt.
           let terminalId: string | null = null;
           let paneTitle = sess.summary || sess.id.slice(0, 8);
           for (const [tid, t] of terminals) {
@@ -119,10 +117,6 @@ const PromptSearchDialog: React.FC = () => {
             }))
             .filter((e) => !isTrivial(e.prompt));
           if (sessionEntries.length === 0) return;
-          // Progressive merge: each resolution appends to entries; sort once
-          // here to keep newest-first ordering. Sort cost is O(n log n) per
-          // resolution but n is bounded by total prompts shown (<=200 in the
-          // filtered view anyway).
           setEntries((prev) => {
             const merged = prev.concat(sessionEntries);
             merged.sort((a, b) => a.ageMs - b.ageMs);
@@ -136,7 +130,85 @@ const PromptSearchDialog: React.FC = () => {
     return () => { cancelled = true; };
   }, [show]);
 
+  // When SQLite is active and user types a query, search the DB directly
+  // instead of filtering the initial entries client-side.
+  const sqliteActive = useTerminalStore((s) => s.copilotSqliteActive);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sqliteResults, setSqliteResults] = useState<SearchEntry[] | null>(null);
+
+  // Version counter to discard stale SQLite results
+  const searchVersionRef = useRef(0);
+
+  useEffect(() => {
+    if (!show || !sqliteActive) return;
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+
+    // Clear stale results immediately so client-side filtering takes over while waiting
+    setSqliteResults(null);
+
+    // Need 4+ chars for SQLite search (LIKE is a full table scan, short queries are too broad)
+    if (!query.trim() || query.trim().length < 4) {
+      return;
+    }
+
+    const version = ++searchVersionRef.current;
+    searchDebounceRef.current = setTimeout(() => {
+      const api = window.terminalAPI as any;
+      api.searchCopilotPrompts?.(query)?.then((rows: any[] | null) => {
+        // Discard if a newer search was initiated
+        if (searchVersionRef.current !== version) return;
+        if (!rows) { setSqliteResults(null); return; }
+        const results: SearchEntry[] = [];
+        for (const row of rows) {
+          const prompt = (row.user_message || '').slice(0, 300);
+          if (isTrivial(prompt)) continue;
+          let terminalId: string | null = null;
+          let paneTitle = row.summary || row.session_id.slice(0, 8);
+          for (const [tid, t] of terminals) {
+            if (t.aiSessionId === row.session_id) {
+              terminalId = tid;
+              paneTitle = t.title || paneTitle;
+              break;
+            }
+          }
+          const ts = row.timestamp ? new Date(row.timestamp).getTime() : 0;
+          results.push({
+            sessionId: row.session_id,
+            provider: 'copilot',
+            promptIndex: 0,
+            prompt,
+            terminalId,
+            paneTitle,
+            sessionFolder: shortPath(row.cwd || ''),
+            sessionCwd: row.cwd || '',
+            ageMs: Math.max(0, Date.now() - ts),
+          });
+        }
+        results.sort((a, b) => a.ageMs - b.ageMs);
+        setSqliteResults(results);
+      }).catch(() => {
+        if (searchVersionRef.current === version) setSqliteResults(null);
+      });
+    }, 600);
+
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+  }, [query, show, sqliteActive]);
+
   const filtered = useMemo(() => {
+    // When SQLite returned results for the current query, use those
+    if (sqliteResults !== null) {
+      // Merge SQLite Copilot results with client-side filtered Claude Code entries
+      const q = query.toLowerCase();
+      const claudeEntries = entries
+        .filter((e) => e.provider === 'claude-code')
+        .filter((e) =>
+          e.prompt.toLowerCase().includes(q) ||
+          e.paneTitle.toLowerCase().includes(q) ||
+          e.sessionFolder.toLowerCase().includes(q),
+        );
+      return [...sqliteResults, ...claudeEntries].sort((a, b) => a.ageMs - b.ageMs).slice(0, 200);
+    }
+    // Otherwise fall back to client-side filtering of loaded entries
     if (!query.trim()) return entries.slice(0, 200);
     const q = query.toLowerCase();
     return entries
@@ -146,7 +218,7 @@ const PromptSearchDialog: React.FC = () => {
         e.sessionFolder.toLowerCase().includes(q),
       )
       .slice(0, 200);
-  }, [entries, query]);
+  }, [entries, query, sqliteResults]);
 
   useEffect(() => {
     if (selectedIndex >= filtered.length) {
@@ -240,7 +312,7 @@ const PromptSearchDialog: React.FC = () => {
           ref={inputRef}
           className="switcher-input"
           type="text"
-          placeholder="Search your AI prompts to jump to that pane..."
+          placeholder={sqliteActive ? "Search all AI prompts... (AND, OR supported)" : "Search your AI prompts to jump to that pane..."}
           value={query}
           onChange={(e) => { setQuery(e.target.value); setSelectedIndex(0); }}
           onKeyDown={handleKeyDown}

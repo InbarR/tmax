@@ -769,7 +769,9 @@ function registerIpcHandlers(): void {
       .sort((a, b) => (b.lastActivityTime ?? 0) - (a.lastActivityTime ?? 0))
       .slice(0, cap);
     const totalEligible = (copilotMonitor?.lastTotalEligible ?? 0) + wsl.length;
-    return { sessions: combined, totalEligible };
+    // When SQLite is active, all sessions are queryable instantly — no need for load-more UX.
+    const sqliteActive = (copilotMonitor as any)?.dbAvailable === true;
+    return { sessions: combined, totalEligible, sqliteActive };
   });
 
   ipcMain.handle(IPC.COPILOT_GET_SESSION, (_event, id: string) => {
@@ -780,6 +782,10 @@ function registerIpcHandlers(): void {
     const native = copilotMonitor?.searchSessions(query) ?? [];
     const wsl = wslSessionManager?.searchCopilotSessions(query) ?? [];
     return [...native, ...wsl];
+  });
+
+  ipcMain.handle(IPC.COPILOT_SEARCH_PROMPTS, (_event, query: string) => {
+    return (copilotMonitor as any)?.db?.searchPrompts?.(query) ?? null;
   });
 
   ipcMain.handle(IPC.COPILOT_START_WATCHING, async () => {

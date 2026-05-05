@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { parseSessionEvents, clearParserCache, extractCopilotPrompts } from './copilot-events-parser';
+import { CopilotSessionDB, sessionRowToSummary } from './copilot-session-db';
 import type {
   CopilotSession,
   CopilotSessionSummary,
@@ -23,10 +24,21 @@ export class CopilotSessionMonitor {
   lastTotalEligible = 0;
   /** Cached candidate list from the last full stat scan, sorted by mtime desc. */
   private cachedCandidates: { sessionId: string; sessionDir: string; mtime: number }[] | null = null;
+  /** SQLite DB for fast session loading (Copilot CLI only). */
+  private db: CopilotSessionDB;
+  /** Whether SQLite DB is available. Cached after first open attempt. */
+  dbAvailable: boolean | null = null;
 
   constructor(options?: { basePath?: string; wslDistro?: string }) {
     this.basePath = options?.basePath ?? path.join(os.homedir(), '.copilot', 'session-state');
     this.wslDistro = options?.wslDistro;
+    // Only use SQLite for native (non-WSL) monitors — WSL distros have their own
+    // DB inside the distro filesystem which isn't accessible via the host path.
+    if (!this.wslDistro) {
+      this.db = new CopilotSessionDB();
+    } else {
+      this.db = new CopilotSessionDB(path.join(path.dirname(this.basePath), 'session-store.db'));
+    }
   }
 
   setCallbacks(callbacks: CopilotMonitorCallbacks): void {
@@ -38,6 +50,105 @@ export class CopilotSessionMonitor {
   }
 
   async scanSessions(limit = 314): Promise<CopilotSessionSummary[]> {
+    // Try SQLite first (9-15x faster than filesystem scan)
+    if (this.dbAvailable === null) {
+      this.dbAvailable = this.db.open();
+    }
+
+    if (this.dbAvailable) {
+      const sqliteSummaries = await this.scanSessionsWithSQLite(limit);
+      if (sqliteSummaries) return sqliteSummaries;
+      // SQLite query failed - fall back to filesystem
+      this.dbAvailable = false;
+    }
+
+    // Fallback: original filesystem approach
+    return this.scanSessionsFilesystem(limit);
+  }
+
+  private async scanSessionsWithSQLite(limit: number): Promise<CopilotSessionSummary[] | null> {
+    const sessionRows = this.db.querySessions(limit);
+    if (!sessionRows) return null;
+
+    const totalCount = this.db.getTotalEligibleCount();
+    if (totalCount !== null) {
+      this.lastTotalEligible = totalCount;
+    }
+
+    if (sessionRows.length === 0) {
+      this.lastTotalEligible = totalCount ?? 0;
+      return [];
+    }
+
+    const sessionIds = sessionRows.map(r => r.id);
+    const turnStatsMap = this.db.queryTurnStats(sessionIds);
+    if (!turnStatsMap) return null;
+
+    const summaries: CopilotSessionSummary[] = [];
+    const currentIds = new Set<string>();
+
+    for (const row of sessionRows) {
+      currentIds.add(row.id);
+      const turnStats = turnStatsMap.get(row.id);
+      const summary = sessionRowToSummary(row, turnStats);
+
+      // Apply WSL metadata if applicable
+      if (this.wslDistro) {
+        summary.wsl = true;
+        summary.wslDistro = this.wslDistro;
+      }
+
+      summaries.push(summary);
+
+      // Store minimal session state in memory for live updates
+      if (!this.sessions.has(row.id)) {
+        this.sessions.set(row.id, {
+          id: row.id,
+          status: 'idle',
+          workspace: {
+            cwd: row.cwd || '',
+            branch: row.branch || '',
+            repository: row.repository || '',
+            name: row.summary || row.id,
+            summary: row.summary || '',
+          },
+          messageCount: turnStats?.message_count ?? 0,
+          toolCallCount: 0,
+          lastActivityTime: summary.lastActivityTime,
+          pendingToolCalls: 0,
+          totalTokens: 0,
+          latestPrompt: summary.latestPrompt,
+          latestPromptTime: summary.latestPromptTime,
+        });
+        this.callbacks.onSessionAdded?.(summary);
+      }
+    }
+
+    // Evict sessions outside the top N from memory
+    for (const [id] of this.sessions) {
+      if (!currentIds.has(id)) {
+        this.sessions.delete(id);
+        clearParserCache(path.join(this.basePath, id, 'events.jsonl'));
+      }
+    }
+
+    // Refresh recently active sessions via events.jsonl to get correct live status.
+    // SQLite-loaded sessions default to 'idle', but some may be actively thinking.
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    for (const summary of summaries) {
+      if (summary.lastActivityTime > fiveMinutesAgo) {
+        const refreshed = this.refreshSession(summary.id);
+        if (refreshed) {
+          const idx = summaries.indexOf(summary);
+          if (idx >= 0) summaries[idx] = refreshed;
+        }
+      }
+    }
+
+    return summaries;
+  }
+
+  private async scanSessionsFilesystem(limit: number): Promise<CopilotSessionSummary[]> {
     const summaries: CopilotSessionSummary[] = [];
 
     // Phase 1: build or reuse cached candidate list
@@ -161,6 +272,52 @@ export class CopilotSessionMonitor {
   }
 
   searchSessions(query: string): CopilotSessionSummary[] {
+    // Try SQLite FTS5 search first (searches ALL sessions, not just loaded ones)
+    if (this.dbAvailable) {
+      const searchRows = this.db.searchSessions(query, 50);
+      if (searchRows) {
+        const sessionIds = searchRows.map(r => r.id);
+        const turnStatsMap = this.db.queryTurnStats(sessionIds);
+
+        const results: CopilotSessionSummary[] = [];
+        for (const row of searchRows) {
+          const turnStats = turnStatsMap?.get(row.id);
+          const summary = sessionRowToSummary(row, turnStats);
+
+          if (this.wslDistro) {
+            summary.wsl = true;
+            summary.wslDistro = this.wslDistro;
+          }
+
+          // Hydrate into this.sessions so getSession() works when user opens a search result
+          if (!this.sessions.has(row.id)) {
+            this.sessions.set(row.id, {
+              id: row.id,
+              status: 'idle',
+              workspace: {
+                cwd: row.cwd || '',
+                branch: row.branch || '',
+                repository: row.repository || '',
+                name: row.summary || row.id,
+                summary: row.summary || '',
+              },
+              messageCount: turnStats?.message_count ?? 0,
+              toolCallCount: 0,
+              lastActivityTime: summary.lastActivityTime,
+              pendingToolCalls: 0,
+              totalTokens: 0,
+              latestPrompt: summary.latestPrompt,
+              latestPromptTime: summary.latestPromptTime,
+            });
+          }
+
+          results.push(summary);
+        }
+        return results;
+      }
+    }
+
+    // Fallback: in-memory search of loaded sessions only
     const q = query.toLowerCase();
     const results: CopilotSessionSummary[] = [];
 
@@ -243,6 +400,7 @@ export class CopilotSessionMonitor {
 
   dispose(): void {
     this.sessions.clear();
+    this.db.close();
   }
 
   /** Re-check only recently active sessions in memory (no directory scan). */
