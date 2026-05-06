@@ -2219,6 +2219,21 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           className={`terminal-pane-title${floatTitleBar ? ' float-titlebar' : ''}${isMultiSelected ? ' multi-selected' : ''}`}
           style={bgTint ? { background: bgTint + (isFocused ? '66' : '33') } : undefined}
           onMouseDown={(e) => {
+            // TASK-107: Middle-click on the title bar closes the pane,
+            // mirroring the tab middle-click-close UX in TabBar. Bail when
+            // the click lands on an interactive child (button, rename input,
+            // status-dot/X icon) so those keep their existing behavior.
+            // preventDefault suppresses Windows' middle-button auto-scroll.
+            if (e.button === 1) {
+              const t = e.target as HTMLElement;
+              if (t.closest('button') || t.closest('input') || t.closest('.status-dot-container')) {
+                return;
+              }
+              e.preventDefault();
+              e.stopPropagation();
+              useTerminalStore.getState().closeTerminal(terminalId);
+              return;
+            }
             // TASK-72: Ctrl/Cmd+click on the title bar toggles this pane in
             // the multi-selection set. Bound to the title bar (not the
             // xterm canvas area) so terminal text selection / focus stays
