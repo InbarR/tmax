@@ -221,7 +221,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   const fontSize = useTerminalStore((s) => s.fontSize);
   // Track modal overlay state — sidebars (copilot, dirs, explorer) should NOT block terminal focus
   const anyOverlayOpen = useTerminalStore((s) =>
-    s.showCommandPalette || s.showSettings || s.showSwitcher || s.showShortcuts
+    s.showCommandPalette || s.showSettings || s.showSwitcher || s.showShortcuts || s.showMcpGrants
   );
   const aiResumeCommandRef = useRef<string>('');
   const aiSessionStartedRef = useRef(false);
@@ -2470,6 +2470,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
                 )}
               </>
             )}
+            <div className="context-menu-separator" />
+            <button className="context-menu-item" onClick={() => {
+              setPaneMenuPos(null);
+              useTerminalStore.getState().toggleMcpGrants();
+            }}>👁 Share with agent…</button>
             <div className="context-menu-separator" />
             <button className="context-menu-item danger" onClick={() => {
               setPaneMenuPos(null);

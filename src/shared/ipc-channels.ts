@@ -75,6 +75,22 @@ export const IPC = {
   KEYBINDINGS_OPEN_FILE: 'keybindings:openFile',
   KEYBINDINGS_RESET: 'keybindings:reset',
   KEYBINDINGS_CHANGED: 'keybindings:changed',
+  // ── Cross-pane MCP (v1) ─────────────────────────────────────────────
+  // See PROPOSAL_CROSS_PANE_MCP.md / PLAN_CROSS_PANE_MCP_V1.md.
+  // All read-only. Default-deny grants live only in main; the renderer drives
+  // grant lifecycle through these channels.
+  MCP_GET_STATUS: 'mcp:getStatus',
+  MCP_SET_ENABLED: 'mcp:setEnabled',
+  MCP_LIST_PANES: 'mcp:listPanes',
+  MCP_LIST_GRANTS: 'mcp:listGrants',
+  MCP_GRANT: 'mcp:grant',
+  MCP_REVOKE: 'mcp:revoke',
+  MCP_REVOKE_ALL: 'mcp:revokeAll',
+  MCP_GRANTS_CHANGED: 'mcp:grantsChanged',
+  MCP_PANES_CHANGED: 'mcp:panesChanged',
+  MCP_UPDATE_PANE: 'mcp:updatePane',
+  MCP_GET_AUDIT: 'mcp:getAudit',
+  MCP_ISSUE_TOKEN: 'mcp:issueToken',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

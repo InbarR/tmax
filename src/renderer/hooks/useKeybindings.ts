@@ -288,6 +288,12 @@ function dispatchAction(action: string): void {
     case 'commandPalette':
       store.toggleCommandPalette();
       break;
+    case 'mcpGrants':
+      // Reachable only via the tab right-click menu and the pane ⋯ menu;
+      // the case is kept so Action types stay valid even if a future
+      // dispatcher path emits it programmatically.
+      store.toggleMcpGrants();
+      break;
     case 'tabMenu':
       store.openTabMenu();
       break;

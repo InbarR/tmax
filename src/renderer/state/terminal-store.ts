@@ -663,6 +663,7 @@ interface TerminalStore {
   showShortcuts: boolean;
   showCommandPalette: boolean;
   showSettings: boolean;
+  showMcpGrants: boolean;
   tabBarPosition: 'top' | 'bottom' | 'left' | 'right';
   hideTabTitles: boolean;
   hideTabCloseButtons: boolean;
@@ -771,6 +772,7 @@ interface TerminalStore {
   togglePaneHints: () => void;
   toggleShortcuts: () => void;
   toggleCommandPalette: () => void;
+  toggleMcpGrants: () => void;
   toggleSettings: () => void;
   closeSettings: () => void;
   updateConfig: (update: Partial<AppConfig>) => Promise<void>;
@@ -971,6 +973,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   showShortcuts: false,
   showCommandPalette: false,
   showSettings: false,
+  showMcpGrants: false,
   showDirPicker: false,
   showFileExplorer: false,
   fileExplorerTargetPath: null,
@@ -2035,6 +2038,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   toggleCommandPalette: () => {
     set((state) => ({ showCommandPalette: !state.showCommandPalette }));
+  },
+
+  toggleMcpGrants: () => {
+    set((state) => ({ showMcpGrants: !state.showMcpGrants }));
   },
 
   toggleSettings: () => {

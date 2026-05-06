@@ -19,6 +19,12 @@ import { initDiagLogger, getDiagLogPath, diagLog, sanitize } from './diag-logger
 import { GitDiffService, resolveGitRoot } from './git-diff-service';
 import { listWorktrees, createWorktree, deleteWorktree, getBranches } from './git-worktree-service';
 import type { DiffMode } from '../shared/diff-types';
+import { McpServer } from './mcp/server';
+import { installTmaxEntry, uninstallTmaxEntry, buildReloadKeystroke } from './mcp/copilot-autoreg';
+import { PermissionsStore } from './mcp/permissions';
+import { paneRegistry, type PaneSnapshot } from './mcp/pane-registry';
+import { setAuditPath, readRecentAudit } from './mcp/audit';
+import type { GrantLevel } from './mcp/types';
 
 // Handle Squirrel.Windows lifecycle events (install, update, uninstall)
 // Must be at the top before any other initialization
@@ -134,6 +140,9 @@ let claudeCodeMonitor: ClaudeCodeSessionMonitor | null = null;
 let claudeCodeWatcher: ClaudeCodeSessionWatcher | null = null;
 let wslSessionManager: WslSessionManager | null = null;
 let versionChecker: VersionChecker | null = null;
+let mcpServer: McpServer | null = null;
+let mcpPermissions: PermissionsStore | null = null;
+let mcpEnabled = true;
 let clipboardTempDir: string | null = null;
 const CLIPBOARD_FILE_STALE_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -528,7 +537,22 @@ function registerIpcHandlers(): void {
       const { wslDistro: _wsl, ...ptyOpts } = opts;
       // For WSL with --cd, node-pty still needs a valid Windows cwd
       const cwd = opts.wslDistro ? (os.homedir()) : ptyOpts.cwd;
-      return ptyManager!.create({ ...ptyOpts, args, cols, rows, cwd });
+      // Issue a per-pane MCP token and inject the env vars so any MCP-aware
+      // CLI agent the user starts in this pane discovers tmax automatically.
+      // The token is harmless to non-agent shells: just two env vars. We
+      // inject even when disabled so re-enabling doesn't require relaunching
+      // the agent (the server would just be 503-ing in the meantime).
+      let mcpEnv: { url: string; token: string } | undefined;
+      if (mcpServer && mcpServer.isRunning()) {
+        const url = mcpServer.url();
+        if (url) {
+          const { token } = mcpServer.issueToken(opts.id);
+          mcpEnv = { url, token };
+        }
+      }
+      // Track wsl info on the registry so MCP tools can label panes correctly.
+      try { paneRegistry.update({ id: opts.id, wsl: !!opts.wslDistro, wslDistro: opts.wslDistro }); } catch { /* ignore */ }
+      return ptyManager!.create({ ...ptyOpts, args, cols, rows, cwd, mcpEnv });
     }
   );
 
@@ -540,6 +564,12 @@ function registerIpcHandlers(): void {
   );
 
   ipcMain.handle(IPC.PTY_KILL, (_event, id: string) => {
+    // Revoke any MCP grants attached to this pane (both as grantee and as
+    // target) and drop the bearer token before tearing down the PTY.
+    try {
+      mcpPermissions?.revokeAllForPane(id);
+      mcpServer?.revokeToken(id);
+    } catch { /* ignore */ }
     ptyManager!.kill(id);
   });
 
@@ -1114,6 +1144,84 @@ function registerIpcHandlers(): void {
       return { ok: false, error: (e as Error).message };
     }
   });
+
+  // ── Cross-pane MCP (v1) ─────────────────────────────────────────────
+  // Default-deny. The renderer surfaces grants via context menu and the
+  // grants matrix dialog (Ctrl+Shift+M); revocations and the kill switch
+  // also live there.
+
+  ipcMain.handle(IPC.MCP_GET_STATUS, () => {
+    return {
+      enabled: mcpEnabled,
+      url: mcpServer?.url() ?? null,
+      // The token isn't useful to the renderer — agents discover theirs via
+      // PTY env. Surface only the *fact* that a server is up.
+      token: null,
+      auditLogPath: getMcpAuditLogPath(),
+    };
+  });
+
+  ipcMain.handle(IPC.MCP_SET_ENABLED, async (_event, enabled: boolean) => {
+    mcpEnabled = !!enabled;
+    // Flip the in-process kill switch. We deliberately do NOT close/reopen
+    // the listener: if we did, every PTY env we previously injected would
+    // point at a stale port + token. Keeping the socket bound (and only
+    // refusing requests with 503) means existing agent panes recover the
+    // instant the user toggles back on, no restart needed.
+    mcpServer?.setEnabled(mcpEnabled);
+    if (!mcpEnabled) {
+      // Wipe live grants on disable — that's the strict-mode promise. Tokens
+      // stay so re-enable is seamless; without grants, everything is denied
+      // anyway.
+      mcpPermissions?.clear();
+    }
+    broadcastMcpGrantsChanged();
+    return { enabled: mcpEnabled, url: mcpServer?.url() ?? null };
+  });
+
+  ipcMain.handle(IPC.MCP_LIST_PANES, () => paneRegistry.list());
+
+  ipcMain.handle(IPC.MCP_LIST_GRANTS, () => mcpPermissions?.list() ?? []);
+
+  ipcMain.handle(IPC.MCP_GRANT, (_event, granteePane: string, targetPane: string, level: GrantLevel) => {
+    if (!mcpPermissions) return null;
+    if (level !== 'buffer' && level !== 'session') {
+      throw new Error(`invalid grant level: ${level}`);
+    }
+    const g = mcpPermissions.grant(granteePane, targetPane, level);
+    // Nudge the grantee pane's running agent to refresh its MCP view so
+    // the new permission takes effect immediately. Best-effort: if the
+    // pane has no live PTY, or the agent doesn't recognize `/mcp`, this
+    // is a harmless no-op.
+    try { ptyManager?.write(granteePane, buildReloadKeystroke()); } catch { /* ignore */ }
+    return g;
+  });
+
+  ipcMain.handle(IPC.MCP_REVOKE, (_event, granteePane: string, targetPane: string) => {
+    mcpPermissions?.revoke(granteePane, targetPane);
+  });
+
+  ipcMain.handle(IPC.MCP_REVOKE_ALL, () => {
+    mcpPermissions?.clear();
+  });
+
+  ipcMain.handle(IPC.MCP_UPDATE_PANE, (_event, snapshot: PaneSnapshot) => {
+    paneRegistry.update(snapshot);
+  });
+
+  ipcMain.handle(IPC.MCP_GET_AUDIT, (_event, limit?: number) => {
+    return readRecentAudit(typeof limit === 'number' && limit > 0 ? limit : 200);
+  });
+
+  ipcMain.handle(IPC.MCP_ISSUE_TOKEN, (_event, paneId: string) => {
+    // Emergency / recovery path: the renderer can ask for a fresh token if
+    // the original env injection was lost (e.g. agent restarted in-pane).
+    // Returns { url, token } — the renderer can paste it into the agent.
+    if (!mcpServer || !mcpServer.isRunning()) return null;
+    const url = mcpServer.url();
+    if (!url) return null;
+    return { url, ...mcpServer.issueToken(paneId) };
+  });
 }
 
 function setupCopilotMonitor(): void {
@@ -1123,9 +1231,11 @@ function setupCopilotMonitor(): void {
     onSessionUpdated(session) {
       mainWindow?.webContents.send(IPC.COPILOT_SESSION_UPDATED, session);
       notifyCopilotSession(session);
+      tryBindAgentSessionToPane('copilot', session);
     },
     onSessionAdded(session) {
       mainWindow?.webContents.send(IPC.COPILOT_SESSION_ADDED, session);
+      tryBindAgentSessionToPane('copilot', session);
     },
     onSessionRemoved(sessionId) {
       mainWindow?.webContents.send(IPC.COPILOT_SESSION_REMOVED, sessionId);
@@ -1161,9 +1271,11 @@ function setupClaudeCodeMonitor(): void {
       // ready / needs attention" and surfaces an OS notification, with
       // a 30 s per-session cooldown.
       notifyCopilotSession(session);
+      tryBindAgentSessionToPane('claude-code', session);
     },
     onSessionAdded(session) {
       mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_ADDED, session);
+      tryBindAgentSessionToPane('claude-code', session);
     },
     onSessionRemoved(sessionId) {
       mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_REMOVED, sessionId);
@@ -1185,6 +1297,98 @@ function setupClaudeCodeMonitor(): void {
   claudeCodeWatcher.setStaleCheckCallback(() => {
     claudeCodeMonitor!.refreshLoadedSessions();
   });
+}
+
+// ── Cross-pane MCP wiring ─────────────────────────────────────────────
+
+function getMcpAuditLogPath(): string | null {
+  try {
+    return path.join(app.getPath('logs'), 'mcp-audit.log');
+  } catch {
+    return null;
+  }
+}
+
+async function setupMcpServer(): Promise<void> {
+  // Audit path is set even before the server starts so the path-getter has
+  // a sensible value to surface to the renderer.
+  const auditPath = getMcpAuditLogPath();
+  if (auditPath) setAuditPath(auditPath);
+
+  mcpPermissions = new PermissionsStore();
+
+  // Push grants/panes changes to the renderer so the matrix dialog stays
+  // current. Both stores call into broadcast helpers below.
+  mcpPermissions.onChange(broadcastMcpGrantsChanged);
+  paneRegistry.onChange(broadcastMcpPanesChanged);
+
+  mcpServer = new McpServer({
+    permissions: mcpPermissions,
+    paneRegistry: paneRegistry,
+  });
+  mcpServer.setEnabled(mcpEnabled);
+
+  // Always bind the listener at boot — even if disabled. The socket stays
+  // up; the kill switch lives inside handleRequest. This keeps PTY env
+  // injection valid across enable/disable toggles.
+  try {
+    await mcpServer.start();
+    console.log('[mcp] listening at', mcpServer.url(), '(enabled=' + mcpEnabled + ')');
+    // Auto-register tmax in the user's Copilot CLI / Claude Code MCP
+    // config so freshly-launched agent panes pick us up at startup with
+    // zero manual `/mcp add`. Per-pane bearer tokens are still honored
+    // because the config uses ${MCP_TMAX_TOKEN} env-var substitution and
+    // pty-manager injects a unique token per PTY.
+    const url = mcpServer.url();
+    if (url) {
+      try { installTmaxEntry(url); } catch (e) { console.warn('[mcp] autoreg install failed:', e); }
+    }
+  } catch (err) {
+    console.error('[mcp] failed to start:', err);
+  }
+}
+
+function broadcastMcpGrantsChanged(): void {
+  if (!mcpPermissions) return;
+  const grants = mcpPermissions.list();
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(IPC.MCP_GRANTS_CHANGED, grants);
+  }
+}
+
+function broadcastMcpPanesChanged(): void {
+  const panes = paneRegistry.list();
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(IPC.MCP_PANES_CHANGED, panes);
+  }
+}
+
+/**
+ * Best-effort match of a discovered CLI agent session to one of our panes.
+ *
+ * The renderer also sends explicit aiSessionId hints for panes the user
+ * launched via "Open AI Session" (those are accurate even on cwd collisions).
+ * This cwd-based fallback covers panes where the user just opened a fresh
+ * Copilot CLI / Claude Code by hand. We only bind if exactly one pane
+ * matches and it doesn't already carry an explicit (different) binding.
+ */
+function tryBindAgentSessionToPane(
+  provider: 'copilot' | 'claude-code',
+  summary: { id: string; cwd?: string },
+): void {
+  if (!summary.cwd) return;
+  const match = findUniquePaneByCwd(summary.cwd);
+  if (!match) return;
+  if (match.aiSessionId && match.aiSessionId !== summary.id) return;
+  paneRegistry.setAgentBinding(match.id, provider, summary.id);
+}
+
+function findUniquePaneByCwd(cwd: string): { id: string; aiSessionId?: string } | null {
+  const norm = (s: string) => s.replace(/[\\/]+$/, '').toLowerCase();
+  const target = norm(cwd);
+  const matches = paneRegistry.list().filter((p) => norm(p.cwd) === target);
+  if (matches.length !== 1) return null;
+  return { id: matches[0].id, aiSessionId: matches[0].aiSessionId };
 }
 
 async function setupWslSessionManager(): Promise<void> {
@@ -1229,7 +1433,7 @@ process.on('uncaughtException', (error) => {
   console.error('Uncaught exception in main process:', error);
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   try {
     // TASK-69: pin the Windows appUserModelID so OS toast notifications
     // (e.g. the TASK-64 "Claude Code: Session Ready" alert) attribute to
@@ -1295,6 +1499,8 @@ app.whenReady().then(() => {
     console.log('Copilot monitor ready');
     setupClaudeCodeMonitor();
     console.log('Claude Code monitor ready');
+    await setupMcpServer();
+    console.log('MCP server ready');
     createWindow();
     console.log('Window created');
 
@@ -1406,6 +1612,8 @@ app.on('window-all-closed', async () => {
   claudeCodeMonitor?.dispose();
   await wslSessionManager?.stop();
   versionChecker?.stop();
+  await mcpServer?.stop();
+  try { uninstallTmaxEntry(); } catch { /* ignore */ }
   clearNotificationCooldowns();
   app.quit();
 });

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -30,6 +30,7 @@ import FloatingRenameInput from './components/FloatingRenameInput';
 import Toast from './components/Toast';
 import SessionSummary from './components/SessionSummary';
 import MarkdownPreviewOverlay from './components/MarkdownPreviewOverlay';
+import McpGrantsDialog from './components/McpGrantsDialog';
 import AppDialogHost from './components/AppDialog';
 
 const App: React.FC = () => {
@@ -39,6 +40,41 @@ const App: React.FC = () => {
   const draggedTerminalId = useTerminalStore((s) => s.draggedTerminalId);
   const showShortcuts = useTerminalStore((s) => s.showShortcuts);
   const broadcastMode = useTerminalStore((s) => s.broadcastMode);
+
+  // Push pane snapshots to the main process so the cross-pane MCP server's
+  // pane registry stays in sync with what the user actually sees in the UI.
+  // Default-deny means this metadata is harmless on its own — the server
+  // rejects every tool call until the user explicitly grants access.
+  //
+  // Diff against a ref cache so we only push *changed* panes. Without this,
+  // every typed character in any pane (which bumps lastProcess / activity on
+  // the terminal map) would re-fire IPC for every pane in the workspace.
+  const mcpSnapshotCache = useRef<Map<string, string>>(new Map());
+  useEffect(() => {
+    const api = (window as any).terminalAPI;
+    if (!api?.mcpUpdatePane) return;
+    const seen = new Set<string>();
+    terminals.forEach((t) => {
+      seen.add(t.id);
+      const snapshot = {
+        id: t.id,
+        title: t.title,
+        cwd: t.cwd,
+        lastProcess: t.lastProcess,
+        aiSessionId: t.aiSessionId,
+        wsl: t.wsl,
+        wslDistro: t.wslDistro,
+      };
+      const key = JSON.stringify(snapshot);
+      if (mcpSnapshotCache.current.get(t.id) === key) return;
+      mcpSnapshotCache.current.set(t.id, key);
+      api.mcpUpdatePane(snapshot);
+    });
+    // Drop cache entries for panes that no longer exist so they don't leak.
+    for (const id of mcpSnapshotCache.current.keys()) {
+      if (!seen.has(id)) mcpSnapshotCache.current.delete(id);
+    }
+  }, [terminals]);
 
   // Toggle a body class so CSS can add a red outline to all terminal panes
   // while broadcast is on.
@@ -298,6 +334,7 @@ const App: React.FC = () => {
         <FloatingRenameInput />
         <SessionSummary />
         <MarkdownPreviewOverlay />
+        <McpGrantsDialog />
         <Toast />
         <AppDialogHost />
       </div>

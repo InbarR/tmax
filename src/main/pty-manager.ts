@@ -3,6 +3,8 @@ import { existsSync, statSync, writeFileSync } from 'fs';
 import { homedir, tmpdir } from 'os';
 import { join } from 'path';
 import { diagLog, sanitize } from './diag-logger';
+import { paneBufferStore } from './mcp/buffer-store';
+import { paneRegistry } from './mcp/pane-registry';
 
 // Dot-sourced by each pwsh session so the full snippet isn't echoed into the terminal.
 // Rewritten once per app launch (stable filename, overwrite).
@@ -35,6 +37,13 @@ export interface PtyCreateOpts {
   env?: Record<string, string>;
   cols: number;
   rows: number;
+  /**
+   * Cross-pane MCP env vars to inject into the spawned PTY. Issued by
+   * main when this pane is being launched as an agent host (or eligible to
+   * become one). The agent's MCP client picks them up automatically; ordinary
+   * shells just see two harmless env vars.
+   */
+  mcpEnv?: { url: string; token: string };
 }
 
 export interface PtyCallbacks {
@@ -127,6 +136,15 @@ export class PtyManager {
     const shellName = opts.shellPath.toLowerCase();
     const shellEnv: Record<string, string> = { TERM_PROGRAM: 'tmax', COLORTERM: 'truecolor' };
 
+    // Cross-pane MCP env injection. The agent's MCP client picks these up
+    // automatically; we additionally surface MCP_TMAX_PANE_ID so tools can
+    // self-identify in logs / chat.
+    if (opts.mcpEnv) {
+      shellEnv.MCP_TMAX_URL = opts.mcpEnv.url;
+      shellEnv.MCP_TMAX_TOKEN = opts.mcpEnv.token;
+      shellEnv.MCP_TMAX_PANE_ID = opts.id;
+    }
+
     // Set PROMPT_COMMAND via env var for native bash (not WSL — shell init takes longer)
     // zsh doesn't support PROMPT_COMMAND; it uses precmd hooks injected below via PTY write
     if (!shellName.includes('wsl') && shellName.includes('bash') && !shellName.includes('zsh')) {
@@ -159,6 +177,9 @@ export class PtyManager {
     this.ptys.set(opts.id, ptyProcess);
     this.stats.set(opts.id, { pid: ptyProcess.pid, writeCount: 0, lastWriteTime: 0, dataCount: 0, lastDataTime: 0, dataBytes: 0 });
     diagLog('pty:created', { id: opts.id, pid: ptyProcess.pid, shell: opts.shellPath, cwd });
+    // Register with the MCP-side pane registry so cross-pane tools can see
+    // this pane immediately, even before the renderer reports its title.
+    try { paneRegistry.register(opts.id, ptyProcess.pid, cwd); } catch { /* swallow */ }
     // CMD: relies on prompt regex fallback (no hook mechanism)
 
     // Inject shell integration for zsh (precmd hook for OSC 7)
@@ -173,6 +194,9 @@ export class PtyManager {
       const s = this.stats.get(opts.id);
       if (s) { s.dataCount++; s.lastDataTime = Date.now(); s.dataBytes += data.length; }
       diagLog('pty:data', { id: opts.id, bytes: data.length });
+      // Mirror PTY data into the cross-pane MCP ring buffer so other agents
+      // can read it via panes.tail / panes.search.
+      paneBufferStore.append(opts.id, data);
       // Batch output: accumulate chunks and flush at most once per BATCH_INTERVAL.
       // This prevents IPC flooding during output bursts (e.g. system resume).
       const existing = this.pendingData.get(opts.id);
@@ -184,6 +208,12 @@ export class PtyManager {
       diagLog('pty:exit', { id: opts.id, exitCode });
       this.ptys.delete(opts.id);
       this.stats.delete(opts.id);
+      paneBufferStore.setExit(opts.id, exitCode);
+      // Drop the pane from the MCP-side registry too. Without this, panes
+      // whose shell exited naturally (e.g. user typed `exit`, or the pwsh
+      // shell was replaced by an agent process) linger as stale rows in
+      // the cross-pane MCP grants dialog.
+      try { paneRegistry.unregister(opts.id); } catch { /* swallow */ }
       this.callbacks.onExit(opts.id, exitCode);
     });
 
@@ -229,6 +259,9 @@ export class PtyManager {
       pty.kill();
       this.ptys.delete(id);
       this.pendingData.delete(id);
+      // Pane is gone — drop it from the MCP-side registry too. The buffer
+      // is dropped inside paneRegistry.unregister().
+      paneRegistry.unregister(id);
     }
   }
 
@@ -236,6 +269,7 @@ export class PtyManager {
     for (const [id, pty] of this.ptys) {
       pty.kill();
       this.ptys.delete(id);
+      paneRegistry.unregister(id);
     }
   }
 }
