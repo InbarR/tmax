@@ -21,13 +21,72 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
+// TASK-130: render GitHub-style markdown tables (| col | col |) into HTML
+// tables so the release-notes Download grid stops bleeding raw pipes into
+// the update modal.
+function renderTables(md: string): string {
+  const lines = md.split('\n');
+  const out: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const header = lines[i];
+    const sep = lines[i + 1];
+    // Header row: starts and (optionally) ends with `|`, has at least one `|`
+    // inside. Separator row: same shape but each cell is dashes/colons only.
+    if (
+      /^\s*\|.*\|\s*$/.test(header) &&
+      sep !== undefined &&
+      /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/.test(sep)
+    ) {
+      const headerCells = header.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+      const rows: string[][] = [];
+      let j = i + 2;
+      while (j < lines.length && /^\s*\|.*\|\s*$/.test(lines[j])) {
+        rows.push(lines[j].trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim()));
+        j++;
+      }
+      out.push('<table><thead><tr>' +
+        headerCells.map((c) => `<th>${c}</th>`).join('') +
+        '</tr></thead><tbody>' +
+        rows.map((r) => '<tr>' + r.map((c) => `<td>${c}</td>`).join('') + '</tr>').join('') +
+        '</tbody></table>');
+      i = j;
+      continue;
+    }
+    out.push(header);
+    i++;
+  }
+  return out.join('\n');
+}
+
+// TASK-130: subset of HTML tags we trust to pass through the markdown
+// renderer unescaped (release notes are author-controlled, not user input).
+// Restoring these specific tags after the global escape keeps everything
+// else safely HTML-escaped.
+const PASSTHROUGH_TAG_RE = /&lt;(\/?(?:details|summary|br|hr))(\s[^&]*?)?&gt;/g;
+function restorePassthroughTags(html: string): string {
+  return html.replace(PASSTHROUGH_TAG_RE, (_m, tag, attrs) => `<${tag}${attrs ?? ''}>`);
+}
+
 function renderMarkdown(md: string): string {
-  return escapeHtml(md)
+  // Tables are parsed BEFORE escapeHtml so the raw `|` separators are still
+  // matchable; the resulting <table>...</table> will get escaped into
+  // entities and then restored by restorePassthroughTags below.
+  let html = renderTables(md);
+  html = escapeHtml(html);
+  html = restorePassthroughTags(html);
+  // Re-allow the table tags we just emitted (we emitted them as plain <table>
+  // but escapeHtml turned them into &lt;table&gt;). Restore them too.
+  html = html
+    .replace(/&lt;(\/?(?:table|thead|tbody|tr|th|td)(?:\s[^&]*?)?)&gt;/g, '<$1>');
+  return html
     // Headings
     .replace(/^### (.+)$/gm, '<h4>$1</h4>')
     .replace(/^## (.+)$/gm, '<h3>$1</h3>')
     // Bold
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    // Inline code (backticks): escape contents already escaped, just wrap
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
     // Links: [text](url)
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
     // Bare URLs
@@ -38,7 +97,7 @@ function renderMarkdown(md: string): string {
     // Collapse multiple blank lines
     .replace(/\n{3,}/g, '\n\n')
     // Strip newlines adjacent to block elements (prevent extra <br/>)
-    .replace(/\n*(<\/?(?:h[1-6]|ul|li|p)>)\n*/g, '$1')
+    .replace(/\n*(<\/?(?:h[1-6]|ul|li|p|table|thead|tbody|tr|th|td|details|summary)>)\n*/g, '$1')
     // Remaining line breaks
     .replace(/\n/g, '<br/>');
 }

@@ -128,7 +128,13 @@ export class VersionChecker {
 
     autoUpdater.on('update-downloaded', async (_event, _releaseNotes, releaseName) => {
       console.log('[update] Squirrel: update-downloaded, releaseName:', releaseName);
-      const version = (releaseName || '').replace(/^v/, '') || undefined;
+      // TASK-130: Squirrel's releaseName for arch-split builds carries the
+      // platform suffix (e.g. "1.7.3-x64") because the nupkg id is
+      // "tmax-x64". Strip the trailing -x64 / -arm64 / -ia32 so the user
+      // sees the plain semver in the modal title.
+      const version = (releaseName || '')
+        .replace(/^v/, '')
+        .replace(/-(x64|arm64|ia32)$/i, '') || undefined;
       const releaseNotes = await this.fetchReleaseNotes();
       this.updateInfo = {
         ...this.updateInfo,

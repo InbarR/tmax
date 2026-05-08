@@ -2386,6 +2386,47 @@ html.transparency-active .input-dialog {
   color: var(--text-primary);
 }
 
+/* TASK-130: render markdown tables and <details> blocks in release notes */
+.update-modal-notes table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 12px;
+  font-size: 13px;
+}
+
+.update-modal-notes table th,
+.update-modal-notes table td {
+  border: 1px solid var(--border-color);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.update-modal-notes table th {
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.04));
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.update-modal-notes details {
+  margin: 8px 0;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.update-modal-notes details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-primary);
+  outline: none;
+  user-select: none;
+}
+
+.update-modal-notes details[open] > summary {
+  margin-bottom: 6px;
+}
+
 .update-modal-actions {
   display: flex;
   gap: 8px;
