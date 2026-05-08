@@ -710,11 +710,32 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           if (!prevText || /\s$/.test(prevText)) break;
           const lastCh = prevText.charAt(prevText.length - 1);
           if (!PATH_BODY.test(lastCh)) break;
-          const headOfCur = logical.replace(/^\s+/, '').charAt(0);
+          const wsHead = logical.match(/^\s+/);
+          const wsLen = wsHead ? wsHead[0].length : 0;
+          const headOfCur = logical.slice(wsLen).charAt(0);
           if (!PATH_BODY.test(headOfCur)) break;
-          for (const s of segs) s.logicalStart += prevText.length;
+          // TASK-137: mirror the forward-stitch seam handling. When segs[0]'s
+          // row begins with leading whitespace, that WS is the wrap-eaten
+          // seam space (Ink keeps it as leading WS on the post-wrap row).
+          // Drop it from `logical` and restore exactly one space so paths
+          // with embedded literal spaces (`OneDrive - Microsoft\...`) keep
+          // their on-disk spelling - otherwise we'd glue prev's tail to the
+          // post-wrap head and produce `OneDrive -  Microsoft\...` (double
+          // space) or `OneDrive -Microsoft\...` (no space), and fileRead
+          // 404s either way.
+          const seamSpace = wsLen > 0 ? ' ' : '';
+          if (wsLen > 0) {
+            logical = logical.slice(wsLen);
+            // segs[0]'s logical content shrunk by wsLen but the row's visible
+            // WS is unchanged - restore the offset-to-col map via leadingWS.
+            // Other segs shift left in `logical` by wsLen.
+            firstSeg.leadingWS += wsLen;
+            for (let i = 1; i < segs.length; i++) segs[i].logicalStart -= wsLen;
+          }
+          const shift = prevText.length + seamSpace.length;
+          for (const s of segs) s.logicalStart += shift;
           segs.unshift({ rowIdx: prevRow, logicalStart: 0, soft: false, leadingWS: 0 });
-          logical = prevText + logical;
+          logical = prevText + seamSpace + logical;
           stitchedBack++;
         }
 
