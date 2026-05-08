@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import * as chokidar from 'chokidar';
 import type { FSWatcher } from 'chokidar';
 
 const UUID_RE =
@@ -28,22 +29,39 @@ export class ClaudeCodeSessionWatcher {
   }
 
   async start(): Promise<void> {
-    const chokidar = await import('chokidar');
+    if (this.watcher) {
+      // Already watching - guard against repeated start() calls (which can
+      // happen when the renderer remounts in dev mode or after restoreSession).
+      return;
+    }
 
     // Watch all JSONL files one level deep under project directories
     const glob = path
       .join(this.basePath, '*', '*.jsonl')
       .replace(/\\/g, '/');
 
-    this.watcher = chokidar.watch(glob, {
-      usePolling: true,
-      interval: 1000,
-      ignoreInitial: true,
-      persistent: true,
-      awaitWriteFinish: {
-        stabilityThreshold: 300,
-        pollInterval: 150,
-      },
+    console.log(`[claude-code-watcher] start() basePath=${this.basePath} glob=${glob}`);
+
+    try {
+      this.watcher = chokidar.watch(glob, {
+        usePolling: true,
+        interval: 1000,
+        ignoreInitial: true,
+        persistent: true,
+        awaitWriteFinish: {
+          stabilityThreshold: 300,
+          pollInterval: 150,
+        },
+      });
+    } catch (err) {
+      console.error(`[claude-code-watcher] chokidar.watch failed:`, err);
+      throw err;
+    }
+    this.watcher.on('error', (err) => {
+      console.error(`[claude-code-watcher] error event:`, err);
+    });
+    this.watcher.on('ready', () => {
+      console.log(`[claude-code-watcher] ready - watching ${this.basePath}`);
     });
 
     this.watcher.on('add', (filePath: string) => {

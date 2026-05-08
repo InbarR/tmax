@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import * as chokidar from 'chokidar';
 import type { FSWatcher } from 'chokidar';
 
 export interface CopilotWatcherCallbacks {
@@ -25,21 +26,35 @@ export class CopilotSessionWatcher {
   }
 
   async start(): Promise<void> {
-    // Dynamic import for chokidar (ESM/CJS compat)
-    const chokidar = await import('chokidar');
+    if (this.watcher) {
+      return;
+    }
 
     const eventsGlob = path.join(this.basePath, '*', 'events.jsonl').replace(/\\/g, '/');
     const workspaceGlob = path.join(this.basePath, '*', 'workspace.yaml').replace(/\\/g, '/');
 
-    this.watcher = chokidar.watch([eventsGlob, workspaceGlob], {
-      usePolling: true,
-      interval: 500,
-      ignoreInitial: true,
-      persistent: true,
-      awaitWriteFinish: {
-        stabilityThreshold: 200,
-        pollInterval: 100,
-      },
+    console.log(`[copilot-watcher] start() basePath=${this.basePath} globs=[${eventsGlob}, ${workspaceGlob}]`);
+
+    try {
+      this.watcher = chokidar.watch([eventsGlob, workspaceGlob], {
+        usePolling: true,
+        interval: 500,
+        ignoreInitial: true,
+        persistent: true,
+        awaitWriteFinish: {
+          stabilityThreshold: 200,
+          pollInterval: 100,
+        },
+      });
+    } catch (err) {
+      console.error(`[copilot-watcher] chokidar.watch failed:`, err);
+      throw err;
+    }
+    this.watcher.on('error', (err) => {
+      console.error(`[copilot-watcher] error event:`, err);
+    });
+    this.watcher.on('ready', () => {
+      console.log(`[copilot-watcher] ready - watching ${this.basePath}`);
     });
 
     this.watcher.on('add', (filePath: string) => {

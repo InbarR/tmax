@@ -803,8 +803,12 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle(IPC.COPILOT_START_WATCHING, async () => {
-    if (copilotWatcher) {
+    if (!copilotWatcher) return;
+    try {
       await copilotWatcher.start();
+    } catch (err) {
+      console.error('[main] copilotWatcher.start() failed:', err);
+      throw err;
     }
   });
 
@@ -850,8 +854,12 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle(IPC.CLAUDE_CODE_START_WATCHING, async () => {
-    if (claudeCodeWatcher) {
+    if (!claudeCodeWatcher) return;
+    try {
       await claudeCodeWatcher.start();
+    } catch (err) {
+      console.error('[main] claudeCodeWatcher.start() failed:', err);
+      throw err;
     }
   });
 
@@ -1154,6 +1162,11 @@ function setupCopilotMonitor(): void {
     // Only refresh already-loaded sessions — no full directory re-scan
     copilotMonitor!.refreshLoadedSessions();
   });
+
+  // TASK-143: auto-start in main; see claude-code path below for rationale.
+  copilotWatcher.start().catch((err) => {
+    console.error('[main] auto-start copilotWatcher failed:', err);
+  });
 }
 
 function setupClaudeCodeMonitor(): void {
@@ -1190,6 +1203,14 @@ function setupClaudeCodeMonitor(): void {
 
   claudeCodeWatcher.setStaleCheckCallback(() => {
     claudeCodeMonitor!.refreshLoadedSessions();
+  });
+
+  // TASK-143: auto-start the watcher in the main process. The renderer also
+  // pings the IPC handler on mount as a belt-and-braces fallback, but if the
+  // renderer's call ever fails silently (packaged builds, mount race) the
+  // watcher would otherwise stay dormant forever. start() is idempotent.
+  claudeCodeWatcher.start().catch((err) => {
+    console.error('[main] auto-start claudeCodeWatcher failed:', err);
   });
 }
 
