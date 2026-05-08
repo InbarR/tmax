@@ -2421,6 +2421,24 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               }}
             >{title}</span>
           )}
+          {/* TASK-139: top-level Float / Restore button next to the ⋯ menu.
+              The same action still lives inside the overflow menu as a
+              fallback. Glyph is drawn from the geometric-shapes block (not
+              emoji) so it renders identically across Win/Mac/Linux. */}
+          <button
+            className="terminal-pane-float-btn"
+            title={paneMode === 'floating' ? 'Restore to grid' : 'Float pane'}
+            aria-label={paneMode === 'floating' ? 'Restore pane to grid' : 'Float pane'}
+            onClick={(e) => {
+              e.stopPropagation();
+              const store = useTerminalStore.getState();
+              if (paneMode === 'floating') {
+                store.moveToTiling(terminalId);
+              } else {
+                store.moveToFloat(terminalId);
+              }
+            }}
+          >{paneMode === 'floating' ? '⬋' : '⬈'}</button>
           <button
             className="terminal-pane-menu-btn"
             title="Pane actions"

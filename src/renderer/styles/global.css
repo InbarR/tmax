@@ -774,7 +774,6 @@ html.transparency-active .input-dialog {
   font-size: 18px;
   line-height: 1;
   padding: 1px 8px;
-  margin-left: auto;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s, background 0.15s, color 0.15s;
@@ -785,6 +784,36 @@ html.transparency-active .input-dialog {
   opacity: 1;
 }
 .terminal-pane-menu-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-primary);
+}
+
+/* TASK-139: top-level Float / Restore button. Mirrors .terminal-pane-menu-btn
+   so the two read as a small button group on the right edge of the title bar.
+   margin-left: auto sits on this button (the first of the pair) so the whole
+   group is right-aligned, matching the prior single-button layout. */
+.terminal-pane-float-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text-secondary);
+  /* Slightly smaller than the dots glyph - the arrow has more visual weight
+     at 18px and would otherwise dominate the title bar. */
+  font-size: 14px;
+  line-height: 1;
+  padding: 3px 6px;
+  margin-left: auto;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  pointer-events: auto;
+}
+.terminal-panel:hover .terminal-pane-float-btn,
+.terminal-panel.focused .terminal-pane-float-btn {
+  opacity: 1;
+}
+.terminal-pane-float-btn:hover {
   background: rgba(255,255,255,0.08);
   color: var(--text-primary);
 }
@@ -1066,8 +1095,9 @@ html.transparency-active .input-dialog {
 
 /* In float mode, the per-pane title bar (.terminal-pane-title) acts as
    the float window's drag handle. Show a move cursor over the empty drag
-   area; interactive children (.terminal-pane-menu-btn, status dot, title
-   text) keep their own cursors via specificity. */
+   area; interactive children (.terminal-pane-float-btn,
+   .terminal-pane-menu-btn, status dot, title text) keep their own cursors
+   via specificity. */
 .terminal-pane-title.float-titlebar {
   cursor: move;
   user-select: none;
