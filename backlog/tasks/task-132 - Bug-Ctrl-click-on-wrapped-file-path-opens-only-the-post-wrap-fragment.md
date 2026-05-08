@@ -1,7 +1,7 @@
 ---
 id: TASK-132
 title: 'Bug: Ctrl-click on wrapped file path opens only the post-wrap fragment'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-05-06 18:07'
@@ -37,3 +37,27 @@ If the wrapping TUI eats the literal seam space entirely (no leading WS on the c
 
 Rebased on top of PR 100 (ce4c1cf) - the decorations/tooltip/console.warn changes from that PR are downstream of the regex match and unaffected by my upstream stitch additions.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added hard-newline forward+backward stitch to the .md link provider in TerminalPanel.tsx so paths wrapped by Ink-based TUIs (Claude Code, Copilot CLI) - which break at content width without setting xterm's isWrapped flag - now reconstruct to their full logical form before MD_PATH_PATTERN runs.
+
+## Changes
+- Mirror the image-path provider's seam check (PATH_BODY on both sides, MAX_HARD_NEWLINE=4 cap).
+- Forward+backward walk so a click on either head or continuation row resolves to the same path.
+- Seam-space restoration when the post-wrap row had leading WS - preserves the spelling of paths with embedded spaces (`OneDrive - Microsoft\...`).
+- Update Seg shape and offsetToRowCol to track soft-vs-hard rows and per-row leading WS, matching the image-path provider's model.
+
+## Risk / scope
+- If Ink eats the seam space entirely (no leading WS on continuation), the stitched path is missing the space and fileRead silently 404s. Same end-state as before the fix.
+- Soft-wrap path was already working (TASK-107); this PR is strictly additive for the hard-newline case.
+
+## Tests
+No automated coverage in this commit - the spec drafted for the repro hit the same launchTmax-stage infra failure PR #100 flagged (`Cannot redefine property: fileRead`). AC #3 unchecked; reopen once e2e infra is restored.
+
+## Sequencing
+Rebased on top of PR #100 (ce4c1cf - decorations + fileRead error handling). The two fixes touch the same provider but operate at different stages (PR 100 is post-match; TASK-132 is pre-match), so they compose cleanly with no logic conflict.
+
+Committed in a34d945.
+<!-- SECTION:FINAL_SUMMARY:END -->

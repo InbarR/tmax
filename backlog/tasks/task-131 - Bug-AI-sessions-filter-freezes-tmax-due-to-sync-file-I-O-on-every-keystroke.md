@@ -1,11 +1,11 @@
 ---
 id: TASK-131
 title: 'Bug: AI sessions filter freezes tmax due to sync file I/O on every keystroke'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-05-06 18:07'
-updated_date: '2026-05-06 18:10'
+updated_date: '2026-05-08 07:30'
 labels: []
 dependencies: []
 ---
@@ -20,7 +20,7 @@ Typing in the AI Sessions filter input causes tmax to become Not Responding for 
 <!-- AC:BEGIN -->
 - [x] #1 searchSessions in copilot-session-monitor matches only on cached in-memory metadata (repo/branch/cwd/name/id/summary); does not call getPrompts
 - [x] #2 searchSessions in claude-code-session-monitor matches only on cached in-memory metadata; does not call getPrompts
-- [ ] #3 Filtering 300+ sessions by typing produces no Not Responding state in the main process
+- [x] #3 Filtering 300+ sessions by typing produces no Not Responding state in the main process
 - [x] #4 Existing session-list metadata search still works for repo/branch/cwd/title queries
 <!-- AC:END -->
 
@@ -45,3 +45,25 @@ Skipped writing an e2e perf assertion: reproducing the freeze requires hundreds 
 
 getPrompts() the method is still used by the prompts-dialog IPC handler (main.ts:848,895) and for synthesizing a display-name fallback in toSummary path; only the searchSessions call site was removed.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Removed the synchronous prompt-file fallback from searchSessions in both copilot-session-monitor.ts and claude-code-session-monitor.ts.
+
+## Why
+With ~340 cached sessions, every keystroke in the AI Sessions filter ran getPrompts() against every session whose metadata did not match the query. getPrompts() does a sync events.jsonl/JSONL read on the main process, so the cumulative I/O blocked the Windows message pump for several seconds, showing the window as Not Responding. The 200ms renderer-side debounce only delayed the freeze; it didn't prevent it.
+
+## What changed
+- searchSessions now matches only on already-loaded metadata (repo, branch, cwd, name/summary, latestPrompt, id).
+- getPrompts() itself stays - it is still used by the prompts-dialog IPC handler.
+- Cross-session prompt-text search needs a precomputed index (TASK-97 already tracks this).
+
+## Tests
+No automated coverage - the freeze repro requires hundreds of on-disk session files and the win is binary, so a perf-threshold spec would be flaky on shared CI. Verified manually on the user's box.
+
+## Risk
+Users who relied on substring-search hitting prompt text will lose those matches until the index lands. Title/repo/cwd/branch/latestPrompt search still covers the common cases.
+
+Committed in ea75400.
+<!-- SECTION:FINAL_SUMMARY:END -->
