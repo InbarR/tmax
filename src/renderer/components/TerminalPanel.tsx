@@ -675,7 +675,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         }
 
         const mdRegex = new RegExp(MD_PATH_PATTERN, 'gi');
-        const links: Array<{ range: { start: { x: number; y: number }; end: { x: number; y: number } }; text: string; activate: () => void; tooltip: string }> = [];
+        const links: Array<{
+          range: { start: { x: number; y: number }; end: { x: number; y: number } };
+          text: string;
+          activate: (e: MouseEvent, text: string) => void;
+          tooltip: string;
+          decorations?: { underline?: boolean; pointerCursor?: boolean };
+        }> = [];
         let match: RegExpExecArray | null;
         while ((match = mdRegex.exec(logical)) !== null) {
           const matchedPath = match[0];
@@ -695,7 +701,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               end: { x: endX, y: bufferLineNumber },
             },
             text: matchedPath,
-            tooltip: `Ctrl+Click to preview: ${matchedPath}`,
+            tooltip: `Click to preview: ${matchedPath}`,
             activate() {
               const termInst = useTerminalStore.getState().terminals.get(terminalId);
               const cwd = termInst?.cwd || '';
@@ -705,12 +711,19 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
                 fullPath = cwd + sep + matchedPath;
               }
               (window.terminalAPI as any).fileRead(fullPath).then((content: string | null) => {
-                if (content !== null) {
-                  const fileName = fullPath.split(/[/\\]/).pop() || fullPath;
-                  useTerminalStore.setState({ markdownPreview: { filePath: fullPath, content, fileName } });
+                if (content === null) {
+                  // eslint-disable-next-line no-console
+                  console.warn('[md-link] fileRead returned null', { fullPath });
+                  return;
                 }
+                const fileName = fullPath.split(/[/\\]/).pop() || fullPath;
+                useTerminalStore.setState({ markdownPreview: { filePath: fullPath, content, fileName } });
+              }).catch((err: unknown) => {
+                // eslint-disable-next-line no-console
+                console.error('[md-link] fileRead threw', { fullPath, err });
               });
             },
+            decorations: { underline: true, pointerCursor: true },
           });
         }
         callback(links.length > 0 ? links : undefined);
