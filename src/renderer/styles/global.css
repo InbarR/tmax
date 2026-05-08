@@ -798,12 +798,12 @@ html.transparency-active .input-dialog {
   border: 1px solid transparent;
   border-radius: 3px;
   color: var(--text-secondary);
-  /* Slightly smaller than the dots glyph - the arrow has more visual weight
-     at 18px and would otherwise dominate the title bar. */
-  font-size: 14px;
   line-height: 1;
-  padding: 3px 6px;
+  padding: 2px 6px;
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s, background 0.15s, color 0.15s;

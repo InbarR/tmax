@@ -7,7 +7,7 @@ import { SerializeAddon } from '@xterm/addon-serialize';
 import { useTerminalStore } from '../state/terminal-store';
 import { registerTerminal, unregisterTerminal } from '../terminal-registry';
 import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache';
-import { isMac } from '../utils/platform';
+import { isMac, formatKeyForPlatform } from '../utils/platform';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { prepareClipboardPaste, resolveClipboardPaste } from '../utils/paste';
 import { smartUnwrapForCopy } from '../utils/smart-unwrap';
@@ -2421,24 +2421,46 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               }}
             >{title}</span>
           )}
-          {/* TASK-139: top-level Float / Restore button next to the ⋯ menu.
-              The same action still lives inside the overflow menu as a
-              fallback. Glyph is drawn from the geometric-shapes block (not
-              emoji) so it renders identically across Win/Mac/Linux. */}
-          <button
-            className="terminal-pane-float-btn"
-            title={paneMode === 'floating' ? 'Restore to grid' : 'Float pane'}
-            aria-label={paneMode === 'floating' ? 'Restore pane to grid' : 'Float pane'}
-            onClick={(e) => {
-              e.stopPropagation();
-              const store = useTerminalStore.getState();
-              if (paneMode === 'floating') {
-                store.moveToTiling(terminalId);
-              } else {
-                store.moveToFloat(terminalId);
-              }
-            }}
-          >{paneMode === 'floating' ? '⬋' : '⬈'}</button>
+          {(() => {
+            // TASK-139: Float / Restore button next to the ⋯ menu. Tooltip
+            // surfaces the toggleFloat shortcut so users learn the keyboard
+            // path. Pull the live binding from config so customized shortcuts
+            // render correctly.
+            const cfgBindings = (config as unknown as { keybindings?: { action: string; key: string }[] } | undefined)?.keybindings;
+            const floatKey = (Array.isArray(cfgBindings) && cfgBindings.find((b) => b.action === 'toggleFloat')?.key) || 'Ctrl+Shift+U';
+            const floatShortcut = formatKeyForPlatform(floatKey);
+            const isFloating = paneMode === 'floating';
+            return (
+              <button
+                className="terminal-pane-float-btn"
+                title={`${isFloating ? 'Restore to grid' : 'Float pane'} (${floatShortcut})`}
+                aria-label={isFloating ? 'Restore pane to grid' : 'Float pane'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const store = useTerminalStore.getState();
+                  if (isFloating) {
+                    store.moveToTiling(terminalId);
+                  } else {
+                    store.moveToFloat(terminalId);
+                  }
+                }}
+              >
+                {isFloating ? (
+                  // Restore: arrow pointing into the bottom-left corner of a frame
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2.5" y="2.5" width="9" height="9" rx="1" />
+                    <path d="M9.5 4.5 L5.5 8.5 M5.5 8.5 L8 8.5 M5.5 8.5 L5.5 6" />
+                  </svg>
+                ) : (
+                  // Float: arrow leaving a frame's top-right corner (pop out)
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2.5" y="3.5" width="8" height="8" rx="1" />
+                    <path d="M7.5 6.5 L11.5 2.5 M11.5 2.5 L9 2.5 M11.5 2.5 L11.5 5" />
+                  </svg>
+                )}
+              </button>
+            );
+          })()}
           <button
             className="terminal-pane-menu-btn"
             title="Pane actions"
