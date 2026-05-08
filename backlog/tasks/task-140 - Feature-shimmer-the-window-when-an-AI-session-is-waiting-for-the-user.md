@@ -1,11 +1,11 @@
 ---
 id: TASK-140
 title: 'Feature: shimmer the window when an AI session is waiting for the user'
-status: In Progress
+status: Done
 assignee:
   - '@claude-agent'
 created_date: '2026-05-08 08:40'
-updated_date: '2026-05-08 14:21'
+updated_date: '2026-05-08 14:22'
 labels:
   - enhancement
 dependencies: []
@@ -50,21 +50,5 @@ Requested in https://github.com/InbarR/tmax/issues/98 by @ofek01001. When a Clau
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Added a subtle window-shimmer cue so users on multi-monitor setups notice when an AI session is waiting for them, without alt-tabbing back to tmax. CSS-only so it works identically on Windows / Mac / Linux.
-
-Changes:
-- `src/main/config-store.ts`: new `aiShimmerEnabled?: boolean` on AppConfig (default true).
-- `src/renderer/styles/global.css`: `@keyframes ai-shimmer-pulse` (2.4s ease-in-out infinite, 2px inset ring + soft 18px inset glow in --focus-border) and `.app-shell.shimmer-active`. `prefers-reduced-motion` collapses to a static inset border (no pulse).
-- `src/renderer/App.tsx`: derived `isAnyAiSessionWaiting` from copilot+claude session lists (awaitingApproval | waitingForUser), tracks window focus via `document.hasFocus()` + focus/blur listeners; toggles `.shimmer-active` only when enabled && waiting && !focused.
-- `src/renderer/components/Settings.tsx`: "AI session shimmer" toggle next to the existing "AI session notifications" row.
-
-User impact:
-- Default-on. When any Copilot or Claude Code session in any workspace transitions into a needs-attention status while the user is on another monitor, the tmax window pulses a soft accent ring; the moment they focus tmax (or the session resumes), it stops. Users who only want OS toasts can disable in Settings.
-
-Tests:
-- `npx tsc --noEmit` clean for changed files (only pre-existing repo errors remain).
-- Manual smoke recommended: run a Claude Code session, let it hit waitingForUser, alt-tab away — window border pulses; alt-tab back — pulse stops.
-
-Risks / follow-ups:
-- The shimmer is a single inset box-shadow on .app-shell; on heavy compositor stacks (mica + opacity) it may layer with the focus border. Subtle by design, so this should be fine in practice; revisit if users report visual conflict.
+Added an unfocused-window shimmer cue triggered when any AI session is in awaitingApproval / waitingForUser state. CSS-only animation (@keyframes ai-shimmer-pulse on .app-shell.shimmer-active, 2.4s inset ring + soft glow in --focus-border), works identically across Win/Mac/Linux. Respects prefers-reduced-motion (collapses to a static border). App.tsx derives isAnyAiSessionWaiting from both copilot and Claude Code session lists, watches document.hasFocus() via window focus/blur listeners, and only shimmers when enabled && waiting && !focused. New aiShimmerEnabled config setting (default true) with a Settings toggle next to AI session notifications. Shipped in e90f5d6.
 <!-- SECTION:FINAL_SUMMARY:END -->
