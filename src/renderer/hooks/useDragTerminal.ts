@@ -49,8 +49,17 @@ export function useDragTerminal(): UseDragTerminalResult {
       const parsed = parseDroppableId(droppableId);
 
       if (!parsed) {
-        // Not a drop zone — it's a tab reorder (terminal ID)
-        store.reorderTerminals(draggedId, droppableId);
+        // Not a drop zone - it's a tab reorder. Workspace tabs use a
+        // "workspace:<id>" prefix (TASK-136) so they don't collide with
+        // terminal-id sortables that share this DndContext.
+        if (draggedId.startsWith('workspace:') && droppableId.startsWith('workspace:')) {
+          store.reorderWorkspaces(
+            draggedId.slice('workspace:'.length),
+            droppableId.slice('workspace:'.length),
+          );
+        } else {
+          store.reorderTerminals(draggedId, droppableId);
+        }
       } else if (parsed) {
         const { targetId, side } = parsed;
 

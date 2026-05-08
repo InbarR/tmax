@@ -851,6 +851,12 @@ interface TerminalStore {
   /** Strip color from every workspace. */
   clearAllWorkspaceColors: () => void;
   /**
+   * Reorder workspaces by moving the dragged workspace to the position of
+   * the drop target. The new Map iteration order is what saveSession
+   * persists, so the order survives across restarts. (TASK-136)
+   */
+  reorderWorkspaces: (draggedId: WorkspaceId, overId: WorkspaceId) => void;
+  /**
    * Close a workspace and all of its terminals. If the closed workspace
    * was active, switches to the next remaining workspace (or creates a
    * fresh default if it was the last one).
@@ -3135,6 +3141,20 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         if (ws.color !== undefined) next.set(k, { ...ws, color: undefined });
       }
       return { workspaces: next };
+    });
+    get().saveSession();
+  },
+
+  reorderWorkspaces: (draggedId: WorkspaceId, overId: WorkspaceId) => {
+    if (draggedId === overId) return;
+    set((state) => {
+      const entries = Array.from(state.workspaces.entries());
+      const fromIndex = entries.findIndex(([id]) => id === draggedId);
+      const toIndex = entries.findIndex(([id]) => id === overId);
+      if (fromIndex === -1 || toIndex === -1) return state;
+      const [moved] = entries.splice(fromIndex, 1);
+      entries.splice(toIndex, 0, moved);
+      return { workspaces: new Map(entries) };
     });
     get().saveSession();
   },

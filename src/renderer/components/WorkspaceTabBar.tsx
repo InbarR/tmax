@@ -1,10 +1,134 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { SortableContext, useSortable, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useTerminalStore, TAB_COLORS } from '../state/terminal-store';
-import type { WorkspaceId } from '../state/types';
+import type { Workspace, WorkspaceId } from '../state/types';
 
 // Tab bar variant for tabMode === 'workspaces' (TASK-40). Each chip is a
 // workspace; clicking a chip switches the entire grid. + creates a new
 // workspace + a fresh terminal in it. Right-click → context menu.
+
+// Workspace sortable ids are namespaced ("workspace:<id>") so they can
+// coexist with terminal-tab sortables in the same shared DndContext
+// without clashing on raw uuids (TASK-136).
+const WORKSPACE_SORT_PREFIX = 'workspace:';
+
+interface WorkspaceTabProps {
+  id: WorkspaceId;
+  ws: Workspace;
+  isActive: boolean;
+  isRenaming: boolean;
+  renameValue: string;
+  renameInputRef: React.RefObject<HTMLInputElement>;
+  showCloseBtn: boolean;
+  onActivate: () => void;
+  onMiddleClick: () => void;
+  onDoubleClick: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
+  onAddPane: () => void;
+  onClose: () => void;
+  onRenameChange: (v: string) => void;
+  onRenameCommit: () => void;
+  onRenameCancel: () => void;
+}
+
+const WorkspaceTab: React.FC<WorkspaceTabProps> = ({
+  id,
+  ws,
+  isActive,
+  isRenaming,
+  renameValue,
+  renameInputRef,
+  showCloseBtn,
+  onActivate,
+  onMiddleClick,
+  onDoubleClick,
+  onContextMenu,
+  onAddPane,
+  onClose,
+  onRenameChange,
+  onRenameCommit,
+  onRenameCancel,
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: WORKSPACE_SORT_PREFIX + id });
+
+  const chipStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    ...(ws.color ? { borderBottom: `3px solid ${ws.color}` } : {}),
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`workspace-tab${isActive ? ' active' : ''}`}
+      data-workspace-id={id}
+      style={chipStyle}
+      onClick={() => { if (!isRenaming) onActivate(); }}
+      onMouseDown={(e) => {
+        if (e.button === 1) {
+          e.preventDefault();
+          onMiddleClick();
+        }
+      }}
+      onDoubleClick={onDoubleClick}
+      onContextMenu={onContextMenu}
+      title={ws.name}
+      {...attributes}
+      {...listeners}
+      role="tab"
+      aria-selected={isActive}
+    >
+      {isRenaming ? (
+        <input
+          ref={renameInputRef}
+          className="workspace-tab-rename"
+          value={renameValue}
+          onChange={(e) => onRenameChange(e.target.value)}
+          onBlur={onRenameCommit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onRenameCommit();
+            else if (e.key === 'Escape') onRenameCancel();
+            e.stopPropagation();
+          }}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <>
+          <span className="workspace-tab-name">{ws.name}</span>
+          {isActive && (
+            <button
+              className="workspace-tab-add-pane-inline"
+              title="Add pane to this workspace"
+              aria-label="Add pane to this workspace"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddPane();
+              }}
+            >
+              +
+            </button>
+          )}
+          {showCloseBtn && (
+            <button
+              className="workspace-tab-close"
+              title="Close workspace"
+              aria-label="Close workspace"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+            >
+              ×
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
 
 const WorkspaceTabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }> = ({ vertical }) => {
   const workspaces = useTerminalStore((s) => s.workspaces);
@@ -101,91 +225,44 @@ const WorkspaceTabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }>
   };
 
   const orderedIds = [...workspaces.keys()];
+  const sortableIds = orderedIds.map((id) => WORKSPACE_SORT_PREFIX + id);
   const ctxWorkspace = ctxMenu ? workspaces.get(ctxMenu.id) : undefined;
 
   return (
     <div className={`workspace-tab-bar${vertical ? ' vertical' : ''}`} role="tablist">
-      {orderedIds.map((id) => {
-        const ws = workspaces.get(id)!;
-        const isActive = id === activeWorkspaceId;
-        const isRenaming = renamingId === id;
-        const chipStyle: React.CSSProperties = ws.color
-          ? { borderBottom: `3px solid ${ws.color}` }
-          : {};
-        return (
-          <div
-            key={id}
-            className={`workspace-tab${isActive ? ' active' : ''}`}
-            role="tab"
-            aria-selected={isActive}
-            data-workspace-id={id}
-            style={chipStyle}
-            onClick={() => { if (!isRenaming) setActiveWorkspace(id); }}
-            onMouseDown={(e) => {
-              if (e.button === 1) {
+      <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
+        {orderedIds.map((id) => {
+          const ws = workspaces.get(id)!;
+          return (
+            <WorkspaceTab
+              key={id}
+              id={id}
+              ws={ws}
+              isActive={id === activeWorkspaceId}
+              isRenaming={renamingId === id}
+              renameValue={renameValue}
+              renameInputRef={renameInputRef}
+              showCloseBtn={workspaces.size > 1}
+              onActivate={() => setActiveWorkspace(id)}
+              onMiddleClick={() => handleClose(id)}
+              onDoubleClick={() => {
+                setRenameValue(ws.name);
+                setRenamingId(id);
+              }}
+              onContextMenu={(e) => {
                 e.preventDefault();
-                handleClose(id);
-              }
-            }}
-            onDoubleClick={() => {
-              setRenameValue(ws.name);
-              setRenamingId(id);
-            }}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              closeMenu();
-              setCtxMenu({ x: e.clientX, y: e.clientY, id });
-            }}
-            title={ws.name}
-          >
-            {isRenaming ? (
-              <input
-                ref={renameInputRef}
-                className="workspace-tab-rename"
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onBlur={commitRename}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitRename();
-                  else if (e.key === 'Escape') setRenamingId(null);
-                  e.stopPropagation();
-                }}
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <>
-                <span className="workspace-tab-name">{ws.name}</span>
-                {isActive && (
-                  <button
-                    className="workspace-tab-add-pane-inline"
-                    title="Add pane to this workspace"
-                    aria-label="Add pane to this workspace"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      createTerminal();
-                    }}
-                  >
-                    +
-                  </button>
-                )}
-                {workspaces.size > 1 && (
-                  <button
-                    className="workspace-tab-close"
-                    title="Close workspace"
-                    aria-label="Close workspace"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleClose(id);
-                    }}
-                  >
-                    ×
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        );
-      })}
+                closeMenu();
+                setCtxMenu({ x: e.clientX, y: e.clientY, id });
+              }}
+              onAddPane={() => createTerminal()}
+              onClose={() => handleClose(id)}
+              onRenameChange={setRenameValue}
+              onRenameCommit={commitRename}
+              onRenameCancel={() => setRenamingId(null)}
+            />
+          );
+        })}
+      </SortableContext>
       <button
         className="workspace-tab-new"
         title="New workspace"
