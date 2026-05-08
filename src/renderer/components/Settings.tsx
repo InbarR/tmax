@@ -138,6 +138,14 @@ const TerminalSettings: React.FC = () => {
           <span className="toggle-track" />
         </label>
       </SettingRow>
+      <SettingRow label="AI session shimmer" description="Subtly pulse the tmax window border when an AI session is waiting for your input and the window is in the background. Useful as a peripheral cue on a multi-monitor setup.">
+        <label className="toggle-switch">
+          <input type="checkbox"
+            checked={(config as any).aiShimmerEnabled !== false}
+            onChange={(e) => update({ aiShimmerEnabled: e.target.checked } as any)} />
+          <span className="toggle-track" />
+        </label>
+      </SettingRow>
       <SettingRow label="AI session load limit" description="Cap on recent sessions loaded per provider (Copilot and Claude Code each). Lower it for faster boot or less memory; set 0 to disable session loading entirely.">
         <input type="number" className="settings-input small" min={0} step={1}
           value={(config as any).aiSessionLoadLimit ?? 314}

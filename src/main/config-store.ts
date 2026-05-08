@@ -74,6 +74,13 @@ export interface AppConfig {
    */
   aiSessionNotifications?: boolean;
   /**
+   * Subtle window shimmer when any AI session is in a needs-attention
+   * state (awaitingApproval / waitingForUser) AND the tmax window is not
+   * focused. Default true. Complements aiSessionNotifications: gives a
+   * peripheral-vision cue for users on a multi-monitor setup. (TASK-140)
+   */
+  aiShimmerEnabled?: boolean;
+  /**
    * Maximum number of recent Copilot / Claude Code sessions scanned on
    * startup. 0 disables session loading entirely (lists stay empty,
    * no scan runs). Default 314. (TASK-102)
@@ -244,6 +251,7 @@ export const defaultConfig: AppConfig = {
   backgroundMaterial: 'none',
   backgroundOpacity: 0.8,
   aiSessionNotifications: true,
+  aiShimmerEnabled: true,
   aiSessionLoadLimit: 314,
 };
 

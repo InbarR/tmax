@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -60,6 +60,39 @@ const App: React.FC = () => {
   // Pick the tab-bar variant based on config.tabMode (TASK-40).
   const tabMode = useTerminalStore((s) => s.config?.tabMode) ?? 'flat';
   const TopBar = tabMode === 'workspaces' ? WorkspaceTabBar : TabBar;
+
+  // TASK-140: shimmer the window when any AI session needs the user's
+  // attention (awaitingApproval / waitingForUser) AND the window is not
+  // focused. Complements the OS toast by giving a peripheral-vision cue
+  // for users on a multi-monitor setup who silence notifications.
+  const copilotSessions = useTerminalStore((s) => s.copilotSessions);
+  const claudeCodeSessions = useTerminalStore((s) => s.claudeCodeSessions);
+  const aiShimmerEnabled = useTerminalStore((s) => (s.config as any)?.aiShimmerEnabled);
+  const isAnyAiSessionWaiting = useMemo(() => {
+    const isAttention = (status: string) =>
+      status === 'awaitingApproval' || status === 'waitingForUser';
+    return (
+      copilotSessions.some((s) => isAttention(s.status)) ||
+      claudeCodeSessions.some((s) => isAttention(s.status))
+    );
+  }, [copilotSessions, claudeCodeSessions]);
+
+  const [windowFocused, setWindowFocused] = useState<boolean>(() =>
+    typeof document !== 'undefined' ? document.hasFocus() : true
+  );
+  useEffect(() => {
+    const onFocus = () => setWindowFocused(true);
+    const onBlur = () => setWindowFocused(false);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, []);
+
+  const shimmerActive =
+    aiShimmerEnabled !== false && isAnyAiSessionWaiting && !windowFocused;
 
   useKeybindings();
 
@@ -260,7 +293,7 @@ const App: React.FC = () => {
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div className={`app-shell tab-bar-${tabBarPosition}`}>
+      <div className={`app-shell tab-bar-${tabBarPosition}${shimmerActive ? ' shimmer-active' : ''}`}>
         {!hideTabBar && tabBarPosition === 'top' && <TopBar />}
         <div className="content-row">
           {!hideTabBar && tabBarPosition === 'left' && <TopBar vertical />}
