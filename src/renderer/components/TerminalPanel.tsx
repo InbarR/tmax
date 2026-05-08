@@ -2256,13 +2256,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   }, [latestPrompt]);
 
   // TASK-140: per-pane shimmer when this pane's AI session is waiting for
-  // the user (awaitingApproval / waitingForUser) AND the window is not
-  // focused. Reuses sessionStatus / aiSessionId derived above.
+  // the user (awaitingApproval / waitingForUser) AND the user isn't
+  // already looking at this pane. Suppress only when tmax is focused AND
+  // this is the focused pane - in any other case (window unfocused, or a
+  // sibling pane focused) the shimmer should call attention. Reuses
+  // sessionStatus / aiSessionId / isFocused derived above.
   const aiShimmerEnabled = useTerminalStore((s) => (s.config as any)?.aiShimmerEnabled);
   const windowFocused = useTerminalStore((s) => s.windowFocused);
+  const userIsHere = windowFocused && isFocused;
   const paneShimmer =
     aiShimmerEnabled !== false &&
-    !windowFocused &&
+    !userIsHere &&
     (sessionStatus === 'awaitingApproval' || sessionStatus === 'waitingForUser');
 
   const className = `terminal-panel${isFocused ? ' focused' : ''}${isMultiSelected ? ' multi-selected' : ''}${paneShimmer ? ' shimmer-pane' : ''}`;
