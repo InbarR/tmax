@@ -185,6 +185,8 @@ export class ClaudeCodeSessionMonitor {
     return this.sessions.get(id) ?? null;
   }
 
+  // TASK-131: match only on in-memory metadata; see copilot-session-monitor.ts
+  // for the full rationale (sync prompt-file reads froze the main process).
   searchSessions(query: string): CopilotSessionSummary[] {
     const q = query.toLowerCase();
     const results: CopilotSessionSummary[] = [];
@@ -194,15 +196,10 @@ export class ClaudeCodeSessionMonitor {
         summary.summary.toLowerCase().includes(q) ||
         summary.branch.toLowerCase().includes(q) ||
         summary.cwd.toLowerCase().includes(q) ||
+        (summary.latestPrompt?.toLowerCase().includes(q) ?? false) ||
         summary.id.toLowerCase().includes(q)
       ) {
         results.push(summary);
-      } else {
-        // Search through prompts
-        const prompts = this.getPrompts(summary.id);
-        if (prompts.some((p) => p.toLowerCase().includes(q))) {
-          results.push(summary);
-        }
       }
     }
 

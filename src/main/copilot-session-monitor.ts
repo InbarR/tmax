@@ -160,6 +160,11 @@ export class CopilotSessionMonitor {
     return summary;
   }
 
+  // TASK-131: match only on in-memory metadata. The previous fallback called
+  // getPrompts() for every non-matching session, doing sync events.jsonl reads
+  // on the main process — with hundreds of sessions that froze the UI for
+  // seconds on every keystroke. Prompt-text search needs a precomputed index
+  // (see TASK-97); until then, search is title/repo/branch/cwd/latestPrompt.
   searchSessions(query: string): CopilotSessionSummary[] {
     const q = query.toLowerCase();
     const results: CopilotSessionSummary[] = [];
@@ -171,15 +176,11 @@ export class CopilotSessionMonitor {
         workspace.branch.toLowerCase().includes(q) ||
         workspace.cwd.toLowerCase().includes(q) ||
         workspace.name.toLowerCase().includes(q) ||
+        (workspace.summary?.toLowerCase().includes(q) ?? false) ||
+        (session.latestPrompt?.toLowerCase().includes(q) ?? false) ||
         session.id.toLowerCase().includes(q)
       ) {
         results.push(this.toSummary(session));
-      } else {
-        // Search through prompts
-        const prompts = this.getPrompts(session.id);
-        if (prompts.some((p) => p.toLowerCase().includes(q))) {
-          results.push(this.toSummary(session));
-        }
       }
     }
 
