@@ -2671,6 +2671,28 @@ body.broadcast-on .terminal-panel {
   color: var(--text-secondary);
 }
 
+.prompt-search-input-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.prompt-search-input-row .switcher-input {
+  padding-right: 110px;
+}
+
+.prompt-search-count {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.75;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 .switcher-list {
   overflow-y: auto;
   flex: 1;

@@ -136,17 +136,31 @@ const PromptSearchDialog: React.FC = () => {
     return () => { cancelled = true; };
   }, [show]);
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return entries.slice(0, 200);
-    const q = query.toLowerCase();
-    return entries
-      .filter((e) =>
-        e.prompt.toLowerCase().includes(q) ||
-        e.paneTitle.toLowerCase().includes(q) ||
-        e.sessionFolder.toLowerCase().includes(q),
-      )
-      .slice(0, 200);
-  }, [entries, query]);
+  // Tokenize the query on whole-word case-insensitive 'AND' so users can
+  // narrow with multi-term queries (e.g. "auth AND token" matches prompts
+  // that mention both). A single-term query keeps the prior substring
+  // behavior. Empty operands are tolerated.
+  const tokens = useMemo(() => {
+    const raw = query.trim();
+    if (!raw) return [];
+    return raw
+      .split(/\bAND\b/i)
+      .map((t) => t.trim().toLowerCase())
+      .filter((t) => t.length > 0);
+  }, [query]);
+
+  const allMatches = useMemo(() => {
+    if (tokens.length === 0) return entries;
+    return entries.filter((e) => {
+      const haystack = `${e.prompt}\n${e.paneTitle}\n${e.sessionFolder}`.toLowerCase();
+      for (const t of tokens) {
+        if (!haystack.includes(t)) return false;
+      }
+      return true;
+    });
+  }, [entries, tokens]);
+
+  const filtered = useMemo(() => allMatches.slice(0, 200), [allMatches]);
 
   useEffect(() => {
     if (selectedIndex >= filtered.length) {
@@ -219,32 +233,64 @@ const PromptSearchDialog: React.FC = () => {
 
   if (!show) return null;
 
+  // Highlight each AND-separated token independently so the user can see
+  // which words actually matched. Falls back to the full query as a single
+  // span when no tokens (legacy substring path).
   const hl = (text: string): React.ReactNode => {
-    if (!query.trim()) return text;
-    const q = query.toLowerCase();
-    const idx = text.toLowerCase().indexOf(q);
-    if (idx < 0) return text;
-    return (
-      <>
-        {text.slice(0, idx)}
-        <mark className="prompt-search-mark">{text.slice(idx, idx + query.length)}</mark>
-        {text.slice(idx + query.length)}
-      </>
-    );
+    if (tokens.length === 0) return text;
+    const lower = text.toLowerCase();
+    type Span = { start: number; end: number };
+    const spans: Span[] = [];
+    for (const t of tokens) {
+      let from = 0;
+      while (from < text.length) {
+        const idx = lower.indexOf(t, from);
+        if (idx < 0) break;
+        spans.push({ start: idx, end: idx + t.length });
+        from = idx + t.length;
+      }
+    }
+    if (spans.length === 0) return text;
+    spans.sort((a, b) => a.start - b.start);
+    const merged: Span[] = [];
+    for (const s of spans) {
+      const last = merged[merged.length - 1];
+      if (last && s.start <= last.end) last.end = Math.max(last.end, s.end);
+      else merged.push({ ...s });
+    }
+    const out: React.ReactNode[] = [];
+    let cursor = 0;
+    merged.forEach((s, i) => {
+      if (s.start > cursor) out.push(text.slice(cursor, s.start));
+      out.push(<mark key={i} className="prompt-search-mark">{text.slice(s.start, s.end)}</mark>);
+      cursor = s.end;
+    });
+    if (cursor < text.length) out.push(text.slice(cursor));
+    return <>{out}</>;
   };
 
   return (
     <div className="switcher-backdrop" onClick={close}>
       <div className="switcher prompt-search" onClick={(e) => e.stopPropagation()}>
-        <input
-          ref={inputRef}
-          className="switcher-input"
-          type="text"
-          placeholder="Search your AI prompts to jump to that pane..."
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setSelectedIndex(0); }}
-          onKeyDown={handleKeyDown}
-        />
+        <div className="prompt-search-input-row">
+          <input
+            ref={inputRef}
+            className="switcher-input"
+            type="text"
+            placeholder="Search prompts (use AND to combine terms)..."
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setSelectedIndex(0); }}
+            onKeyDown={handleKeyDown}
+          />
+          {entries.length > 0 && (
+            <span className="prompt-search-count" aria-live="polite">
+              {allMatches.length === entries.length
+                ? `${entries.length}`
+                : `${allMatches.length} of ${entries.length}`}
+              {allMatches.length > filtered.length ? ` (showing ${filtered.length})` : ''}
+            </span>
+          )}
+        </div>
         <div className="switcher-list">
           {loading && entries.length === 0 && (
             <div className="switcher-empty">Loading prompts...</div>
