@@ -257,7 +257,10 @@ const CopilotPanel: React.FC = () => {
     const v = (config as any)?.aiSessionListSortMode;
     return v === 'time-desc' || v === 'time-asc' || v === 'activity' ? v : 'activity';
   })();
-  const groupOrder: GroupOrder = ((config as any)?.aiGroupByRepoOrder === 'alpha') ? 'alpha' : 'activity';
+  // Default group order is alphabetical - users scan the list by repo name
+  // more often than by group-recency. Within each group, sessions still sort
+  // by activity (sortSessions is unchanged below).
+  const groupOrder: GroupOrder = ((config as any)?.aiGroupByRepoOrder === 'activity') ? 'activity' : 'alpha';
   const cycleSortMode = () => {
     useTerminalStore.getState().updateConfig({ aiSessionListSortMode: SORT_MODE_CYCLE[sortMode] } as any);
   };
