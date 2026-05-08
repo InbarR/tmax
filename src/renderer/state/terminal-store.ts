@@ -669,6 +669,7 @@ interface TerminalStore {
   renamingTerminalId: TerminalId | null;
   viewMode: 'split' | 'focus' | 'grid';
   broadcastMode: boolean; // when true, typing in any pane is sent to all tiled panes
+  windowFocused: boolean; // mirrored from window focus/blur; gates the per-pane shimmer (TASK-140)
   gridColumns: number; // 0 = auto (sqrt-based), 1..N = fixed column count
   preGridRoot: LayoutNode | null; // saved layout before entering grid mode
   selectedTerminalIds: Record<TerminalId, true>;
@@ -1019,6 +1020,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   renamingTerminalId: null,
   viewMode: 'grid' as 'split' | 'focus' | 'grid',
   broadcastMode: false,
+  windowFocused: typeof document !== 'undefined' ? document.hasFocus() : true,
   gridColumns: 0,
   preGridRoot: null as LayoutNode | null,
   selectedTerminalIds: {} as Record<TerminalId, true>,

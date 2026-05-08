@@ -2255,7 +2255,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     runJumpToPromptSearch(search, term, text);
   }, [latestPrompt]);
 
-  const className = `terminal-panel${isFocused ? ' focused' : ''}${isMultiSelected ? ' multi-selected' : ''}`;
+  // TASK-140: per-pane shimmer when this pane's AI session is waiting for
+  // the user (awaitingApproval / waitingForUser) AND the window is not
+  // focused. Reuses sessionStatus / aiSessionId derived above.
+  const aiShimmerEnabled = useTerminalStore((s) => (s.config as any)?.aiShimmerEnabled);
+  const windowFocused = useTerminalStore((s) => s.windowFocused);
+  const paneShimmer =
+    aiShimmerEnabled !== false &&
+    !windowFocused &&
+    (sessionStatus === 'awaitingApproval' || sessionStatus === 'waitingForUser');
+
+  const className = `terminal-panel${isFocused ? ' focused' : ''}${isMultiSelected ? ' multi-selected' : ''}${paneShimmer ? ' shimmer-pane' : ''}`;
 
   return (
     <div
