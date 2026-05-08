@@ -79,6 +79,20 @@ export interface AppConfig {
    * no scan runs). Default 314. (TASK-102)
    */
   aiSessionLoadLimit?: number;
+  /**
+   * AI Sessions list sort mode. 'activity' (default) keeps the existing
+   * pinned-first/open-first/recency order, optionally grouped by repo.
+   * 'time-desc' / 'time-asc' flatten the list across repos and sort by
+   * lastActivityTime. Pinned sessions still float to the top. (TASK-135)
+   */
+  aiSessionListSortMode?: 'activity' | 'time-desc' | 'time-asc';
+  /**
+   * When AI Sessions are grouped by repo and sort mode is 'activity',
+   * controls whether group headers are ordered by their newest member
+   * ('activity', the default) or alphabetically by folder name
+   * ('alpha'). (TASK-135)
+   */
+  aiGroupByRepoOrder?: 'activity' | 'alpha';
 }
 
 function findPwsh(): string | null {

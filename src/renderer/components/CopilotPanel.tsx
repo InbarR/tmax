@@ -28,6 +28,23 @@ const STATUS_LABELS: Record<CopilotSessionStatus, string> = {
 
 type FilterTab = 'all' | 'copilot' | 'claude-code';
 type LifecycleTab = 'active' | 'completed' | 'old';
+type SortMode = 'activity' | 'time-desc' | 'time-asc';
+type GroupOrder = 'activity' | 'alpha';
+
+const SORT_MODE_LABEL: Record<SortMode, string> = {
+  activity: 'by activity',
+  'time-desc': 'newest first',
+  'time-asc': 'oldest first',
+};
+const SORT_MODE_CYCLE: Record<SortMode, SortMode> = {
+  activity: 'time-desc',
+  'time-desc': 'time-asc',
+  'time-asc': 'activity',
+};
+const GROUP_ORDER_LABEL: Record<GroupOrder, string> = {
+  activity: 'by activity',
+  alpha: 'alphabetical',
+};
 
 function isActiveStatus(status: CopilotSessionStatus): boolean {
   return status !== 'idle';
@@ -78,16 +95,23 @@ function sortSessions(
   sessions: CopilotSessionSummary[],
   openSessionIds: Set<string>,
   pinned: Record<string, true>,
+  sortMode: SortMode = 'activity',
 ): CopilotSessionSummary[] {
   return [...sessions].sort((a, b) => {
-    // Pinned sessions float to the top, then open-in-tmax, then by activity.
+    // Pinned sessions float to the top regardless of sort mode.
     const aPin = pinned[a.id] ? 1 : 0;
     const bPin = pinned[b.id] ? 1 : 0;
     if (aPin !== bPin) return bPin - aPin;
-    const aOpen = openSessionIds.has(a.id) ? 1 : 0;
-    const bOpen = openSessionIds.has(b.id) ? 1 : 0;
-    if (aOpen !== bOpen) return bOpen - aOpen;
-    return (b.lastActivityTime || 0) - (a.lastActivityTime || 0);
+    if (sortMode === 'activity') {
+      // Open-in-tmax beats stale; otherwise by recency.
+      const aOpen = openSessionIds.has(a.id) ? 1 : 0;
+      const bOpen = openSessionIds.has(b.id) ? 1 : 0;
+      if (aOpen !== bOpen) return bOpen - aOpen;
+      return (b.lastActivityTime || 0) - (a.lastActivityTime || 0);
+    }
+    const at = a.lastActivityTime || 0;
+    const bt = b.lastActivityTime || 0;
+    return sortMode === 'time-desc' ? bt - at : at - bt;
   });
 }
 
@@ -224,6 +248,22 @@ const CopilotPanel: React.FC = () => {
   // #69: Group sessions by cwd's folder name. Default on; persisted in config
   // so users who explicitly turn it off stay off across restarts.
   const groupByRepo = (config as any)?.aiGroupByRepo !== false;
+  // TASK-135: list-level sort mode + group-order, both persisted.
+  // sortMode: 'activity' (default - pinned/open/recency, optionally grouped),
+  //           'time-desc' / 'time-asc' (flat by lastActivityTime; pinned still float).
+  // groupOrder applies only when groupByRepo is on AND sortMode is 'activity':
+  //   'activity' (default) sorts groups by their newest member; 'alpha' sorts by name.
+  const sortMode: SortMode = (() => {
+    const v = (config as any)?.aiSessionListSortMode;
+    return v === 'time-desc' || v === 'time-asc' || v === 'activity' ? v : 'activity';
+  })();
+  const groupOrder: GroupOrder = ((config as any)?.aiGroupByRepoOrder === 'alpha') ? 'alpha' : 'activity';
+  const cycleSortMode = () => {
+    useTerminalStore.getState().updateConfig({ aiSessionListSortMode: SORT_MODE_CYCLE[sortMode] } as any);
+  };
+  const toggleGroupOrder = () => {
+    useTerminalStore.getState().updateConfig({ aiGroupByRepoOrder: groupOrder === 'alpha' ? 'activity' : 'alpha' } as any);
+  };
   // TASK-35: case-fold the grouping key so cwds that differ only in case
   // (e.g. C:\projects\ClawPilot vs ...\clawpilot - same Windows folder)
   // collapse into one group. Display name (rendered in the header) is
@@ -295,14 +335,19 @@ const CopilotPanel: React.FC = () => {
     const deduped = Array.from(byId.values());
     const lifecycleFiltered = deduped.filter((s) => getSessionLifecycle(s) === lifecycleTab);
 
-    return sortSessions(lifecycleFiltered, openSessionIds, pinnedSessions);
-  }, [copilotSessions, claudeCodeSessions, query, filterTab, showRunningOnly, summaryOverrides, lifecycleTab, getSessionLifecycle, openSessionIds, pinnedSessions]);
+    return sortSessions(lifecycleFiltered, openSessionIds, pinnedSessions, sortMode);
+  }, [copilotSessions, claudeCodeSessions, query, filterTab, showRunningOnly, summaryOverrides, lifecycleTab, getSessionLifecycle, openSessionIds, pinnedSessions, sortMode]);
 
   // #69: when groupByRepo is on, reorder filtered so sessions sharing a cwd
-  // folder are contiguous, and groups are sorted by the most-recent activity
-  // within each group. Sessions without a cwd go to "(no repo)" at the end.
+  // folder are contiguous. Group order depends on `groupOrder`:
+  //   - 'activity' (default): groups by their most-recent member.
+  //   - 'alpha': groups by case-insensitive group key.
+  // TASK-135: when sortMode is time-* the group reorder is bypassed entirely
+  // so the user gets a true cross-folder time list. Pinned still float (the
+  // PINNED pseudo-group is achieved through the pinned-first sort in
+  // sortSessions, not via groupByRepo).
   const displayList = useMemo(() => {
-    if (!groupByRepo) return filtered;
+    if (!groupByRepo || sortMode !== 'activity') return filtered;
     const groups = new Map<string, CopilotSessionSummary[]>();
     for (const s of filtered) {
       const key = effectiveRepoKey(s);
@@ -315,12 +360,13 @@ const CopilotPanel: React.FC = () => {
       if (bk === PINNED_GROUP_KEY) return 1;
       if (ak === '(no repo)') return 1;
       if (bk === '(no repo)') return -1;
+      if (groupOrder === 'alpha') return ak.localeCompare(bk);
       const aRecent = Math.max(...av.map((s) => s.lastActivityTime || 0));
       const bRecent = Math.max(...bv.map((s) => s.lastActivityTime || 0));
       return bRecent - aRecent;
     });
     return sortedGroups.flatMap(([, group]) => group);
-  }, [filtered, groupByRepo, pinnedSessions]);
+  }, [filtered, groupByRepo, pinnedSessions, sortMode, groupOrder]);
 
   // TASK-35: per-group display label (preserves original casing from the
   // first session encountered in each lowercase bucket).
@@ -715,7 +761,7 @@ const CopilotPanel: React.FC = () => {
       <div className="dir-panel-header">
         <span>✨ AI Sessions</span>
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center', position: 'relative' }}>
-          {groupByRepo && (() => {
+          {groupByRepo && sortMode === 'activity' && (() => {
             const allKeys = Array.from(groupSizes.keys());
             const allCollapsed = allKeys.length > 0 && allKeys.every((k) => collapsedGroups.has(k));
             const disabled = allKeys.length === 0;
@@ -786,6 +832,29 @@ const CopilotPanel: React.FC = () => {
                   <span style={{ display: 'inline-block', width: 16, color: groupByRepo ? 'var(--focus-border, #89b4fa)' : 'transparent' }}>✓</span>
                   Group by repo
                 </button>
+                {/* TASK-135: cycle sort mode (activity / newest / oldest).
+                    Stays open so the user can cycle without re-opening. */}
+                <button
+                  className="context-menu-item"
+                  onClick={() => { cycleSortMode(); }}
+                  title="Click to cycle: by activity -> newest first -> oldest first"
+                >
+                  <span style={{ display: 'inline-block', width: 16 }}>↕</span>
+                  Sort: {SORT_MODE_LABEL[sortMode]}
+                </button>
+                {/* TASK-135: alpha vs activity ordering for the group headers,
+                    only meaningful when grouping is on and sort mode is
+                    activity (time-sort flattens the list). */}
+                {groupByRepo && sortMode === 'activity' && (
+                  <button
+                    className="context-menu-item"
+                    onClick={() => { toggleGroupOrder(); }}
+                    title="Toggle group header order"
+                  >
+                    <span style={{ display: 'inline-block', width: 16 }}>↧</span>
+                    Group order: {GROUP_ORDER_LABEL[groupOrder]}
+                  </button>
+                )}
                 <button
                   className="context-menu-item"
                   onClick={() => { setShowRunningOnly((v) => !v); setHeaderMenuOpen(false); }}
@@ -956,8 +1025,11 @@ const CopilotPanel: React.FC = () => {
           const itemStyle = paneColor ? { borderLeft: `3px solid ${paneColor}` } : undefined;
           const currentRepo = effectiveRepoKey(session);
           const prevRepo = index > 0 ? effectiveRepoKey(displayList[index - 1]) : null;
-          const showGroupHeader = groupByRepo && currentRepo !== prevRepo;
-          const isCollapsed = groupByRepo && collapsedGroups.has(currentRepo);
+          // TASK-135: time-sort mode produces a flat cross-folder list; no
+          // group headers / collapse should render even if groupByRepo is on.
+          const groupingActive = groupByRepo && sortMode === 'activity';
+          const showGroupHeader = groupingActive && currentRepo !== prevRepo;
+          const isCollapsed = groupingActive && collapsedGroups.has(currentRepo);
           const headerLabel = groupDisplayNames.get(currentRepo) || currentRepo;
           const isPaneActive = activePaneSessionId === session.id;
 
