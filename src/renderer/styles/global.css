@@ -5567,10 +5567,13 @@ select.settings-input {
   inset: 0;
   pointer-events: none;
   z-index: 9999;
-  border: 2px solid var(--focus-border, #89b4fa);
+  /* Outer glow gets clipped by .terminal-panel's overflow:hidden, so all
+     the visual weight sits inside: thicker accent border + a strong inset
+     glow that fades the inner edge, producing a clearly visible pulse. */
+  border: 3px solid var(--focus-border, #89b4fa);
   border-radius: inherit;
-  box-shadow: 0 0 18px var(--focus-border, #89b4fa),
-              inset 0 0 22px rgba(137, 180, 250, 0.45);
+  box-shadow: inset 0 0 36px rgba(137, 180, 250, 0.7),
+              inset 0 0 0 1px rgba(137, 180, 250, 0.9);
   animation: ai-shimmer-pulse 2.4s ease-in-out infinite;
   opacity: 0;
 }
