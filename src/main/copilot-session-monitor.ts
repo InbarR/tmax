@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { parseSessionEvents, clearParserCache, extractCopilotPrompts } from './copilot-events-parser';
 import { CopilotSessionDB, sessionRowToSummary } from './copilot-session-db';
+import { tokenizeAnd, matchesAllTokens } from '../shared/and-filter';
 import type {
   CopilotSession,
   CopilotSessionSummary,
@@ -322,21 +323,24 @@ export class CopilotSessionMonitor {
       }
     }
 
-    // Fallback: in-memory search of loaded sessions only
-    const q = query.toLowerCase();
+    // Fallback: in-memory search of loaded sessions only. Use shared AND
+    // tokenizer so 'foo AND bar' matches sessions containing both substrings.
+    const tokens = tokenizeAnd(query);
+    if (tokens.length === 0) return [];
     const results: CopilotSessionSummary[] = [];
 
     for (const [, session] of this.sessions) {
       const { workspace } = session;
-      if (
-        workspace.repository.toLowerCase().includes(q) ||
-        workspace.branch.toLowerCase().includes(q) ||
-        workspace.cwd.toLowerCase().includes(q) ||
-        workspace.name.toLowerCase().includes(q) ||
-        (workspace.summary?.toLowerCase().includes(q) ?? false) ||
-        (session.latestPrompt?.toLowerCase().includes(q) ?? false) ||
-        session.id.toLowerCase().includes(q)
-      ) {
+      const haystack = [
+        workspace.repository,
+        workspace.branch,
+        workspace.cwd,
+        workspace.name,
+        workspace.summary ?? '',
+        session.latestPrompt ?? '',
+        session.id,
+      ].join('\n').toLowerCase();
+      if (matchesAllTokens(haystack, tokens)) {
         results.push(this.toSummary(session));
       }
     }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useTerminalStore } from '../state/terminal-store';
-import { tokenizeAnd, matchesAllTokens } from '../utils/and-filter';
+import { tokenizeAnd, matchesAllTokens } from '../../shared/and-filter';
 import MarkdownPreview from './MarkdownPreview';
 import ZoomControls from './ZoomControls';
 import { useZoom } from '../hooks/useZoom';

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
-import { tokenizeAnd, matchesAllTokens } from '../utils/and-filter';
+import { tokenizeAnd, matchesAllTokens } from '../../shared/and-filter';
 import type {
   DiffMode,
   DiffFile,

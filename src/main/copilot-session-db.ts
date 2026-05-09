@@ -137,29 +137,44 @@ export class CopilotSessionDB {
     if (!this.db || !query.trim()) return null;
 
     try {
-      // If the query contains FTS5 boolean operators (AND/OR/NOT), pass it
-      // through as-is so users can do structured searches. Otherwise, wrap
-      // each word in double-quotes so special chars like #, (, ) don't cause
-      // FTS5 syntax errors. Words are implicitly ANDed by FTS5.
+      // FTS5 query construction. Two priorities:
+      //  1) Prefix matching - 'refre' should hit 'refresh' the way a "filter
+      //     as you type" UX expects. Bare terms like `term*` are FTS5's prefix
+      //     operator; quoted terms like "term" are exact-word phrases and
+      //     would silently miss partial matches (the bug from the AI session
+      //     search where `add AND refre` returned nothing).
+      //  2) Special-char tolerance - punctuation like #, (, ), :, /, etc.
+      //     would cause FTS5 syntax errors if passed bare. We sanitize each
+      //     token by stripping non-token chars; if nothing safe is left we
+      //     drop that token. Always emit `token*` for prefix matching.
+      // AND/OR/NOT operators are preserved in the user's casing-insensitive
+      // form so structured searches like `auth AND fail OR retry` still work.
       const hasOperators = /\b(AND|OR|NOT)\b/.test(query);
+      const sanitizeToPrefix = (raw: string): string => {
+        const cleaned = raw.replace(/[^A-Za-z0-9_\-]+/g, ' ').trim();
+        if (!cleaned) return '';
+        // Multiple words inside one segment? Each becomes its own prefix term;
+        // implicit AND between them keeps the existing semantics.
+        return cleaned.split(/\s+/).map((w) => `${w}*`).join(' ');
+      };
       let ftsQuery: string;
       if (hasOperators) {
-        // Wrap each non-operator token in quotes, keep operators bare
         const parts = query
-          .split(/\b(AND|OR|NOT)\b/)
-          .map(part => /^(AND|OR|NOT)$/.test(part.trim()) ? part.trim() : '"' + part.trim().replace(/"/g, ' ') + '"')
-          .filter(p => p && p !== '""');
-        // Strip trailing/leading operators (user still typing)
+          .split(/\b(AND|OR|NOT)\b/i)
+          .map((part) =>
+            /^(AND|OR|NOT)$/i.test(part.trim())
+              ? part.trim().toUpperCase()
+              : sanitizeToPrefix(part),
+          )
+          .filter((p) => p.length > 0);
+        // Strip trailing/leading operators (user still typing).
         while (parts.length > 0 && /^(AND|OR|NOT)$/.test(parts[parts.length - 1])) parts.pop();
         while (parts.length > 0 && /^(AND|OR|NOT)$/.test(parts[0])) parts.shift();
         ftsQuery = parts.join(' ');
       } else {
-        // Wrap each word individually in quotes (implicit AND)
-        ftsQuery = query
-          .split(/\s+/)
-          .filter(w => w.length > 0)
-          .map(w => '"' + w.replace(/"/g, '') + '"')
-          .join(' ');
+        // No operators - sanitize the whole query into space-separated prefix
+        // terms (implicit AND between them).
+        ftsQuery = sanitizeToPrefix(query);
       }
       if (!ftsQuery.trim()) return null;
 

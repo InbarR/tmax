@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
-import { tokenizeAnd, matchesAllTokens } from '../utils/and-filter';
+import { tokenizeAnd, matchesAllTokens } from '../../shared/and-filter';
 import type { CopilotSessionSummary } from '../../shared/copilot-types';
 
 interface SearchEntry {

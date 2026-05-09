@@ -4,7 +4,7 @@ import { useTerminalStore } from '../state/terminal-store';
 import { getTerminalEntry } from '../terminal-registry';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { renderWithMdLinks } from '../utils/md-link-parser';
-import { tokenizeAnd, matchesAllTokens } from '../utils/and-filter';
+import { tokenizeAnd, matchesAllTokens } from '../../shared/and-filter';
 import type { CopilotSessionSummary, CopilotSessionStatus, SessionProvider, SessionLifecycle } from '../../shared/copilot-types';
 
 const MIN_WIDTH = 180;

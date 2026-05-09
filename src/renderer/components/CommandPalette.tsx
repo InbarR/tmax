@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 import { formatKeyForPlatform } from '../utils/platform';
-import { tokenizeAnd, matchesAllTokens } from '../utils/and-filter';
+import { tokenizeAnd, matchesAllTokens } from '../../shared/and-filter';
 import InputDialog from './InputDialog';
 import { confirmDialog } from './AppDialog';
 

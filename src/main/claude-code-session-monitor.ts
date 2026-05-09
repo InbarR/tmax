@@ -7,6 +7,7 @@ import {
   extractClaudeCodePrompts,
 } from './claude-code-events-parser';
 import type { CopilotSessionSummary } from '../shared/copilot-types';
+import { tokenizeAnd, matchesAllTokens } from '../shared/and-filter';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/i;
@@ -187,18 +188,22 @@ export class ClaudeCodeSessionMonitor {
 
   // TASK-131: match only on in-memory metadata; see copilot-session-monitor.ts
   // for the full rationale (sync prompt-file reads froze the main process).
+  // TASK-147: support 'foo AND bar' tokenization so the user-facing search
+  // honors the same syntax as every other filter box in the app.
   searchSessions(query: string): CopilotSessionSummary[] {
-    const q = query.toLowerCase();
+    const tokens = tokenizeAnd(query);
+    if (tokens.length === 0) return [];
     const results: CopilotSessionSummary[] = [];
 
     for (const [, summary] of this.sessions) {
-      if (
-        summary.summary.toLowerCase().includes(q) ||
-        summary.branch.toLowerCase().includes(q) ||
-        summary.cwd.toLowerCase().includes(q) ||
-        (summary.latestPrompt?.toLowerCase().includes(q) ?? false) ||
-        summary.id.toLowerCase().includes(q)
-      ) {
+      const haystack = [
+        summary.summary,
+        summary.branch,
+        summary.cwd,
+        summary.latestPrompt ?? '',
+        summary.id,
+      ].join('\n').toLowerCase();
+      if (matchesAllTokens(haystack, tokens)) {
         results.push(summary);
       }
     }
