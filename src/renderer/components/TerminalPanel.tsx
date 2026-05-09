@@ -2497,16 +2497,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
                 }}
               >
                 {isFloating ? (
-                  // Restore: arrow pointing into the bottom-left corner of a frame
-                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2.5" y="2.5" width="9" height="9" rx="1" />
-                    <path d="M9.5 4.5 L5.5 8.5 M5.5 8.5 L8 8.5 M5.5 8.5 L5.5 6" />
+                  // Restore: diagonal arrows pointing inward toward the center.
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="13,5 9,5 9,1" />
+                    <line x1="13" y1="1" x2="9" y2="5" />
+                    <polyline points="1,9 5,9 5,13" />
+                    <line x1="1" y1="13" x2="5" y2="9" />
                   </svg>
                 ) : (
-                  // Float: arrow leaving a frame's top-right corner (pop out)
-                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2.5" y="3.5" width="8" height="8" rx="1" />
-                    <path d="M7.5 6.5 L11.5 2.5 M11.5 2.5 L9 2.5 M11.5 2.5 L11.5 5" />
+                  // Float: diagonal arrows pointing outward to the corners.
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9,1 13,1 13,5" />
+                    <line x1="13" y1="1" x2="9" y2="5" />
+                    <polyline points="5,13 1,13 1,9" />
+                    <line x1="1" y1="13" x2="5" y2="9" />
                   </svg>
                 )}
               </button>

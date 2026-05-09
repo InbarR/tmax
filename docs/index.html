@@ -609,6 +609,64 @@
     .sec-marker .sm-prompt { color: var(--green); margin-right: 6px; opacity: 0.9; }
     .sec-marker .sm-cmd { color: var(--fg); }
 
+    /* npm install option below the primary download */
+    .npm-install {
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px dashed var(--border);
+    }
+    .npm-label {
+      color: var(--fg2);
+      font-size: 13px;
+      margin-bottom: 8px;
+      text-align: center;
+      font-family: var(--mono);
+    }
+    .npm-cmd {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 12px 14px;
+      background: #050505;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--fg);
+      font-family: var(--mono);
+      font-size: 14px;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .npm-cmd:hover { border-color: var(--green); background: #0a0a0a; }
+    .npm-cmd .npm-prompt { color: var(--green); flex-shrink: 0; }
+    .npm-cmd .npm-text { flex: 1; }
+    .npm-cmd .npm-copy {
+      flex-shrink: 0;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      color: var(--fg2);
+      padding: 2px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .npm-cmd:hover .npm-copy { color: var(--green); border-color: rgba(74,222,128,0.4); }
+    .npm-cmd.copied .npm-copy { color: var(--green); border-color: rgba(74,222,128,0.6); }
+    .npm-after {
+      color: var(--fg2);
+      font-size: 12px;
+      margin-top: 8px;
+      text-align: center;
+      font-family: var(--mono);
+    }
+    .npm-after code {
+      background: rgba(255,255,255,0.06);
+      padding: 1px 6px;
+      border-radius: 3px;
+      color: var(--fg);
+    }
+
     /* Restyled primary download as terminal command */
     .download-btn {
       font-family: var(--mono);
@@ -748,6 +806,15 @@
   <div class="download-other">
     <p>Other platforms:</p>
     <div class="download-grid" id="other-downloads"></div>
+  </div>
+  <div class="npm-install" id="npm-install">
+    <div class="npm-label">Or install via npm:</div>
+    <button class="npm-cmd" id="npm-cmd-btn" title="Copy to clipboard">
+      <span class="npm-prompt">$</span>
+      <span class="npm-text">npm install -g tmax-terminal</span>
+      <span class="npm-copy" id="npm-copy-label">copy</span>
+    </button>
+    <div class="npm-after">Then run <code>tmax</code> from any terminal.</div>
   </div>
 </div>
 
@@ -1100,6 +1167,37 @@ loadRelease().then(() => {
   if (btn) btn.href = mailto;
   if (footer) footer.href = mailto;
 });
+
+// npm install command - copy to clipboard with feedback.
+(function initNpmCopy() {
+  const btn = document.getElementById('npm-cmd-btn');
+  const label = document.getElementById('npm-copy-label');
+  if (!btn || !label) return;
+  btn.addEventListener('click', async () => {
+    const cmd = 'npm install -g tmax-terminal';
+    try {
+      await navigator.clipboard.writeText(cmd);
+    } catch {
+      // Fallback for older / non-secure contexts.
+      const ta = document.createElement('textarea');
+      ta.value = cmd;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (_) {}
+      document.body.removeChild(ta);
+    }
+    btn.classList.add('copied');
+    label.textContent = 'copied!';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      label.textContent = 'copy';
+    }, 1600);
+    if (window.goatcounter && typeof window.goatcounter.count === 'function') {
+      window.goatcounter.count({ path: 'dl-npm', title: 'Copy npm install command', event: true });
+    }
+  });
+})();
 
 // Hero terminal typewriter. Types `tmax --help`, then prints the help body
 // line by line, then drops to a fresh prompt with the blinking cursor.

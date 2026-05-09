@@ -82,14 +82,20 @@
     <button class="filter-btn active" id="timelineStack-release">Release</button>
     <button class="filter-btn" id="timelineStack-platform">Platform</button>
   </div>
-  <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;">
+  <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;flex-wrap:wrap;">
     <span style="color:var(--dim);font-size:12px;">Group by:</span>
     <button class="filter-btn" id="timelineInterval-all">All snapshots</button>
     <button class="filter-btn" id="timelineInterval-hour">Hour</button>
     <button class="filter-btn active" id="timelineInterval-day">Day</button>
     <button class="filter-btn" id="timelineInterval-week">Week</button>
+    <span id="timelineZoomBadge" style="display:none;color:var(--dim);font-size:12px;margin-left:auto;">Zoomed: <span id="timelineZoomRange"></span></span>
+    <button class="filter-btn" id="timelineZoomReset" style="display:none;">Reset zoom</button>
   </div>
-  <div class="chart-container"><canvas id="timelineChart"></canvas></div>
+  <div class="chart-container" style="user-select:none;">
+    <canvas id="timelineChart"></canvas>
+    <div id="timelineDragOverlay" style="position:absolute;top:0;bottom:0;background:rgba(137,180,250,0.18);border-left:1px dashed rgba(137,180,250,0.7);border-right:1px dashed rgba(137,180,250,0.7);pointer-events:none;display:none;"></div>
+  </div>
+  <div style="color:var(--dim);font-size:11px;margin-top:4px;">Tip: drag horizontally on the chart to zoom into a range. Click a single bar to inspect.</div>
   <div style="color:var(--dim);font-size:12px;margin-top:8px;" id="timelineNote">Loading...</div>
   <div id="timelineDiff" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(249,226,175,0.08);border:1px solid rgba(249,226,175,0.3);border-radius:6px;font-size:13px;"></div>
 </div>
@@ -294,6 +300,9 @@ function bucketSnapshots(snapshots, interval) {
 let selectedBarIndices = [];
 // Populated each render so the click handler can hit-test.
 let lastBarGeometry = []; // [{ index, x, w, total, t }]
+// Drag-to-zoom: when set, only snapshots within [start, end] (epoch ms) are
+// rendered. Cleared by the Reset zoom button.
+let timelineZoom = null;
 
 async function loadTimeline() {
   try {
@@ -323,9 +332,18 @@ function renderTimeline() {
   const W = rect.width, H = rect.height;
   ctx.clearRect(0, 0, W, H);
 
+  // Drag-to-zoom: filter the snapshot history to the selected window before
+  // bucketing. The zoom range is in raw timestamps so resampling at a finer
+  // interval (Hour vs Day) just rebuckets the same window.
+  const zoomedHistory = timelineZoom
+    ? timelineHistory.filter((s) => {
+        const t = new Date(s.t).getTime();
+        return t >= timelineZoom.start && t <= timelineZoom.end;
+      })
+    : timelineHistory;
   // Bucket snapshots by selected interval before aggregating so the chart
   // shows one column per bucket (e.g. one bar per day).
-  const bucketed = bucketSnapshots(timelineHistory, timelineInterval);
+  const bucketed = bucketSnapshots(zoomedHistory, timelineInterval);
 
   // Sum INSTALL downloads per snapshot per stacking-key. Excludes:
   //  - RELEASES / RELEASES-x64 / RELEASES-arm64 metadata files
@@ -567,23 +585,124 @@ function renderDiff() {
   `;
 }
 
-(function initTimelineClicks() {
+(function initTimelineInteraction() {
   const canvas = document.getElementById('timelineChart');
+  const overlay = document.getElementById('timelineDragOverlay');
+  const container = canvas.parentElement;
   canvas.style.cursor = 'crosshair';
-  canvas.addEventListener('click', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-    // Find the bar whose horizontal span contains the click.
-    const hit = lastBarGeometry.find((g) => cx >= g.x - 4 && cx <= g.x + g.w + 4);
-    if (!hit || cy < 10) return;
-    const i = hit.index;
-    if (selectedBarIndices.includes(i)) {
-      selectedBarIndices = selectedBarIndices.filter((x) => x !== i);
-    } else {
-      selectedBarIndices.push(i);
-      if (selectedBarIndices.length > 2) selectedBarIndices.shift();
+
+  // Drag state. We treat any pointerdown→pointermove→pointerup with > DRAG_THRESHOLD
+  // px of horizontal travel as a zoom drag; anything under that is a bar click.
+  const DRAG_THRESHOLD = 5;
+  let dragStartX = null;
+  let dragMoved = false;
+
+  function localX(e) {
+    const r = canvas.getBoundingClientRect();
+    return e.clientX - r.left;
+  }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    dragStartX = localX(e);
+    dragMoved = false;
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (dragStartX === null) return;
+    const x = localX(e);
+    if (Math.abs(x - dragStartX) > DRAG_THRESHOLD) dragMoved = true;
+    if (dragMoved) {
+      const cRect = container.getBoundingClientRect();
+      const canvasRect = canvas.getBoundingClientRect();
+      const offset = canvasRect.left - cRect.left;
+      const x1 = Math.min(dragStartX, x), x2 = Math.max(dragStartX, x);
+      overlay.style.display = 'block';
+      overlay.style.left = (offset + x1) + 'px';
+      overlay.style.width = (x2 - x1) + 'px';
     }
+  });
+  canvas.addEventListener('pointerup', (e) => {
+    if (dragStartX === null) return;
+    const endX = localX(e);
+    overlay.style.display = 'none';
+    try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+
+    if (dragMoved && lastBarGeometry.length) {
+      // Map the dragged x range to a snapshot time range. Use the centers of
+      // the bars whose midpoints fall inside the drag rectangle; if none
+      // (e.g. drag entirely between two bars), fall back to the closest bars.
+      const x1 = Math.min(dragStartX, endX), x2 = Math.max(dragStartX, endX);
+      const inside = lastBarGeometry.filter((g) => {
+        const mid = g.x + g.w / 2;
+        return mid >= x1 && mid <= x2;
+      });
+      const range = inside.length >= 1
+        ? [inside[0].t, inside[inside.length - 1].t]
+        : [
+            lastBarGeometry.reduce((best, g) =>
+              Math.abs((g.x + g.w / 2) - x1) < Math.abs((best.x + best.w / 2) - x1) ? g : best,
+              lastBarGeometry[0]).t,
+            lastBarGeometry.reduce((best, g) =>
+              Math.abs((g.x + g.w / 2) - x2) < Math.abs((best.x + best.w / 2) - x2) ? g : best,
+              lastBarGeometry[0]).t,
+          ];
+      // Pad the window slightly so bars at the edges aren't clipped by
+      // bucket-boundary rounding.
+      const pad = Math.max(1, Math.round((range[1] - range[0]) * 0.01));
+      timelineZoom = { start: range[0] - pad, end: range[1] + pad };
+      selectedBarIndices = [];
+      updateZoomBadge();
+      renderTimeline();
+      renderDiff();
+    } else {
+      // Click → bar select (existing behavior).
+      const cy = e.clientY - canvas.getBoundingClientRect().top;
+      const hit = lastBarGeometry.find((g) => endX >= g.x - 4 && endX <= g.x + g.w + 4);
+      if (hit && cy >= 10) {
+        const i = hit.index;
+        if (selectedBarIndices.includes(i)) {
+          selectedBarIndices = selectedBarIndices.filter((x) => x !== i);
+        } else {
+          selectedBarIndices.push(i);
+          if (selectedBarIndices.length > 2) selectedBarIndices.shift();
+        }
+        renderTimeline();
+        renderDiff();
+      }
+    }
+    dragStartX = null;
+    dragMoved = false;
+  });
+  canvas.addEventListener('pointercancel', () => {
+    overlay.style.display = 'none';
+    dragStartX = null;
+    dragMoved = false;
+  });
+
+  function updateZoomBadge() {
+    const badge = document.getElementById('timelineZoomBadge');
+    const reset = document.getElementById('timelineZoomReset');
+    const range = document.getElementById('timelineZoomRange');
+    if (timelineZoom) {
+      const fmt = (ts) => {
+        const d = new Date(ts);
+        return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+      };
+      range.textContent = `${fmt(timelineZoom.start)} → ${fmt(timelineZoom.end)}`;
+      badge.style.display = '';
+      reset.style.display = '';
+    } else {
+      badge.style.display = 'none';
+      reset.style.display = 'none';
+    }
+  }
+
+  document.getElementById('timelineZoomReset').addEventListener('click', () => {
+    timelineZoom = null;
+    selectedBarIndices = [];
+    updateZoomBadge();
     renderTimeline();
     renderDiff();
   });
