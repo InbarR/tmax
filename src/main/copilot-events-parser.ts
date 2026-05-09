@@ -126,7 +126,11 @@ function processEvent(raw: Record<string, unknown>, state: ParserCache): void {
       state.status = 'thinking';
       break;
     case 'assistant.turn_end':
-      state.status = 'idle';
+      // Assistant finished its turn - the next move is the user's. Mark as
+      // waitingForUser (mirroring Claude Code's end_turn handling) so the
+      // pane status dot and the AI shimmer reflect that this session is
+      // ready for input. Goes back to 'thinking' on the next user.message.
+      state.status = 'waitingForUser';
       break;
     case 'user.message': {
       state.messageCount++;

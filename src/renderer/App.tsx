@@ -64,13 +64,19 @@ const App: React.FC = () => {
   // TASK-140: keep the global windowFocused flag in sync with OS focus.
   // Per-pane shimmer logic lives in TerminalPanel and reads this flag.
   useEffect(() => {
+    const sync = () => useTerminalStore.setState({ windowFocused: document.hasFocus() });
+    // Re-read on mount in case the store's module-load value was stale (the
+    // window may have gained focus before this effect attached its listeners).
+    sync();
     const onFocus = () => useTerminalStore.setState({ windowFocused: true });
     const onBlur = () => useTerminalStore.setState({ windowFocused: false });
     window.addEventListener('focus', onFocus);
     window.addEventListener('blur', onBlur);
+    document.addEventListener('visibilitychange', sync);
     return () => {
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', sync);
     };
   }, []);
 

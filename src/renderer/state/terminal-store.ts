@@ -670,6 +670,11 @@ interface TerminalStore {
   viewMode: 'split' | 'focus' | 'grid';
   broadcastMode: boolean; // when true, typing in any pane is sent to all tiled panes
   windowFocused: boolean; // mirrored from window focus/blur; gates the per-pane shimmer (TASK-140)
+  // Set of AI session IDs the user has acknowledged in their current waiting
+  // state - the user focused the pane while it was waitingForUser /
+  // awaitingApproval, so further shimmers are suppressed until the AI moves
+  // off the waiting state and re-enters it (a fresh "needs attention" event).
+  acknowledgedWaitingSessions: Record<string, true>;
   gridColumns: number; // 0 = auto (sqrt-based), 1..N = fixed column count
   preGridRoot: LayoutNode | null; // saved layout before entering grid mode
   selectedTerminalIds: Record<TerminalId, true>;
@@ -886,6 +891,7 @@ interface TerminalStore {
   searchCopilotSessions: (query: string) => Promise<void>;
   openCopilotSession: (sessionId: string) => Promise<void>;
   setCopilotSessions: (sessions: CopilotSessionSummary[]) => void;
+  acknowledgeWaitingSession: (sessionId: string) => void;
   updateTerminalTitleFromSession: (session: CopilotSessionSummary, sessionType?: 'copilot' | 'claude') => void;
   addCopilotSession: (session: CopilotSessionSummary) => void;
   updateCopilotSession: (session: CopilotSessionSummary) => void;
@@ -1021,6 +1027,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   viewMode: 'grid' as 'split' | 'focus' | 'grid',
   broadcastMode: false,
   windowFocused: typeof document !== 'undefined' ? document.hasFocus() : true,
+  acknowledgedWaitingSessions: {},
   gridColumns: 0,
   preGridRoot: null as LayoutNode | null,
   selectedTerminalIds: {} as Record<TerminalId, true>,
@@ -3409,6 +3416,11 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     await openAiSession(sessionId, 'copilot', get, set);
   },
 
+  acknowledgeWaitingSession: (sessionId: string) => {
+    if (get().acknowledgedWaitingSessions[sessionId]) return;
+    set((s) => ({ acknowledgedWaitingSessions: { ...s.acknowledgedWaitingSessions, [sessionId]: true } }));
+  },
+
   setCopilotSessions: (sessions: CopilotSessionSummary[]) => {
     set({ copilotSessions: sessions });
   },
@@ -3577,16 +3589,29 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   updateCopilotSession: (session: CopilotSessionSummary) => {
     const oldSession = get().copilotSessions.find((x) => x.id === session.id);
-    set((s) => ({
-      // Upsert: a session-updated IPC event can land before the matching
-      // session-added (e.g. an in-flight loadCopilotSessions response races
-      // with a fresh prompt's onSessionUpdated). A plain `.map` would drop
-      // the update silently and leave the last-prompt bar showing stale
-      // text - TASK-59. Filter+append matches addCopilotSession's shape.
-      copilotSessions: oldSession
-        ? s.copilotSessions.map((x) => (x.id === session.id ? session : x))
-        : [...s.copilotSessions, session],
-    }));
+    set((s) => {
+      const next: Partial<TerminalStore> = {
+        // Upsert: a session-updated IPC event can land before the matching
+        // session-added (e.g. an in-flight loadCopilotSessions response races
+        // with a fresh prompt's onSessionUpdated). A plain `.map` would drop
+        // the update silently and leave the last-prompt bar showing stale
+        // text - TASK-59. Filter+append matches addCopilotSession's shape.
+        copilotSessions: oldSession
+          ? s.copilotSessions.map((x) => (x.id === session.id ? session : x))
+          : [...s.copilotSessions, session],
+      };
+      // When a session leaves a waiting state, drop any ack so the next
+      // waiting episode produces a fresh shimmer (TASK-140 follow-up).
+      if (
+        s.acknowledgedWaitingSessions[session.id] &&
+        session.status !== 'waitingForUser' &&
+        session.status !== 'awaitingApproval'
+      ) {
+        const { [session.id]: _drop, ...rest } = s.acknowledgedWaitingSessions;
+        next.acknowledgedWaitingSessions = rest;
+      }
+      return next as TerminalStore;
+    });
     get().updateTerminalTitleFromSession(session, 'copilot');
     // Auto-reactivate only if session has a linked terminal in tmax
     const lifecycle = get().sessionLifecycleOverrides[session.id];
@@ -3646,15 +3671,26 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   updateClaudeCodeSession: (session: CopilotSessionSummary) => {
     const oldSession = get().claudeCodeSessions.find((x) => x.id === session.id);
-    set((s) => ({
-      // Upsert: see updateCopilotSession for the race that motivates this
-      // (TASK-59). A `.map` over a fresh array silently drops updates for
-      // sessions that haven't been added yet, leaving the per-pane last-
-      // prompt bar wedged on whatever was loaded at startup.
-      claudeCodeSessions: oldSession
-        ? s.claudeCodeSessions.map((x) => (x.id === session.id ? session : x))
-        : [...s.claudeCodeSessions, session],
-    }));
+    set((s) => {
+      const next: Partial<TerminalStore> = {
+        // Upsert: see updateCopilotSession for the race that motivates this
+        // (TASK-59). A `.map` over a fresh array silently drops updates for
+        // sessions that haven't been added yet, leaving the per-pane last-
+        // prompt bar wedged on whatever was loaded at startup.
+        claudeCodeSessions: oldSession
+          ? s.claudeCodeSessions.map((x) => (x.id === session.id ? session : x))
+          : [...s.claudeCodeSessions, session],
+      };
+      if (
+        s.acknowledgedWaitingSessions[session.id] &&
+        session.status !== 'waitingForUser' &&
+        session.status !== 'awaitingApproval'
+      ) {
+        const { [session.id]: _drop, ...rest } = s.acknowledgedWaitingSessions;
+        next.acknowledgedWaitingSessions = rest;
+      }
+      return next as TerminalStore;
+    });
     get().updateTerminalTitleFromSession(session, 'claude');
     // Auto-reactivate only if session has a linked terminal in tmax
     const lifecycle = get().sessionLifecycleOverrides[session.id];

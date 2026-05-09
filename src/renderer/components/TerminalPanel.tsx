@@ -263,6 +263,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   const handleFocus = useCallback(() => {
     const prevFocused = useTerminalStore.getState().focusedTerminalId;
     useTerminalStore.getState().setFocus(terminalId);
+    // A user click reaching this pane means the tmax window has OS focus,
+    // even if the window-level 'focus' event was lost (e.g. after restoring
+    // a minimized window or coming back from a different desktop). Without
+    // this reassert, `windowFocused` could stay stuck at false and the
+    // per-pane AI shimmer would never clear (TASK-140 follow-up).
+    if (!useTerminalStore.getState().windowFocused) {
+      useTerminalStore.setState({ windowFocused: true });
+    }
     diagRef.current.focusEventCount++;
     diagRef.current.lastFocusTime = Date.now();
     window.terminalAPI.diagLog('renderer:focus-gained', { terminalId });
@@ -2263,11 +2271,27 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   // sessionStatus / aiSessionId / isFocused derived above.
   const aiShimmerEnabled = useTerminalStore((s) => (s.config as any)?.aiShimmerEnabled);
   const windowFocused = useTerminalStore((s) => s.windowFocused);
+  const sessionAcknowledged = useTerminalStore((s) =>
+    aiSessionId ? !!s.acknowledgedWaitingSessions[aiSessionId] : false,
+  );
   const userIsHere = windowFocused && isFocused;
+  const isWaitingState =
+    sessionStatus === 'awaitingApproval' || sessionStatus === 'waitingForUser';
+  // Once the user lands on a waiting pane, mark the session as acknowledged
+  // so leaving for another pane (or another window) doesn't re-trigger the
+  // shimmer for the same waiting episode. The ack is cleared in the store
+  // when the session leaves the waiting state, so the next "needs attention"
+  // moment fires a fresh shimmer.
+  useEffect(() => {
+    if (userIsHere && isWaitingState && aiSessionId && !sessionAcknowledged) {
+      useTerminalStore.getState().acknowledgeWaitingSession(aiSessionId);
+    }
+  }, [userIsHere, isWaitingState, aiSessionId, sessionAcknowledged]);
   const paneShimmer =
     aiShimmerEnabled !== false &&
     !userIsHere &&
-    (sessionStatus === 'awaitingApproval' || sessionStatus === 'waitingForUser');
+    !sessionAcknowledged &&
+    isWaitingState;
 
   const className = `terminal-panel${isFocused ? ' focused' : ''}${isMultiSelected ? ' multi-selected' : ''}${paneShimmer ? ' shimmer-pane' : ''}`;
 
