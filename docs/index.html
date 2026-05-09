@@ -23,7 +23,10 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
+      background:
+        radial-gradient(1200px 600px at 50% -100px, rgba(96,165,250,0.08), transparent 60%),
+        radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0) 0 0 / 24px 24px,
+        var(--bg);
       color: var(--fg);
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
@@ -37,21 +40,77 @@
       max-width: 820px;
       margin: 0 auto;
     }
-    .hero img { width: 80px; margin-bottom: 12px; }
+    .hero img { width: 80px; margin-bottom: 12px; position: relative; z-index: 1; }
+    .logo-wrap {
+      position: relative;
+      display: inline-block;
+      margin-bottom: 12px;
+      width: 96px;
+      height: 80px;
+    }
+    .logo-wrap svg.tmax-logo {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .logo-wrap svg.tmax-logo .ch {
+      animation: ch-pulse 3.2s ease-in-out infinite;
+    }
+    .logo-wrap svg.tmax-logo .ch1 { animation-delay: 0s; }
+    .logo-wrap svg.tmax-logo .ch2 { animation-delay: 0.18s; }
+    .logo-wrap svg.tmax-logo .ch3 { animation-delay: 0.36s; }
+    .logo-wrap svg.tmax-logo .ch4 { animation-delay: 0.54s; }
+    @keyframes ch-pulse {
+      0%, 60%, 100% { opacity: var(--rest, 1); }
+      30%           { opacity: 1; filter: drop-shadow(0 0 6px rgba(74,222,128,0.7)); }
+    }
+    /* Soft green glow sweep behind the chevrons - hints at data flowing
+       through the arrows. Loops every ~3.2s, slow enough to be ambient. */
+    .logo-wrap::before {
+      content: '';
+      position: absolute;
+      inset: -18px -28px;
+      z-index: 0;
+      pointer-events: none;
+      background: radial-gradient(
+        ellipse 50% 60% at 0% 50%,
+        rgba(74,222,128,0.45) 0%,
+        rgba(74,222,128,0.15) 35%,
+        transparent 70%
+      );
+      filter: blur(8px);
+      animation: logo-sweep 3.2s ease-in-out infinite;
+    }
+    @keyframes logo-sweep {
+      0%   { transform: translateX(-30%); opacity: 0; }
+      40%  { opacity: 1; }
+      70%  { opacity: 0.5; }
+      100% { transform: translateX(60%); opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .logo-wrap::before { animation: none; opacity: 0; }
+      .logo-wrap svg.tmax-logo .ch { animation: none; }
+    }
     .hero h1 { font-size: 52px; font-weight: 700; margin-bottom: 4px; letter-spacing: -1px; line-height: 1.1; }
     .hero .tagline { font-size: 24px; color: var(--blue); font-weight: 600; margin-bottom: 12px; letter-spacing: -0.5px; }
     .hero p { font-size: 18px; color: var(--fg2); max-width: 620px; margin: 0 auto 20px; line-height: 1.5; }
     .hero .badges { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 30px; }
     .badge {
       display: inline-block;
-      padding: 4px 12px;
+      padding: 4px 10px;
       background: var(--bg2);
       border: 1px solid var(--border);
-      border-radius: 20px;
-      font-size: 13px;
+      border-radius: 4px;
+      font-size: 12px;
+      letter-spacing: 0.5px;
       color: var(--fg2);
+      font-family: var(--mono);
     }
-    .badge.link { cursor: pointer; transition: border-color 0.15s; }
+    .badge::before { content: '['; opacity: 0.55; margin-right: 4px; }
+    .badge::after  { content: ']'; opacity: 0.55; margin-left: 4px; }
+    .badge.link { cursor: pointer; transition: border-color 0.15s, color 0.15s; }
     .badge.link:hover { border-color: var(--blue); color: var(--fg); text-decoration: none; }
 
     .gallery {
@@ -197,7 +256,18 @@
       border-color: rgba(255,255,255,0.12);
     }
     .feature-card .icon { font-size: 28px; margin-bottom: 10px; }
-    .feature-card h3 { font-size: 16px; margin-bottom: 6px; }
+    .feature-card h3 {
+      font-size: 15px;
+      margin-bottom: 8px;
+      font-family: var(--mono);
+      letter-spacing: -0.3px;
+      color: var(--fg);
+    }
+    .feature-card h3::before {
+      content: '› ';
+      color: var(--green);
+      opacity: 0.85;
+    }
     .feature-card p { font-size: 13px; color: var(--fg2); }
 
     /* Use cases: larger cards, more narrative, positioned above the fold as "why" before the features grid's "what" */
@@ -229,7 +299,18 @@
       margin-bottom: 14px;
       display: inline-block;
     }
-    .use-case h3 { font-size: 18px; margin-bottom: 8px; color: var(--fg); }
+    .use-case h3 {
+      font-size: 17px;
+      margin-bottom: 8px;
+      color: var(--fg);
+      font-family: var(--mono);
+      letter-spacing: -0.3px;
+    }
+    .use-case h3::before {
+      content: '› ';
+      color: var(--green);
+      opacity: 0.85;
+    }
     .use-case p { font-size: 14px; color: var(--fg2); line-height: 1.55; }
 
     .screenshot {
@@ -323,13 +404,31 @@
     .changelog-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
 
     .footer {
-      text-align: center;
-      padding: 40px 20px;
+      padding: 14px 20px 60px;
       color: var(--fg2);
-      font-size: 13px;
+      font-size: 12px;
       border-top: 1px solid rgba(255,255,255,0.06);
+      font-family: var(--mono);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
     }
     .footer a { color: var(--blue); }
+    .footer .left, .footer .right { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+    .footer .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 1px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+    .footer .pill.ok { color: var(--green); border-color: rgba(74,222,128,0.3); }
+    .footer .pill.ok::before { content: '●'; font-size: 8px; color: var(--green); }
 
     .mac-note {
       background: rgba(251,191,36,0.08);
@@ -357,17 +456,236 @@
       margin-top: 4px;
       flex-wrap: wrap;
     }
+
+    /* Terminal-aesthetic refresh */
+    :root {
+      --mono: 'Cascadia Code', 'JetBrains Mono', 'SF Mono', 'Menlo', 'Consolas', monospace;
+    }
+    .topbar {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--fg2);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      background: rgba(10,10,10,0.78);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .navbar .brand {
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      color: var(--fg);
+    }
+    .navbar .brand::before { content: '[ '; color: var(--green); opacity: 0.8; font-weight: 400; }
+    .navbar .brand::after  { content: ' ]'; color: var(--green); opacity: 0.8; font-weight: 400; }
+    .navbar .links {
+      display: flex;
+      gap: 22px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .navbar .links a {
+      color: var(--fg2);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .navbar .links a:hover { color: var(--fg); text-decoration: none; }
+    .navbar .right a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+    .navbar .right a:hover { color: var(--fg); text-decoration: none; }
+    @media (max-width: 720px) {
+      .navbar { padding: 10px 14px; font-size: 12px; }
+      .navbar .links { gap: 14px; }
+    }
+
+    /* Anchor scroll offset so the sticky navbar doesn't cover section tops. */
+    [id="uses"], [id="download"], [id="changelog"],
+    [id="features"], [id="gallery"], [id="community"] {
+      scroll-margin-top: 64px;
+    }
+    .topbar .left, .topbar .right { display: flex; gap: 14px; align-items: center; }
+    .topbar .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 1px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+    .topbar .pill.ok { color: var(--green); border-color: rgba(74,222,128,0.3); }
+    .topbar .pill.ok::before { content: '●'; font-size: 8px; color: var(--green); }
+    .topbar .dim { opacity: 0.7; }
+
+    .terminal-frame {
+      max-width: 720px;
+      margin: 18px auto 4px;
+      background: #050505;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      text-align: left;
+    }
+    .terminal-frame .tf-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg3);
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--fg2);
+    }
+    .terminal-frame .tf-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .terminal-frame .tf-title { margin-left: 8px; opacity: 0.7; }
+    .terminal-frame .tf-body {
+      padding: 16px 18px 18px;
+      font-family: var(--mono);
+      font-size: 13.5px;
+      line-height: 1.65;
+      color: var(--fg);
+      white-space: pre-wrap;
+    }
+    .terminal-frame .tf-prompt { color: var(--green); }
+    .terminal-frame .tf-cmd { color: var(--fg); }
+    .terminal-frame .tf-out { color: var(--fg2); }
+    .terminal-frame .tf-out .k { color: var(--blue); }
+    .terminal-frame .tf-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 1em;
+      background: var(--fg);
+      vertical-align: text-bottom;
+      animation: tf-blink 1.05s steps(1) infinite;
+      margin-left: 2px;
+    }
+    @keyframes tf-blink { 50% { opacity: 0; } }
+
+    /* Section markers: monospace headings with [NN] prefix */
+    .gallery h2,
+    .features h2,
+    .use-cases h2,
+    .download-section h2,
+    .shortcuts h2,
+    .community h2,
+    .changelog h2 {
+      font-family: var(--mono);
+      letter-spacing: -0.5px;
+    }
+    .sec-marker {
+      display: block;
+      color: var(--fg2);
+      font-family: var(--mono);
+      font-size: 13px;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+      opacity: 0.85;
+    }
+    .sec-marker .sm-prompt { color: var(--green); margin-right: 6px; opacity: 0.9; }
+    .sec-marker .sm-cmd { color: var(--fg); }
+
+    /* Restyled primary download as terminal command */
+    .download-btn {
+      font-family: var(--mono);
+      text-align: left;
+      padding: 18px 20px;
+      letter-spacing: 0.2px;
+      background: linear-gradient(180deg, #1c61c2 0%, var(--blue) 100%);
+    }
+    .download-btn::before {
+      content: '> ';
+      opacity: 0.85;
+      margin-right: 2px;
+    }
+    .download-btn .dl-enter {
+      float: right;
+      opacity: 0.75;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+    }
   </style>
 </head>
 <body>
 
-<div style="text-align:center;padding:12px;color:var(--fg2);font-size:12px;border-bottom:1px solid var(--border);">&copy; Inbar Rotem 314</div>
+<div class="topbar">
+  <div class="left">
+    <span class="dim">tmax</span>
+    <span class="pill ok">STABLE</span>
+    <span class="dim" id="topbar-version">loading...</span>
+  </div>
+  <div class="right">
+    <span class="dim">cross-platform · open source · MIT</span>
+    <span class="dim">&copy; Inbar Rotem 314</span>
+  </div>
+</div>
 
-<div class="hero">
-  <img src="https://raw.githubusercontent.com/InbarR/tmax/main/assets/icon.png" alt="tmax">
+<nav class="navbar">
+  <a class="brand" href="#top">TMAX</a>
+  <div class="links">
+    <a href="#uses">/uses</a>
+    <a href="#download">/download</a>
+    <a href="#changelog">/changelog</a>
+    <a href="#features">/features</a>
+    <a href="#gallery">/gallery</a>
+    <a href="#community">/community</a>
+  </div>
+  <div class="right">
+    <a href="https://github.com/InbarR/tmax" target="_blank" rel="noopener">github &#8599;</a>
+  </div>
+</nav>
+
+<div class="hero" id="top">
+  <span class="logo-wrap" role="img" aria-label="tmax">
+    <svg class="tmax-logo" viewBox="0 0 96 80" xmlns="http://www.w3.org/2000/svg">
+      <!-- Four chevrons fading from bright green to dim grey, matching the
+           tmax icon. Each ch element pulses on a staggered delay so the
+           highlight appears to sweep through the chevrons. -->
+      <g fill="none" stroke-width="9" stroke-linecap="square" stroke-linejoin="miter">
+        <polyline class="ch ch1" stroke="#4ade80" style="--rest:1" points="14,22 36,40 14,58"/>
+        <polyline class="ch ch2" stroke="#4ade80" style="--rest:0.7" points="34,22 56,40 34,58"/>
+        <polyline class="ch ch3" stroke="#a3a3a3" style="--rest:0.55" points="54,22 76,40 54,58"/>
+        <polyline class="ch ch4" stroke="#71717a" style="--rest:0.4" points="68,22 90,40 68,58"/>
+      </g>
+    </svg>
+  </span>
   <h1>tmax</h1>
   <p class="tagline">Terminal on steroids</p>
   <p>Tile terminals, run multiple AI agents side by side, and track every Claude Code and Copilot session in one window. Windows, macOS, Linux.</p>
+
+  <div class="terminal-frame" aria-hidden="true">
+    <div class="tf-bar">
+      <span class="tf-dot" style="background:#ff5f56"></span>
+      <span class="tf-dot" style="background:#ffbd2e"></span>
+      <span class="tf-dot" style="background:#27c93f"></span>
+      <span class="tf-title">~ &mdash; tmax</span>
+    </div>
+    <div class="tf-body" id="tf-body"><span class="tf-prompt">$</span> <span id="tf-typed"></span><span class="tf-cursor" id="tf-cursor"></span></div>
+  </div>
   <div class="badges">
     <a class="badge link" href="#download">Windows</a>
     <a class="badge link" href="#download">macOS</a>
@@ -394,8 +712,8 @@
   <img src="screenshots/tmax-hero.png" alt="tmax screenshot">
 </div>
 
-<div class="use-cases">
-  <h2>When to reach for tmax</h2>
+<div class="use-cases" id="uses">
+  <h2><span class="sec-marker"><span class="sm-prompt">&gt;</span><span class="sm-cmd">tmax uses</span></span>When to reach for tmax</h2>
   <p class="sub">If any of these sound like your week, you'll feel at home.</p>
   <div class="use-case-grid">
     <div class="use-case">
@@ -417,10 +735,11 @@
 </div>
 
 <div class="download-section" id="download">
-  <h2>Download</h2>
+  <h2><span class="sec-marker"><span class="sm-prompt">&gt;</span><span class="sm-cmd">tmax install</span></span>Download</h2>
   <p class="detected-os" id="detected-os">Detecting your platform...</p>
   <a class="download-btn" id="primary-download" href="#">
-    Download for <span id="os-name">your platform</span>
+    <span class="dl-enter">&crarr;</span>
+    ./download <span id="os-name">your platform</span>
     <br><small id="os-detail"></small>
   </a>
   <div class="mac-note" id="mac-note">
@@ -433,12 +752,12 @@
 </div>
 
 <div class="changelog" id="changelog">
-  <h2>Changelog</h2>
+  <h2><span class="sec-marker"><span class="sm-prompt">&gt;</span><span class="sm-cmd">tmax log</span></span>Changelog</h2>
   <div class="changelog-content" id="changelog-content">Loading changelog...</div>
 </div>
 
-<div class="features">
-  <h2>What you get</h2>
+<div class="features" id="features">
+  <h2><span class="sec-marker"><span class="sm-prompt">&gt;</span><span class="sm-cmd">tmax features</span></span>What you get</h2>
   <div class="feature-grid">
     <div class="feature-card">
       <h3>&#9638; Splits & floats</h3>
@@ -484,8 +803,8 @@
 </div>
 
 
-<div class="gallery">
-  <h2>See it in action</h2>
+<div class="gallery" id="gallery">
+  <h2><span class="sec-marker"><span class="sm-prompt">&gt;</span><span class="sm-cmd">tmax demo</span></span>See it in action</h2>
   <div class="gallery-grid">
     <div class="gallery-item">
       <img src="screenshots/tmax-explorer.png" alt="File explorer with AI sessions" onclick="openLightbox(this.src)">
@@ -514,8 +833,8 @@
   <img id="lightbox-img" src="" alt="Enlarged screenshot">
 </div>
 
-<div class="community">
-  <h2>Get involved</h2>
+<div class="community" id="community">
+  <h2><span class="sec-marker"><span class="sm-prompt">&gt;</span><span class="sm-cmd">tmax contribute</span></span>Get involved</h2>
   <div class="community-grid">
     <div class="feature-card">
       <div class="icon">&#9888;</div>
@@ -551,9 +870,18 @@
 </div>
 
 <div class="footer">
-  <p>Open source &middot; <a href="https://github.com/InbarR/tmax">GitHub</a> &middot; MIT License</p>
-  <p style="margin-top:8px;">Built with Electron, React, TypeScript, xterm.js</p>
-  <p style="margin-top:8px;"><a id="footer-contact" href="mailto:inbar.rotem@gmail.com?subject=tmax%20feedback">&#9993; Contact</a></p>
+  <div class="left">
+    <span class="pill ok">OPEN SOURCE</span>
+    <span>MIT License</span>
+    <span class="dim">·</span>
+    <a href="https://github.com/InbarR/tmax">github.com/InbarR/tmax</a>
+  </div>
+  <div class="right">
+    <span class="dim">built with</span>
+    <span>Electron · React · TypeScript · xterm.js</span>
+    <span class="dim">·</span>
+    <a id="footer-contact" href="mailto:inbar.rotem@gmail.com?subject=tmax%20feedback">contact</a>
+  </div>
 </div>
 
 <script>
@@ -706,8 +1034,10 @@ async function loadRelease() {
       }
     }
 
-    // Update version badge
+    // Update version badge (hero) and topbar pill
     document.getElementById('version-badge').textContent = version;
+    const tbv = document.getElementById('topbar-version');
+    if (tbv) tbv.textContent = `· ${version} · build OK`;
 
     // Update star count
     try {
@@ -770,6 +1100,66 @@ loadRelease().then(() => {
   if (btn) btn.href = mailto;
   if (footer) footer.href = mailto;
 });
+
+// Hero terminal typewriter. Types `tmax --help`, then prints the help body
+// line by line, then drops to a fresh prompt with the blinking cursor.
+(function typeHero() {
+  const typed = document.getElementById('tf-typed');
+  const body = document.getElementById('tf-body');
+  const cursor = document.getElementById('tf-cursor');
+  if (!typed || !body || !cursor) return;
+  // Honor reduced-motion: render the final state immediately.
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    body.innerHTML = renderFinal();
+    return;
+  }
+  function renderFinal() {
+    return '<span class="tf-prompt">$</span> <span class="tf-cmd">tmax --help</span>\n'
+      + '<span class="tf-out">tile, float, and run AI agents side-by-side &mdash; without losing the thread.</span>\n\n'
+      + '<span class="tf-out">  <span class="k">panes</span>      split horizontally, vertically, grid, or float</span>\n'
+      + '<span class="tf-out">  <span class="k">agents</span>     parallel Claude Code &amp; Copilot, tracked from one panel</span>\n'
+      + '<span class="tf-out">  <span class="k">workspaces</span> per-tab layouts that survive restarts</span>\n'
+      + '<span class="tf-out">  <span class="k">keys</span>       command palette + every shortcut rebindable</span>\n\n'
+      + '<span class="tf-prompt">$</span> <span class="tf-cursor"></span>';
+  }
+  const cmd = 'tmax --help';
+  const lines = [
+    '',
+    '<span class="tf-out">tile, float, and run AI agents side-by-side &mdash; without losing the thread.</span>',
+    '',
+    '<span class="tf-out">  <span class="k">panes</span>      split horizontally, vertically, grid, or float</span>',
+    '<span class="tf-out">  <span class="k">agents</span>     parallel Claude Code &amp; Copilot, tracked from one panel</span>',
+    '<span class="tf-out">  <span class="k">workspaces</span> per-tab layouts that survive restarts</span>',
+    '<span class="tf-out">  <span class="k">keys</span>       command palette + every shortcut rebindable</span>',
+    '',
+  ];
+  let i = 0;
+  function typeCmd() {
+    if (i <= cmd.length) {
+      typed.innerHTML = '<span class="tf-cmd">' + cmd.slice(0, i) + '</span>';
+      i++;
+      setTimeout(typeCmd, 55 + Math.random() * 40);
+    } else {
+      // Hide the inline cursor; it'll come back at the end on a new prompt line.
+      cursor.style.display = 'none';
+      setTimeout(printLines, 280);
+    }
+  }
+  let li = 0;
+  let acc = '<span class="tf-prompt">$</span> <span class="tf-cmd">tmax --help</span>\n';
+  function printLines() {
+    if (li < lines.length) {
+      acc += lines[li] + '\n';
+      body.innerHTML = acc;
+      li++;
+      setTimeout(printLines, 110);
+    } else {
+      acc += '<span class="tf-prompt">$</span> <span class="tf-cursor"></span>';
+      body.innerHTML = acc;
+    }
+  }
+  typeCmd();
+})();
 </script>
 
 <!-- GoatCounter: privacy-friendly page analytics. Update data-goatcounter to
