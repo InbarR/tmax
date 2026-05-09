@@ -6,6 +6,7 @@ import {
 } from '@dnd-kit/core';
 import { useTerminalStore } from './state/terminal-store';
 import { getTerminalEntry } from './terminal-registry';
+import { applyChromeFromTheme } from './utils/theme-presets';
 import type { CopilotSessionSummary } from '../shared/copilot-types';
 import { useKeybindings } from './hooks/useKeybindings';
 import { useDragTerminal } from './hooks/useDragTerminal';
@@ -39,6 +40,12 @@ const App: React.FC = () => {
   const draggedTerminalId = useTerminalStore((s) => s.draggedTerminalId);
   const showShortcuts = useTerminalStore((s) => s.showShortcuts);
   const broadcastMode = useTerminalStore((s) => s.broadcastMode);
+  // Apply chrome CSS variables whenever the xterm theme changes - keeps the
+  // tab bar / status bar / sidebar in sync with the active preset (TASK-149).
+  const themeColors = useTerminalStore((s) => s.config?.theme);
+  useEffect(() => {
+    if (themeColors) applyChromeFromTheme(themeColors as unknown as Record<string, string>);
+  }, [themeColors]);
 
   // Toggle a body class so CSS can add a red outline to all terminal panes
   // while broadcast is on.

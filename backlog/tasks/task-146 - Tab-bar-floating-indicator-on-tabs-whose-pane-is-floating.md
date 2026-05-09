@@ -1,11 +1,11 @@
 ---
 id: TASK-146
 title: 'Tab bar: floating indicator on tabs whose pane is floating'
-status: In Progress
+status: Done
 assignee:
   - '@inrotem'
 created_date: '2026-05-09 16:30'
-updated_date: '2026-05-09 16:30'
+updated_date: '2026-05-09 18:29'
 labels: []
 dependencies: []
 ---

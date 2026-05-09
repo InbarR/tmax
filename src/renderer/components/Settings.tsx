@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 import { isMac, formatKeyForPlatform } from '../utils/platform';
+import { THEME_PRESETS, themesEqual, type ThemePreset } from '../utils/theme-presets';
 
 type Tab = 'terminal' | 'keybindings' | 'shells' | 'theme' | 'appearance';
 
@@ -385,68 +386,6 @@ const ShellsSettings: React.FC = () => {
 
 // ── Theme Settings ────────────────────────────────────────────────
 
-// Built-in presets users can click to swap their entire xterm palette.
-// `bright*` defaults to non-bright when the preset author didn't supply one.
-const THEME_PRESETS: { name: string; theme: Record<string, string> }[] = [
-  {
-    name: 'Catppuccin Mocha',
-    theme: {
-      background: '#1e1e2e',
-      foreground: '#cdd6f4',
-      cursor: '#f5e0dc',
-      selectionBackground: '#585b70',
-      black: '#45475a',
-      red: '#f38ba8',
-      green: '#a6e3a1',
-      yellow: '#f9e2af',
-      blue: '#89b4fa',
-      magenta: '#f5c2e7',
-      cyan: '#94e2d5',
-      white: '#bac2de',
-      brightBlack: '#585b70',
-      brightRed: '#f38ba8',
-      brightGreen: '#a6e3a1',
-      brightYellow: '#f9e2af',
-      brightBlue: '#89b4fa',
-      brightMagenta: '#f5c2e7',
-      brightCyan: '#94e2d5',
-      brightWhite: '#a6adc8',
-    },
-  },
-  {
-    name: 'Warm Dusk',
-    theme: {
-      background: '#11192a',
-      foreground: '#c8d3e6',
-      cursor: '#ee6c4d',
-      selectionBackground: '#2e3a52',
-      black: '#2a3142',
-      red: '#ee6c4d',
-      green: '#7ec1bb',
-      yellow: '#f4a261',
-      blue: '#6c8ebf',
-      magenta: '#d09cfa',
-      cyan: '#56b6c2',
-      white: '#c8d3e6',
-      brightBlack: '#3d4660',
-      brightRed: '#ff8a6b',
-      brightGreen: '#9bd6cf',
-      brightYellow: '#ffb37a',
-      brightBlue: '#8eaad6',
-      brightMagenta: '#e0b3ff',
-      brightCyan: '#7fc9d4',
-      brightWhite: '#e0e8f5',
-    },
-  },
-];
-
-function themesEqual(a: Record<string, string>, b: Record<string, string>): boolean {
-  for (const k of Object.keys(b)) {
-    if ((a[k] || '').toLowerCase() !== (b[k] || '').toLowerCase()) return false;
-  }
-  return true;
-}
-
 const ThemeSettings: React.FC = () => {
   const config = useTerminalStore((s) => s.config)!;
   const update = useTerminalStore((s) => s.updateConfig);
@@ -455,8 +394,12 @@ const ThemeSettings: React.FC = () => {
     update({ theme: { ...config.theme, [field]: value } });
   };
 
-  const applyPreset = (preset: typeof THEME_PRESETS[number]) => {
+  const applyPreset = (preset: ThemePreset) => {
     update({ theme: { ...config.theme, ...preset.theme } });
+    // Chrome is applied via runtime CSS variable overrides; no config persist.
+    for (const [key, value] of Object.entries(preset.chrome)) {
+      document.documentElement.style.setProperty(key, value);
+    }
   };
 
   const colors = [

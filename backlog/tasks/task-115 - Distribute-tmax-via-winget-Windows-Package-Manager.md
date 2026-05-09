@@ -1,11 +1,11 @@
 ---
 id: TASK-115
 title: Distribute tmax via winget (Windows Package Manager)
-status: In Progress
+status: Done
 assignee:
   - '@inbar'
 created_date: '2026-05-04 20:31'
-updated_date: '2026-05-04 21:25'
+updated_date: '2026-05-09 18:31'
 labels: []
 dependencies: []
 ---
