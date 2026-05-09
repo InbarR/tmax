@@ -3657,6 +3657,47 @@ select.settings-input {
 }
 
 /* Theme */
+.theme-preset-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.theme-preset-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.theme-preset-btn:hover {
+  border-color: var(--focus-border);
+  background: var(--bg-tertiary);
+}
+.theme-preset-btn.active {
+  border-color: var(--focus-border);
+  box-shadow: 0 0 0 1px var(--focus-border) inset;
+}
+.theme-preset-swatches {
+  display: inline-flex;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.theme-preset-swatches > span {
+  width: 12px;
+  height: 18px;
+  display: block;
+}
+.theme-preset-name {
+  font-weight: 500;
+}
+
 .theme-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

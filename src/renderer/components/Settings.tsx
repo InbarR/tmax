@@ -385,12 +385,78 @@ const ShellsSettings: React.FC = () => {
 
 // ── Theme Settings ────────────────────────────────────────────────
 
+// Built-in presets users can click to swap their entire xterm palette.
+// `bright*` defaults to non-bright when the preset author didn't supply one.
+const THEME_PRESETS: { name: string; theme: Record<string, string> }[] = [
+  {
+    name: 'Catppuccin Mocha',
+    theme: {
+      background: '#1e1e2e',
+      foreground: '#cdd6f4',
+      cursor: '#f5e0dc',
+      selectionBackground: '#585b70',
+      black: '#45475a',
+      red: '#f38ba8',
+      green: '#a6e3a1',
+      yellow: '#f9e2af',
+      blue: '#89b4fa',
+      magenta: '#f5c2e7',
+      cyan: '#94e2d5',
+      white: '#bac2de',
+      brightBlack: '#585b70',
+      brightRed: '#f38ba8',
+      brightGreen: '#a6e3a1',
+      brightYellow: '#f9e2af',
+      brightBlue: '#89b4fa',
+      brightMagenta: '#f5c2e7',
+      brightCyan: '#94e2d5',
+      brightWhite: '#a6adc8',
+    },
+  },
+  {
+    name: 'Warm Dusk',
+    theme: {
+      background: '#11192a',
+      foreground: '#c8d3e6',
+      cursor: '#ee6c4d',
+      selectionBackground: '#2e3a52',
+      black: '#2a3142',
+      red: '#ee6c4d',
+      green: '#7ec1bb',
+      yellow: '#f4a261',
+      blue: '#6c8ebf',
+      magenta: '#d09cfa',
+      cyan: '#56b6c2',
+      white: '#c8d3e6',
+      brightBlack: '#3d4660',
+      brightRed: '#ff8a6b',
+      brightGreen: '#9bd6cf',
+      brightYellow: '#ffb37a',
+      brightBlue: '#8eaad6',
+      brightMagenta: '#e0b3ff',
+      brightCyan: '#7fc9d4',
+      brightWhite: '#e0e8f5',
+    },
+  },
+];
+
+function themesEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+  for (const k of Object.keys(b)) {
+    if ((a[k] || '').toLowerCase() !== (b[k] || '').toLowerCase()) return false;
+  }
+  return true;
+}
+
 const ThemeSettings: React.FC = () => {
   const config = useTerminalStore((s) => s.config)!;
   const update = useTerminalStore((s) => s.updateConfig);
 
   const updateTheme = (field: string, value: string) => {
     update({ theme: { ...config.theme, [field]: value } });
+  };
+
+  const applyPreset = (preset: typeof THEME_PRESETS[number]) => {
+    update({ theme: { ...config.theme, ...preset.theme } });
   };
 
   const colors = [
@@ -410,6 +476,30 @@ const ThemeSettings: React.FC = () => {
 
   return (
     <div className="settings-section">
+      <SettingRow label="Preset" description="Apply a built-in palette - clicking sets every color below at once.">
+        <div className="theme-preset-row">
+          {THEME_PRESETS.map((preset) => {
+            const active = themesEqual(config.theme as unknown as Record<string, string>, preset.theme);
+            return (
+              <button
+                key={preset.name}
+                className={`theme-preset-btn${active ? ' active' : ''}`}
+                onClick={() => applyPreset(preset)}
+                title={`Apply ${preset.name}`}
+              >
+                <span className="theme-preset-swatches" aria-hidden="true">
+                  <span style={{ background: preset.theme.background }} />
+                  <span style={{ background: preset.theme.foreground }} />
+                  <span style={{ background: preset.theme.red }} />
+                  <span style={{ background: preset.theme.green }} />
+                  <span style={{ background: preset.theme.cyan }} />
+                </span>
+                <span className="theme-preset-name">{preset.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      </SettingRow>
       <div className="theme-grid">
         {colors.map(({ key, label }) => (
           <div key={key} className="theme-color-row">
