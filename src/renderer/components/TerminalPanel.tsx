@@ -2428,6 +2428,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             />
             <span className="pane-close-x" title="Close pane (Ctrl+Shift+W)">✕</span>
           </div>
+          {paneMode === 'floating' && (
+            <span
+              className="terminal-pane-float-pill"
+              title="This pane is floating"
+              aria-label="Floating pane"
+            >FLOAT</span>
+          )}
           {isRenamingPane ? (
             <input
               className="pane-rename-input"

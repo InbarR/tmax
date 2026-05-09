@@ -809,6 +809,27 @@ html.transparency-active .input-dialog {
   transition: opacity 0.15s, background 0.15s, color 0.15s;
   pointer-events: auto;
 }
+
+/* Persistent indicator that this pane is floating. Sits next to the title
+   text and stays visible regardless of focus / hover so the user never has
+   to wonder which pane is detached from the grid (TASK-146). */
+.terminal-pane-float-pill {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  font-family: 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  padding: 1px 5px;
+  margin-right: 6px;
+  border: 1px solid rgba(137, 180, 250, 0.45);
+  background: rgba(137, 180, 250, 0.12);
+  color: #89b4fa;
+  border-radius: 3px;
+  user-select: none;
+  pointer-events: auto;
+}
 .terminal-panel:hover .terminal-pane-float-btn,
 .terminal-panel.focused .terminal-pane-float-btn {
   opacity: 1;
