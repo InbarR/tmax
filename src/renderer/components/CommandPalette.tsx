@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 import { formatKeyForPlatform } from '../utils/platform';
+import { tokenizeAnd, matchesAllTokens } from '../utils/and-filter';
 import InputDialog from './InputDialog';
 import { confirmDialog } from './AppDialog';
 
@@ -202,12 +203,12 @@ const CommandPalette: React.FC = () => {
   }, []);
 
   const filtered = useMemo(() => {
-    if (!query) return commands;
-    const q = query.toLowerCase();
-    return commands.filter((c) =>
-      c.label.toLowerCase().includes(q) ||
-      (c.shortcut && c.shortcut.toLowerCase().includes(q))
-    );
+    const tokens = tokenizeAnd(query);
+    if (tokens.length === 0) return commands;
+    return commands.filter((c) => {
+      const haystack = `${c.label}\n${c.shortcut || ''}`.toLowerCase();
+      return matchesAllTokens(haystack, tokens);
+    });
   }, [commands, query]);
 
   useEffect(() => {

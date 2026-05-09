@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
+import { tokenizeAnd, matchesAllTokens } from '../utils/and-filter';
 import type { CopilotSessionSummary } from '../../shared/copilot-types';
 
 interface SearchEntry {
@@ -133,22 +134,11 @@ const PromptSearchDialog: React.FC = () => {
   // Tokenize the query on whole-word case-insensitive 'AND' for client-side
   // filtering of non-SQLite results (Claude Code, fresh installs, fallback).
   // SQLite FTS5 handles AND/OR natively when the user is on the DB path.
-  const tokens = useMemo(() => {
-    const raw = query.trim();
-    if (!raw) return [];
-    return raw
-      .split(/\bAND\b/i)
-      .map((t) => t.trim().toLowerCase())
-      .filter((t) => t.length > 0);
-  }, [query]);
-
-  const matchesAllTokens = useCallback((haystack: string) => {
-    if (tokens.length === 0) return true;
-    for (const t of tokens) {
-      if (!haystack.includes(t)) return false;
-    }
-    return true;
-  }, [tokens]);
+  const tokens = useMemo(() => tokenizeAnd(query), [query]);
+  const matchesAll = useCallback(
+    (haystack: string) => matchesAllTokens(haystack, tokens),
+    [tokens],
+  );
 
   // When SQLite is active and the user types a query, search the DB directly
   // instead of filtering only the initial in-memory entries client-side.
@@ -218,12 +208,12 @@ const PromptSearchDialog: React.FC = () => {
     if (sqliteResults !== null) {
       const claudeEntries = entries
         .filter((e) => e.provider === 'claude-code')
-        .filter((e) => matchesAllTokens(`${e.prompt}\n${e.paneTitle}\n${e.sessionFolder}`.toLowerCase()));
+        .filter((e) => matchesAll(`${e.prompt}\n${e.paneTitle}\n${e.sessionFolder}`.toLowerCase()));
       return [...sqliteResults, ...claudeEntries].sort((a, b) => a.ageMs - b.ageMs);
     }
     if (tokens.length === 0) return entries;
-    return entries.filter((e) => matchesAllTokens(`${e.prompt}\n${e.paneTitle}\n${e.sessionFolder}`.toLowerCase()));
-  }, [entries, sqliteResults, tokens, matchesAllTokens]);
+    return entries.filter((e) => matchesAll(`${e.prompt}\n${e.paneTitle}\n${e.sessionFolder}`.toLowerCase()));
+  }, [entries, sqliteResults, tokens, matchesAll]);
 
   const filtered = useMemo(() => allMatches.slice(0, 200), [allMatches]);
 

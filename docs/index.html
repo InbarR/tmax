@@ -378,7 +378,15 @@
       margin: 0 auto 60px;
       padding: 0 20px;
     }
-    .changelog h2 { font-size: 32px; text-align: center; margin-bottom: 24px; }
+    .changelog h2 { font-size: 32px; text-align: center; margin-bottom: 12px; }
+    .changelog .release-cadence {
+      text-align: center;
+      color: var(--fg2);
+      font-family: var(--mono);
+      font-size: 12px;
+      margin-bottom: 18px;
+      letter-spacing: 0.2px;
+    }
     .changelog-content {
       background: var(--bg2);
       border: 1px solid var(--border);
@@ -820,6 +828,7 @@
 
 <div class="changelog" id="changelog">
   <h2><span class="sec-marker"><span class="sm-prompt">&gt;</span><span class="sm-cmd">tmax log</span></span>Changelog</h2>
+  <p class="release-cadence">New versions ship on Sundays. Bug-fix patches land mid-week as needed.</p>
   <div class="changelog-content" id="changelog-content">Loading changelog...</div>
 </div>
 

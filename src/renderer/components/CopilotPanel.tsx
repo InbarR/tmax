@@ -4,6 +4,7 @@ import { useTerminalStore } from '../state/terminal-store';
 import { getTerminalEntry } from '../terminal-registry';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { renderWithMdLinks } from '../utils/md-link-parser';
+import { tokenizeAnd, matchesAllTokens } from '../utils/and-filter';
 import type { CopilotSessionSummary, CopilotSessionStatus, SessionProvider, SessionLifecycle } from '../../shared/copilot-types';
 
 const MIN_WIDTH = 180;
@@ -1304,25 +1305,9 @@ const PromptsDialog: React.FC<{
   // Reverse to show newest first, then filter
   const reversed = useMemo(() => [...prompts].reverse(), [prompts]);
   const filtered = useMemo(() => {
-    const raw = search.trim();
-    if (!raw) return reversed;
-    // Split on case-insensitive 'AND' as a whole word; tolerate empty operands.
-    const tokens = raw
-      .split(/\bAND\b/i)
-      .map((t) => t.trim().toLowerCase())
-      .filter((t) => t.length > 0);
+    const tokens = tokenizeAnd(search);
     if (tokens.length === 0) return reversed;
-    if (tokens.length === 1) {
-      const q = tokens[0];
-      return reversed.filter((p) => p.toLowerCase().includes(q));
-    }
-    return reversed.filter((p) => {
-      const lower = p.toLowerCase();
-      for (const t of tokens) {
-        if (!lower.includes(t)) return false;
-      }
-      return true;
-    });
+    return reversed.filter((p) => matchesAllTokens(p.toLowerCase(), tokens));
   }, [reversed, search]);
 
   // Reset selection when filter changes

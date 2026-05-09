@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useTerminalStore } from '../state/terminal-store';
+import { tokenizeAnd, matchesAllTokens } from '../utils/and-filter';
 import MarkdownPreview from './MarkdownPreview';
 import ZoomControls from './ZoomControls';
 import { useZoom } from '../hooks/useZoom';
@@ -238,13 +239,13 @@ const FileExplorer: React.FC = () => {
 
   if (!show) return null;
 
-  const q = filter.toLowerCase();
+  const tokens = tokenizeAnd(filter);
 
   const renderEntry = (entry: FileEntry, depth: number, parentMatches?: boolean): React.ReactNode => {
-    const nameMatches = !q || entry.name.toLowerCase().includes(q);
+    const nameMatches = tokens.length === 0 || matchesAllTokens(entry.name.toLowerCase(), tokens);
     if (!nameMatches && !parentMatches) {
       if (entry.isDirectory && children[entry.path]) {
-        const hasMatch = children[entry.path].some((c) => c.name.toLowerCase().includes(q));
+        const hasMatch = children[entry.path].some((c) => matchesAllTokens(c.name.toLowerCase(), tokens));
         if (!hasMatch) return null;
       } else if (!entry.isDirectory) {
         return null;

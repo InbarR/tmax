@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
+import { tokenizeAnd, matchesAllTokens } from '../utils/and-filter';
 
 interface DirContextMenu {
   x: number;
@@ -28,9 +29,9 @@ const DirPicker: React.FC = () => {
       ...favoriteDirs.map((dir) => ({ dir, isFav: true })),
       ...recentDirs.filter((d) => !favSet.has(d)).map((dir) => ({ dir, isFav: false })),
     ];
-    if (!query) return items;
-    const q = query.toLowerCase();
-    return items.filter((item) => item.dir.toLowerCase().includes(q));
+    const tokens = tokenizeAnd(query);
+    if (tokens.length === 0) return items;
+    return items.filter((item) => matchesAllTokens(item.dir.toLowerCase(), tokens));
   }, [favoriteDirs, recentDirs, query]);
 
   useEffect(() => {

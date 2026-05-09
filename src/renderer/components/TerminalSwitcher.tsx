@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
+import { tokenizeAnd, matchesAllTokens } from '../utils/and-filter';
 
 const TerminalSwitcher: React.FC = () => {
   const show = useTerminalStore((s) => s.showSwitcher);
@@ -18,9 +19,9 @@ const TerminalSwitcher: React.FC = () => {
   );
 
   const filtered = useMemo(() => {
-    if (!query) return entries;
-    const q = query.toLowerCase();
-    return entries.filter(([, t]) => t.title.toLowerCase().includes(q));
+    const tokens = tokenizeAnd(query);
+    if (tokens.length === 0) return entries;
+    return entries.filter(([, t]) => matchesAllTokens(t.title.toLowerCase(), tokens));
   }, [entries, query]);
 
   // Reset state when opening

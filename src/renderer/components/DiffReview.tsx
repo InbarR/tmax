@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
+import { tokenizeAnd, matchesAllTokens } from '../utils/and-filter';
 import type {
   DiffMode,
   DiffFile,
@@ -89,9 +90,12 @@ const FileTree: React.FC<FileTreeProps> = ({ files, selectedFile, onSelectFile }
   const filterRef = useRef<HTMLInputElement>(null);
 
   const filteredFiles = useMemo(() => {
-    if (!filter) return files;
-    const q = filter.toLowerCase();
-    return files.filter(f => f.path.toLowerCase().includes(q) || fileName(f.path).toLowerCase().includes(q));
+    const tokens = tokenizeAnd(filter);
+    if (tokens.length === 0) return files;
+    return files.filter((f) => {
+      const haystack = `${f.path}\n${fileName(f.path)}`.toLowerCase();
+      return matchesAllTokens(haystack, tokens);
+    });
   }, [files, filter]);
 
   const grouped = useMemo(() => groupFilesByDir(filteredFiles), [filteredFiles]);
