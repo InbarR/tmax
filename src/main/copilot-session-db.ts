@@ -187,9 +187,38 @@ export class CopilotSessionDB {
         LIMIT ?
       `);
 
-      const results = stmt.all(ftsQuery, limit) as SearchResultRow[];
-      console.log(`[copilot-session-db] search '${query}' → FTS5: ${ftsQuery} → ${results.length} results`);
-      return results;
+      // FTS5 indexes every prompt and event in a session, so 'add AND
+      // refresh AND button' was returning long-running sessions where the
+      // terms scattered across the conversation history. For queries with
+      // implicit AND (no boolean operators) or AND-only, post-filter to
+      // sessions whose displayed metadata (summary + repo + branch + cwd)
+      // contains every term - matches "session search" intent. OR / NOT
+      // queries skip the post-filter so FTS5's logic stands.
+      const skipMetadataFilter = /\b(OR|NOT)\b/i.test(query);
+      const FETCH_MULTIPLIER = skipMetadataFilter ? 1 : 4;
+      const results = stmt.all(ftsQuery, limit * FETCH_MULTIPLIER) as SearchResultRow[];
+      let finalResults = results;
+      if (!skipMetadataFilter) {
+        const andTokens = query
+          .split(/\bAND\b/i)
+          .map((t) => t.replace(/[^A-Za-z0-9_\-\s]+/g, ' ').trim().toLowerCase())
+          .filter((t) => t.length > 0)
+          .flatMap((t) => t.split(/\s+/));
+        if (andTokens.length > 0) {
+          finalResults = results.filter((row) => {
+            const haystack = [row.summary, row.cwd, row.repository, row.branch]
+              .filter(Boolean)
+              .join('\n')
+              .toLowerCase();
+            for (const t of andTokens) {
+              if (!haystack.includes(t)) return false;
+            }
+            return true;
+          }).slice(0, limit);
+        }
+      }
+      console.log(`[copilot-session-db] search '${query}' → FTS5: ${ftsQuery} → ${results.length} raw → ${finalResults.length} returned`);
+      return finalResults;
     } catch (err) {
       console.error(`[copilot-session-db] search failed: ${err}`);
       // FTS5 query may still fail on complex input - gracefully return null
