@@ -173,6 +173,25 @@ const SOLARIZED_DARK_CHROME: Record<string, string> = {
   '--rgb-accent-danger': '220, 50, 47',
 };
 
+const SOLARIZED_LIGHT_CHROME: Record<string, string> = {
+  '--bg-primary': '#fdf6e3',
+  '--bg-secondary': '#eee8d5',
+  '--border-color': '#93a1a1',
+  '--focus-border': '#268bd2',
+  '--text-primary': '#586e75',
+  '--text-secondary': '#93a1a1',
+  '--tab-bg': '#eee8d5',
+  '--tab-active': '#fdf6e3',
+  '--accent': '#268bd2',
+  '--accent-success': '#859900',
+  '--accent-warning': '#b58900',
+  '--accent-danger': '#dc322f',
+  '--rgb-accent': '38, 139, 210',
+  '--rgb-accent-success': '133, 153, 0',
+  '--rgb-accent-warning': '181, 137, 0',
+  '--rgb-accent-danger': '220, 50, 47',
+};
+
 export const THEME_PRESETS: ThemePreset[] = [
   {
     name: 'Catppuccin Mocha',
@@ -381,6 +400,32 @@ export const THEME_PRESETS: ThemePreset[] = [
       brightWhite: '#fdf6e3',
     },
     chrome: SOLARIZED_DARK_CHROME,
+  },
+  {
+    name: 'Solarized Light',
+    theme: {
+      background: '#fdf6e3',
+      foreground: '#586e75',
+      cursor: '#586e75',
+      selectionBackground: '#eee8d5',
+      black: '#073642',
+      red: '#dc322f',
+      green: '#859900',
+      yellow: '#b58900',
+      blue: '#268bd2',
+      magenta: '#d33682',
+      cyan: '#2aa198',
+      white: '#eee8d5',
+      brightBlack: '#002b36',
+      brightRed: '#cb4b16',
+      brightGreen: '#586e75',
+      brightYellow: '#657b83',
+      brightBlue: '#839496',
+      brightMagenta: '#6c71c4',
+      brightCyan: '#93a1a1',
+      brightWhite: '#fdf6e3',
+    },
+    chrome: SOLARIZED_LIGHT_CHROME,
   },
 ];
 
