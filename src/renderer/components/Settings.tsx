@@ -452,9 +452,16 @@ const ThemeSettings: React.FC = () => {
             ) && (
               <option value="__custom__" disabled>Custom (hand-edited)</option>
             )}
-            {THEME_PRESETS.map((preset) => (
-              <option key={preset.name} value={preset.name}>{preset.name}</option>
-            ))}
+            <optgroup label="Dark">
+              {THEME_PRESETS.filter((p) => p.mode === 'dark').map((preset) => (
+                <option key={preset.name} value={preset.name}>{preset.name}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Light">
+              {THEME_PRESETS.filter((p) => p.mode === 'light').map((preset) => (
+                <option key={preset.name} value={preset.name}>{preset.name}</option>
+              ))}
+            </optgroup>
           </select>
         </div>
       </SettingRow>

@@ -17,6 +17,7 @@
  */
 export interface ThemePreset {
   name: string;
+  mode: 'dark' | 'light';
   theme: Record<string, string>;
   chrome: Record<string, string>;
 }
@@ -252,6 +253,7 @@ const GITHUB_LIGHT_CHROME: Record<string, string> = {
 export const THEME_PRESETS: ThemePreset[] = [
   {
     name: 'Catppuccin Mocha',
+    mode: 'dark',
     theme: {
       background: '#1e1e2e',
       foreground: '#cdd6f4',
@@ -278,6 +280,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     name: 'Warm Dusk',
+    mode: 'dark',
     theme: {
       background: '#0a1422',
       foreground: '#d4dcec',
@@ -304,6 +307,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     name: 'Tokyo Night',
+    mode: 'dark',
     theme: {
       background: '#1a1b26',
       foreground: '#c0caf5',
@@ -330,6 +334,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     name: 'Dracula',
+    mode: 'dark',
     theme: {
       background: '#282a36',
       foreground: '#f8f8f2',
@@ -356,6 +361,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     name: 'Nord',
+    mode: 'dark',
     theme: {
       background: '#2e3440',
       foreground: '#eceff4',
@@ -382,6 +388,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     name: 'Gruvbox Dark',
+    mode: 'dark',
     theme: {
       background: '#282828',
       foreground: '#ebdbb2',
@@ -408,6 +415,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     name: 'Rosé Pine',
+    mode: 'dark',
     theme: {
       background: '#191724',
       foreground: '#e0def4',
@@ -434,6 +442,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     name: 'Solarized Dark',
+    mode: 'dark',
     theme: {
       background: '#002b36',
       foreground: '#eee8d5',
@@ -460,6 +469,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     name: 'Solarized Light',
+    mode: 'light',
     theme: {
       background: '#fdf6e3',
       foreground: '#586e75',
@@ -486,6 +496,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     name: 'Catppuccin Latte',
+    mode: 'light',
     theme: {
       background: '#eff1f5',
       foreground: '#4c4f69',
@@ -512,6 +523,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     name: 'Rosé Pine Dawn',
+    mode: 'light',
     theme: {
       background: '#faf4ed',
       foreground: '#575279',
@@ -538,6 +550,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     name: 'GitHub Light',
+    mode: 'light',
     theme: {
       background: '#ffffff',
       foreground: '#1f2328',
