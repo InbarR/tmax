@@ -3327,7 +3327,10 @@ body.broadcast-on .terminal-panel {
 
 .settings-dialog {
   width: 600px;
-  max-height: 80vh;
+  /* Pin height so the dialog doesn't reflow when switching tabs - short
+     tabs (Terminal) reserve the same vertical footprint as tall ones
+     (Theme, Keybindings); long tab bodies scroll inside .settings-body. */
+  height: min(80vh, 640px);
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 10px;
