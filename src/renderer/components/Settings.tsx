@@ -419,28 +419,43 @@ const ThemeSettings: React.FC = () => {
 
   return (
     <div className="settings-section">
-      <SettingRow label="Preset" description="Apply a built-in palette - clicking sets every color below at once.">
-        <div className="theme-preset-row">
-          {THEME_PRESETS.map((preset) => {
-            const active = themesEqual(config.theme as unknown as Record<string, string>, preset.theme);
-            return (
-              <button
-                key={preset.name}
-                className={`theme-preset-btn${active ? ' active' : ''}`}
-                onClick={() => applyPreset(preset)}
-                title={`Apply ${preset.name}`}
-              >
-                <span className="theme-preset-swatches" aria-hidden="true">
-                  <span style={{ background: preset.theme.background }} />
-                  <span style={{ background: preset.theme.foreground }} />
-                  <span style={{ background: preset.theme.red }} />
-                  <span style={{ background: preset.theme.green }} />
-                  <span style={{ background: preset.theme.cyan }} />
-                </span>
-                <span className="theme-preset-name">{preset.name}</span>
-              </button>
+      <SettingRow label="Preset" description="Pick a built-in palette - selecting one sets every color below at once.">
+        <div className="theme-preset-control">
+          {(() => {
+            const activePreset = THEME_PRESETS.find((p) =>
+              themesEqual(config.theme as unknown as Record<string, string>, p.theme),
             );
-          })}
+            return (
+              <span className="theme-preset-swatches" aria-hidden="true" title={activePreset?.name ?? 'Custom'}>
+                <span style={{ background: (activePreset ?? THEME_PRESETS[0]).theme.background }} />
+                <span style={{ background: (activePreset ?? THEME_PRESETS[0]).theme.foreground }} />
+                <span style={{ background: (activePreset ?? THEME_PRESETS[0]).theme.red }} />
+                <span style={{ background: (activePreset ?? THEME_PRESETS[0]).theme.green }} />
+                <span style={{ background: (activePreset ?? THEME_PRESETS[0]).theme.cyan }} />
+              </span>
+            );
+          })()}
+          <select
+            className="settings-input"
+            value={
+              THEME_PRESETS.find((p) =>
+                themesEqual(config.theme as unknown as Record<string, string>, p.theme),
+              )?.name ?? '__custom__'
+            }
+            onChange={(e) => {
+              const preset = THEME_PRESETS.find((p) => p.name === e.target.value);
+              if (preset) applyPreset(preset);
+            }}
+          >
+            {!THEME_PRESETS.some((p) =>
+              themesEqual(config.theme as unknown as Record<string, string>, p.theme),
+            ) && (
+              <option value="__custom__" disabled>Custom (hand-edited)</option>
+            )}
+            {THEME_PRESETS.map((preset) => (
+              <option key={preset.name} value={preset.name}>{preset.name}</option>
+            ))}
+          </select>
         </div>
       </SettingRow>
       <div className="theme-grid">
