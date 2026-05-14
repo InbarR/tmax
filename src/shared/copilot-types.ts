@@ -36,6 +36,13 @@ export interface CopilotWorkspaceMetadata {
   repository: string;
   name: string;
   summary: string;
+  /**
+   * True when the user explicitly renamed this session via the Copilot CLI
+   * `/rename` command. Persists in workspace.yaml as `user_named: true`.
+   * When true, the parser preserves the on-disk `name` value verbatim and
+   * skips any auto-derivation from summary/repo/cwd. Issue #2 follow-up.
+   */
+  userNamed?: boolean;
 }
 
 export interface CopilotActivityEntry {

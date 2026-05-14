@@ -266,7 +266,13 @@ export class CopilotSessionMonitor {
         oldSession.messageCount !== session.messageCount ||
         oldSession.toolCallCount !== session.toolCallCount ||
         oldSession.latestPrompt !== session.latestPrompt ||
-        oldSession.workspace.summary !== session.workspace.summary)) {
+        oldSession.workspace.summary !== session.workspace.summary ||
+        // Issue #2 follow-up: `/rename` writes to workspace.yaml's `name`
+        // field (and sets `user_named: true`), NOT to `summary`. The
+        // original fix only watched `summary`, so CLI renames were silently
+        // dropped. Compare both so a CLI rename refreshes the UI.
+        oldSession.workspace.name !== session.workspace.name ||
+        oldSession.workspace.userNamed !== session.workspace.userNamed)) {
       this.callbacks.onSessionUpdated?.(summary);
     }
 
@@ -509,11 +515,28 @@ export class CopilotSessionMonitor {
           case 'summary':
             result.summary = value;
             break;
+          // Issue #2 follow-up: the CLI's `/rename` writes the chosen
+          // title to `name:` (not `summary:`) and flips `user_named: true`.
+          // The original parser ignored both fields, so /rename never
+          // surfaced in the UI. Read them now and let the derivation
+          // block below honor the user's explicit choice.
+          case 'name':
+            result.name = value;
+            break;
+          case 'user_named':
+            result.userNamed = value === 'true' || value === 'True' || value === '1';
+            break;
         }
       }
 
-      // Derive display name: summary > repo > folder name
-      if (result.summary) {
+      // Derive display name: user-set name (CLI /rename) > summary > repo > folder name.
+      // When `user_named: true` we keep whatever the CLI wrote — even if
+      // summary or other fields would otherwise win — and seed `summary`
+      // with the same value so the renderer (which reads `summary`) shows
+      // the user's chosen name.
+      if (result.userNamed && result.name && result.name !== path.basename(sessionDir)) {
+        result.summary = result.name;
+      } else if (result.summary) {
         result.name = result.summary;
       } else if (result.repository) {
         result.name = result.repository.split('/').pop() || result.repository;
