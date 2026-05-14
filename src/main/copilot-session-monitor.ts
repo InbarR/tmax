@@ -265,7 +265,8 @@ export class CopilotSessionMonitor {
     if (oldSession && (oldSession.status !== session.status ||
         oldSession.messageCount !== session.messageCount ||
         oldSession.toolCallCount !== session.toolCallCount ||
-        oldSession.latestPrompt !== session.latestPrompt)) {
+        oldSession.latestPrompt !== session.latestPrompt ||
+        oldSession.workspace.summary !== session.workspace.summary)) {
       this.callbacks.onSessionUpdated?.(summary);
     }
 

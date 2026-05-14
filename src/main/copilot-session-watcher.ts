@@ -75,7 +75,7 @@ export class CopilotSessionWatcher {
       const sessionId = this.extractSessionId(filePath);
       if (!sessionId) return;
 
-      if (filePath.endsWith('events.jsonl')) {
+      if (filePath.endsWith('events.jsonl') || filePath.endsWith('workspace.yaml')) {
         this.callbacks.onEventsChanged(sessionId);
       }
     });

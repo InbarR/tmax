@@ -3719,7 +3719,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       const updatedTerminals = new Map(s.terminals);
       for (const [id, inst] of updatedTerminals) {
         if (inst.aiSessionId === sessionId) {
-          updatedTerminals.set(id, { ...inst, title: name, customTitle: true, aiAutoTitle: false });
+          updatedTerminals.set(id, { ...inst, title: name, customTitle: true, aiAutoTitle: false, firstCommandTitle: false });
         }
       }
       return {
