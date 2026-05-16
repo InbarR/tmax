@@ -200,6 +200,28 @@ async function openAiSession(
     displayName = session.summary || sessionId.slice(0, 8);
   }
 
+  // Auto-color the new pane when colorize-all-tabs is on, so opening a
+  // session from the AI list doesn't drop in with the default theme bg
+  // (had to manually run Colorize Again to give it a color otherwise).
+  let tabColor: string | undefined;
+  {
+    const { autoColorTabs, terminals: existingTerminals, activeWorkspaceId } = get();
+    if (autoColorTabs) {
+      const colorCounts = new Map<string, number>();
+      for (const c of TAB_COLORS) colorCounts.set(c.value, 0);
+      for (const t of existingTerminals.values()) {
+        if ((t.workspaceId ?? activeWorkspaceId) !== activeWorkspaceId) continue;
+        if (t.tabColor && colorCounts.has(t.tabColor)) {
+          colorCounts.set(t.tabColor, (colorCounts.get(t.tabColor) ?? 0) + 1);
+        }
+      }
+      let minCount = Infinity;
+      for (const [color, count] of colorCounts) {
+        if (count < minCount) { minCount = count; tabColor = color; }
+      }
+    }
+  }
+
   const instance: TerminalInstance = {
     id,
     title: displayName,
@@ -215,6 +237,7 @@ async function openAiSession(
     wsl: isWsl || undefined,
     wslDistro: wslDistro || undefined,
     workspaceId: get().activeWorkspaceId,
+    tabColor,
   };
 
   const { terminals, layout } = get();
@@ -347,6 +370,25 @@ function syncTerminalTransparency(theme: Record<string, string>, opacity?: numbe
  * Remove a leaf from the tree. If the leaf is inside a split, promote its
  * sibling to replace the split node. Returns null if the tree becomes empty.
  */
+/**
+ * Swap the terminalId on a leaf node in-place (immutable rewrite). Used by
+ * TASK-173's "new terminal in place" - the layout slot stays exactly where
+ * it was; only the underlying terminal id is replaced.
+ */
+export function replaceLeafTerminalId(
+  root: LayoutNode,
+  oldId: TerminalId,
+  newId: TerminalId,
+): LayoutNode {
+  if (root.kind === 'leaf') {
+    return root.terminalId === oldId ? { ...root, terminalId: newId } : root;
+  }
+  const first = replaceLeafTerminalId(root.first, oldId, newId);
+  const second = replaceLeafTerminalId(root.second, oldId, newId);
+  if (first === root.first && second === root.second) return root;
+  return { ...root, first, second };
+}
+
 export function removeLeaf(
   root: LayoutNode,
   terminalId: TerminalId,
@@ -722,6 +764,11 @@ interface TerminalStore {
   copilotSearchQuery: string;
   copilotSearching: boolean;
   copilotSqliteActive: boolean;
+  // Per-pane generation counter bumped by refreshTerminal(). React uses
+  // this as the xterm wrapper's `key` to force unmount+remount; the PTY
+  // lives in main, so the underlying shell process is untouched. Soft
+  // escape hatch for input-freezes (GH #101 / TASK-156).
+  refreshGenerations: Record<string, number>;
   selectedCopilotSessionId: string | null;
   // Prompts dialog state. Either terminalId (for the per-pane Ctrl+Shift+K
   // shortcut) or sessionId (for opening from the session summary popover).
@@ -743,6 +790,7 @@ interface TerminalStore {
   loadConfig: () => Promise<void>;
   createTerminal: (shellProfileId?: string, cwdOverride?: string) => Promise<void>;
   closeTerminal: (id: TerminalId) => Promise<void>;
+  replaceTerminal: (id: TerminalId, shellProfileId?: string) => Promise<void>;
   /**
    * Browser-style undo close (TASK-112). Pops the most recent entry off
    * closedTerminals and creates a fresh pane reusing its shellProfileId,
@@ -819,6 +867,14 @@ interface TerminalStore {
   saveSession: () => Promise<void>;
   restoreSession: () => Promise<boolean>;
   /**
+   * TASK-163: re-load just the cross-window-syncable maps
+   * (sessionNameOverrides, sessionLifecycleOverrides, sessionPinned) from
+   * the on-disk session file and merge them into the live store. Called
+   * from the SESSION_FILE_CHANGED handler in App.tsx when another tmax
+   * window writes to tmax-session.json. Returns true if any map changed.
+   */
+  reloadSessionSyncMaps: () => Promise<boolean>;
+  /**
    * True from app boot until session restore + auto-spawn fallback have
    * finished. Used by TilingLayout to render a neutral loading indicator
    * instead of the empty-state hero while panes are still being attached
@@ -883,8 +939,17 @@ interface TerminalStore {
   toggleCopilotPanel: () => void;
   // Open the AI Sessions panel and ask it to highlight the session
   // linked to this pane. Sets focus to the pane (so the panel reads the
-  // right aiSessionId) and bumps aiSessionHighlightRequest.
-  showAiSessionsForPane: (terminalId: TerminalId) => void;
+  // right aiSessionId) and bumps aiSessionHighlightRequest. If the
+  // session isn't in the loaded slice (we cap loads at ~314), fetches it
+  // by id and prepends it to the local list before bumping the request.
+  showAiSessionsForPane: (terminalId: TerminalId) => Promise<void>;
+  // Bump the per-pane refresh generation, forcing a React remount of the
+  // xterm wrapper. PTY untouched. TASK-156 / GH #101.
+  refreshTerminal: (terminalId: TerminalId) => void;
+  // Spawn a fresh AI session in the given cwd, running the configured
+  // copilotCommand or claudeCodeCommand. Used by the "+ New session"
+  // affordance on group headers in the AI Sessions panel. TASK-159 / GH #105.
+  createAiSessionInCwd: (provider: SessionProvider, cwd: string, options?: { wsl?: boolean; wslDistro?: string }) => Promise<void>;
   loadCopilotSessions: () => Promise<void>;
   loadMoreSessions: (extra: number) => Promise<void>;
   loadAllSessions: () => Promise<void>;
@@ -953,8 +1018,48 @@ let _sessionExtras: Record<string, unknown> = {};
 // restoreSession has populated the store. Flipped to true once restoreSession
 // has completed (or confirmed no saved session exists).
 let _sessionHydrated = false;
+// TASK-162: saveSession used to fire on every state change (12 callsites),
+// blasting electron-store sync writes whenever AI updates / typing /
+// resizing triggered the store. Debounce to ~300 ms - any saveSession
+// call within the window resets the timer and the latest snapshot wins.
+let _saveSessionTimer: ReturnType<typeof setTimeout> | null = null;
+const SAVE_SESSION_DEBOUNCE_MS = 300;
 // Monotonically increasing counter to detect stale loadWorktrees() calls
 let _loadWorktreesSeq = 0;
+// TASK-163: timestamp of the most recent saveSession() the renderer issued.
+// The SESSION_FILE_CHANGED watcher in main fires on every disk write
+// (including the renderer's own). When the broadcast arrives within
+// _OWN_WRITE_IGNORE_MS of a self-write AND the on-disk sync maps already
+// match the in-memory state, the reload is a no-op - this is the
+// feedback-loop guard.
+let _lastOwnSaveAt = 0;
+const _OWN_WRITE_IGNORE_MS = 500;
+
+function shallowEqualStringMap(
+  a: Record<string, string> | undefined,
+  b: Record<string, string> | undefined,
+): boolean {
+  const aKeys = a ? Object.keys(a) : [];
+  const bKeys = b ? Object.keys(b) : [];
+  if (aKeys.length !== bKeys.length) return false;
+  for (const k of aKeys) {
+    if (!b || a![k] !== b[k]) return false;
+  }
+  return true;
+}
+
+function shallowEqualBoolMap(
+  a: Record<string, true> | undefined,
+  b: Record<string, true> | undefined,
+): boolean {
+  const aKeys = a ? Object.keys(a) : [];
+  const bKeys = b ? Object.keys(b) : [];
+  if (aKeys.length !== bKeys.length) return false;
+  for (const k of aKeys) {
+    if (!b || !b[k]) return false;
+  }
+  return true;
+}
 
 // ── Store implementation ─────────────────────────────────────────────
 
@@ -1011,6 +1116,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   copilotSearchQuery: '',
   copilotSearching: false,
   copilotSqliteActive: false,
+  refreshGenerations: {},
   selectedCopilotSessionId: null,
   tabGroups: new Map(),
   markdownPreview: null,
@@ -1158,6 +1264,106 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       nextZIndex,
       preGridRoot: newPreGridRoot,
     });
+  },
+
+  replaceTerminal: async (id: TerminalId, shellProfileId?: string) => {
+    // TASK-173: close the current pane's PTY and spawn a fresh one in the
+    // SAME layout slot. Different from refreshTerminal (which keeps the
+    // PTY) and closeTerminal (which removes the slot). Useful when a
+    // shell is in a weird state or the user wants a clean shell without
+    // disturbing the surrounding split layout.
+    const { config, terminals, layout, workspaces, viewMode, preGridRoot } = get();
+    if (!config) return;
+    const old = terminals.get(id);
+    if (!old) return;
+    const profileId = shellProfileId ?? old.shellProfileId ?? config.defaultShellId;
+    const profile = config.shells.find((s) => s.id === profileId) ?? config.shells.find((s) => s.id === config.defaultShellId);
+    if (!profile) return;
+
+    const newId = uuidv4();
+    const cwd = profile.cwd
+      || (config as any).defaultCwd
+      || ((window as any).platformInfo?.platform === 'win32' ? 'C:\\Users' : (window as any).platformInfo?.homeDir || '/');
+    const { pid } = await window.terminalAPI.createPty({
+      id: newId,
+      shellPath: profile.path,
+      args: profile.args,
+      cwd,
+      env: profile.env,
+      cols: 80,
+      rows: 24,
+    });
+
+    // Build the replacement instance, preserving the slot-relevant fields
+    // (mode, tabColor, workspaceId) so the user sees the same shape pane.
+    const replacement: TerminalInstance = {
+      id: newId,
+      title: profile.name,
+      shellProfileId: profile.id,
+      cwd,
+      customTitle: false,
+      tabColor: old.tabColor,
+      mode: old.mode,
+      pid,
+      lastProcess: '',
+      startupCommand: '',
+      workspaceId: old.workspaceId,
+    };
+
+    const newTerminals = new Map(terminals);
+    newTerminals.delete(id);
+    newTerminals.set(newId, replacement);
+
+    // Swap the leaf id in the active layout tree.
+    let newRoot = layout.tilingRoot;
+    let newFloating = layout.floatingPanels;
+    if (old.mode === 'tiled' && newRoot) {
+      newRoot = replaceLeafTerminalId(newRoot, id, newId);
+    } else if (old.mode === 'floating') {
+      newFloating = newFloating.map((p) => (p.terminalId === id ? { ...p, terminalId: newId } : p));
+    }
+
+    // If we're in grid view, also patch preGridRoot so toggling back keeps
+    // the layout consistent.
+    let newPreGridRoot = preGridRoot;
+    if (viewMode === 'grid' && old.mode === 'tiled' && preGridRoot) {
+      newPreGridRoot = replaceLeafTerminalId(preGridRoot, id, newId);
+    }
+
+    // Mirror the swap into the workspaces map so a workspace switch later
+    // doesn't reveal stale terminal ids.
+    const newWorkspaces = new Map(workspaces);
+    for (const [wsId, ws] of newWorkspaces) {
+      let wsTree = ws.layout.tilingRoot;
+      let wsFloating = ws.layout.floatingPanels;
+      let dirty = false;
+      if (wsTree) {
+        const next = replaceLeafTerminalId(wsTree, id, newId);
+        if (next !== wsTree) { wsTree = next; dirty = true; }
+      }
+      if (wsFloating.some((p) => p.terminalId === id)) {
+        wsFloating = wsFloating.map((p) => (p.terminalId === id ? { ...p, terminalId: newId } : p));
+        dirty = true;
+      }
+      if (dirty) {
+        newWorkspaces.set(wsId, { ...ws, layout: { tilingRoot: wsTree, floatingPanels: wsFloating } });
+      }
+    }
+
+    set({
+      terminals: newTerminals,
+      layout: { tilingRoot: newRoot, floatingPanels: newFloating },
+      workspaces: newWorkspaces,
+      preGridRoot: newPreGridRoot,
+      focusedTerminalId: newId,
+    });
+
+    // Kill the old PTY after the layout has been swapped so the user
+    // never sees a "Process exited" flash on the previous content. The
+    // kill happens in the background; we don't await it.
+    void window.terminalAPI.killPty(id);
+
+    get().saveSession();
   },
 
   closeTerminal: async (id: TerminalId) => {
@@ -2736,6 +2942,18 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     // Skip until the store has been hydrated from disk — otherwise an early
     // save would overwrite persisted overrides with empty defaults.
     if (!_sessionHydrated) return;
+    // TASK-162: coalesce rapid-fire calls. Each save does an IPC +
+    // sync electron-store.set in main; without this, typing / AI session
+    // updates / workspace nudges could trigger 10+ writes/second and stall
+    // the UI on IPC round-trips. 300 ms debounce keeps the latest snapshot
+    // and lands well before any user-perceptible "should be saved" deadline.
+    if (_saveSessionTimer) clearTimeout(_saveSessionTimer);
+    _saveSessionTimer = setTimeout(() => {
+      _saveSessionTimer = null;
+      void runSaveSession();
+    }, SAVE_SESSION_DEBOUNCE_MS);
+
+    async function runSaveSession(): Promise<void> {
     const { terminals, layout, favoriteDirs, recentDirs, config, copilotSessions, claudeCodeSessions, workspaces, activeWorkspaceId } = get();
     // Snapshot the active workspace's layout from the canonical top-level
     // before serialization (TASK-40) - the workspaces map only mirrors on
@@ -2802,7 +3020,77 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       activeWorkspaceId,
     };
     _sessionExtras = data;
+    // TASK-163: tag the timestamp before the IPC round-trip. The main
+    // process file watcher fires shortly after; the SESSION_FILE_CHANGED
+    // handler compares against this to skip self-triggered reloads.
+    _lastOwnSaveAt = Date.now();
     await window.terminalAPI.saveSession(data);
+    }
+  },
+
+  reloadSessionSyncMaps: async () => {
+    if (!_sessionHydrated) return false;
+    try {
+      const session = (await window.terminalAPI.loadSession()) as Record<string, unknown> | null;
+      if (!session) return false;
+      const diskNames = (session.sessionNameOverrides && typeof session.sessionNameOverrides === 'object')
+        ? (session.sessionNameOverrides as Record<string, string>)
+        : {};
+      const diskLifecycle = (session.sessionLifecycleOverrides && typeof session.sessionLifecycleOverrides === 'object')
+        ? (session.sessionLifecycleOverrides as Record<string, import('../../shared/copilot-types').SessionLifecycle>)
+        : {};
+      const diskPinned = (session.sessionPinned && typeof session.sessionPinned === 'object')
+        ? (session.sessionPinned as Record<string, true>)
+        : {};
+
+      const st = get();
+      const namesEqual = shallowEqualStringMap(st.sessionNameOverrides, diskNames);
+      const lifecycleEqual = shallowEqualStringMap(st.sessionLifecycleOverrides as Record<string, string>, diskLifecycle as Record<string, string>);
+      const pinnedEqual = shallowEqualBoolMap(st.sessionPinned, diskPinned);
+
+      if (namesEqual && lifecycleEqual && pinnedEqual) {
+        // No disk-vs-memory delta - either nothing changed, or this is the
+        // echo from our own saveSession. Either way: no-op.
+        void _lastOwnSaveAt;
+        return false;
+      }
+
+      const patch: Partial<TerminalStore> = {};
+      if (!namesEqual) {
+        patch.sessionNameOverrides = diskNames;
+        // Mirror any renames into open AI pane titles, same as
+        // setSessionNameOverride does locally.
+        const updated = new Map(st.terminals);
+        let changed = false;
+        for (const [id, inst] of updated) {
+          if (!inst.aiSessionId) continue;
+          const next = diskNames[inst.aiSessionId];
+          if (next && next !== inst.title) {
+            updated.set(id, { ...inst, title: next, customTitle: true, aiAutoTitle: false });
+            changed = true;
+          }
+        }
+        if (changed) patch.terminals = updated;
+      }
+      if (!lifecycleEqual) patch.sessionLifecycleOverrides = diskLifecycle;
+      if (!pinnedEqual) patch.sessionPinned = diskPinned;
+
+      // Refresh the cached extras blob so the next saveSession doesn't
+      // clobber unrelated fields with stale data.
+      _sessionExtras = { ..._sessionExtras, ...session };
+      set(patch as any);
+
+      // If names changed, push the fresh map to main so notifyCopilotSession
+      // shows the correct display name immediately.
+      if (!namesEqual) {
+        try {
+          (window.terminalAPI as any).syncSessionNameOverrides?.(diskNames);
+        } catch { /* non-fatal */ }
+      }
+      return true;
+    } catch {
+      return false;
+    }
   },
 
   restoreSession: async () => {
@@ -2866,7 +3154,20 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
             id, shellPath: profile.path, args: profile.args, cwd, env: profile.env, cols: 80, rows: 24,
             wslDistro: info.wsl ? info.wslDistro : undefined,
           });
-          return { id, instance: { id, title: info.title || profile.name, customTitle: info.customTitle ?? !!info.title, shellProfileId: profile.id, cwd, mode: 'tiled' as const, pid, lastProcess: '', startupCommand: info.startupCommand || '', aiSessionId: info.aiSessionId, aiAutoTitle: info.aiAutoTitle, tabColor: info.tabColor, wsl: info.wsl, wslDistro: info.wslDistro, workspaceId: info.workspaceId } };
+          // TASK-167 follow-up: send the startup command (e.g. AI resume)
+          // at PTY-creation time so panes in flat-tab mode (only the focused
+          // tab's TerminalPanel mounts) still resume their AI sessions in
+          // the background. WSL needs prompt detection that lives in the
+          // component for now, so skip it here and let mount handle it.
+          let startupCommandSent = false;
+          if (info.startupCommand && !info.wsl) {
+            const cmd = info.startupCommand;
+            setTimeout(() => {
+              try { window.terminalAPI.writePty(id, cmd + '\r'); } catch { /* terminal gone */ }
+            }, 1500);
+            startupCommandSent = true;
+          }
+          return { id, instance: { id, title: info.title || profile.name, customTitle: info.customTitle ?? !!info.title, shellProfileId: profile.id, cwd, mode: 'tiled' as const, pid, lastProcess: '', startupCommand: info.startupCommand || '', startupCommandSent, aiSessionId: info.aiSessionId, aiAutoTitle: info.aiAutoTitle, tabColor: info.tabColor, wsl: info.wsl, wslDistro: info.wslDistro, workspaceId: info.workspaceId } };
         } catch { return null; }
       }
 
@@ -3336,15 +3637,151 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     get().saveSession();
   },
 
+  // Spawn a fresh AI session at the given cwd, running the configured
+  // copilotCommand / claudeCodeCommand. TASK-159 / GH #105: the AI Sessions
+  // panel exposes a "+ New session" affordance per repo group; this is
+  // what it calls. WSL paths route through the wsl shell profile and
+  // pass wslDistro through to createPty.
+  createAiSessionInCwd: async (provider, cwd, options) => {
+    const { config, terminals, layout } = get();
+    if (!config) return;
+    const isWsl = options?.wsl === true && !!options.wslDistro;
+    const profileId = isWsl ? 'wsl' : config.defaultShellId;
+    const profile = config.shells.find((s) => s.id === profileId);
+    if (!profile) return;
+    const startupCommand = provider === 'copilot'
+      ? (config.copilotCommand || 'copilot')
+      : (config.claudeCodeCommand || 'claude');
+    const id = uuidv4();
+    const { pid } = await window.terminalAPI.createPty({
+      id,
+      shellPath: profile.path,
+      args: profile.args,
+      cwd: cwd || profile.cwd || ((window as any).platformInfo?.platform === 'win32' ? 'C:\\Users' : (window as any).platformInfo?.homeDir || '/'),
+      env: profile.env,
+      cols: 80,
+      rows: 24,
+      wslDistro: isWsl ? options.wslDistro : undefined,
+    });
+    // Auto-color if autoColorTabs is on (same logic as createTerminal).
+    let tabColor: string | undefined;
+    {
+      const autoColorOn = get().autoColorTabs;
+      const activeWsId = get().activeWorkspaceId;
+      if (autoColorOn) {
+        const colorCounts = new Map<string, number>();
+        for (const c of TAB_COLORS) colorCounts.set(c.value, 0);
+        for (const t of terminals.values()) {
+          if ((t.workspaceId ?? activeWsId) !== activeWsId) continue;
+          if (t.tabColor && colorCounts.has(t.tabColor)) {
+            colorCounts.set(t.tabColor, (colorCounts.get(t.tabColor) ?? 0) + 1);
+          }
+        }
+        let minCount = Infinity;
+        for (const [color, count] of colorCounts) {
+          if (count < minCount) { minCount = count; tabColor = color; }
+        }
+      }
+    }
+
+    const instance: TerminalInstance = {
+      id,
+      title: profile.name,
+      shellProfileId: profileId,
+      cwd,
+      customTitle: false,
+      aiAutoTitle: true,
+      mode: 'tiled',
+      pid,
+      lastProcess: '',
+      startupCommand,
+      workspaceId: get().activeWorkspaceId,
+      wsl: isWsl || undefined,
+      wslDistro: isWsl ? options.wslDistro : undefined,
+      tabColor,
+    };
+    const newTerminals = new Map(terminals);
+    newTerminals.set(id, instance);
+    const newLeaf: LayoutLeafNode = { kind: 'leaf', terminalId: id };
+    let newRoot: LayoutNode;
+    if (layout.tilingRoot === null) {
+      newRoot = newLeaf;
+    } else {
+      const order = getLeafOrder(layout.tilingRoot);
+      newRoot = insertLeaf(layout.tilingRoot, order[order.length - 1], id, 'right');
+    }
+    set({
+      terminals: newTerminals,
+      layout: { ...layout, tilingRoot: newRoot },
+      focusedTerminalId: id,
+    });
+    get().saveSession();
+  },
+
+  // Soft refresh: bump the pane's refresh generation so React unmounts and
+  // remounts the xterm wrapper (keyed on the generation). PTY survives
+  // because it lives in main; renderer-side stalls (focus thief, stuck
+  // listeners) get cleared without losing scrollback. TASK-156 / GH #101.
+  refreshTerminal: (terminalId: TerminalId) => {
+    if (!get().terminals.has(terminalId)) return;
+    set((s) => ({
+      refreshGenerations: {
+        ...s.refreshGenerations,
+        [terminalId]: (s.refreshGenerations[terminalId] ?? 0) + 1,
+      },
+    }));
+    get().addToast('Pane refreshed');
+  },
+
   // ── Copilot panel actions ──────────────────────────────────────────
-  showAiSessionsForPane: (terminalId: TerminalId) => {
-    const { terminals } = get();
-    if (!terminals.has(terminalId)) return;
+  showAiSessionsForPane: async (terminalId: TerminalId) => {
+    const { terminals, copilotSessions, claudeCodeSessions } = get();
+    const terminal = terminals.get(terminalId);
+    if (!terminal) return;
+
+    // Open the panel + focus the pane first so the UI responds immediately,
+    // even if the session-fetch round-trip takes a moment.
     set((s) => ({
       showCopilotPanel: true,
       focusedTerminalId: terminalId,
       aiSessionHighlightRequest: s.aiSessionHighlightRequest + 1,
     }));
+
+    const aiSessionId = terminal.aiSessionId;
+    const provider = terminal.aiProvider;
+    if (!aiSessionId || !provider) return;
+
+    // CopilotPanel's highlight effect bails when the session isn't in the
+    // loaded slice. Default cap is 314 (aiSessionLoadLimit); on a busy
+    // machine with 1500+ sessions, ~80% of panes' sessions won't be
+    // present and "Show in AI sessions" silently did nothing. Fetch the
+    // missing summary by id and prepend it so the panel can find it.
+    const list = provider === 'copilot' ? copilotSessions : claudeCodeSessions;
+    if (list.some((s) => s.id === aiSessionId)) return;
+
+    try {
+      const fetched: CopilotSessionSummary | null = provider === 'copilot'
+        ? await (window.terminalAPI as any).getCopilotSession(aiSessionId)
+        : await (window.terminalAPI as any).getClaudeCodeSession(aiSessionId);
+      if (!fetched) return;
+      set((s) => {
+        // Re-check inside the set to avoid racing with a concurrent
+        // background load that may have just inserted the same row.
+        const existing = provider === 'copilot' ? s.copilotSessions : s.claudeCodeSessions;
+        if (existing.some((x) => x.id === fetched.id)) return s;
+        return provider === 'copilot'
+          ? {
+              copilotSessions: [fetched, ...existing],
+              aiSessionHighlightRequest: s.aiSessionHighlightRequest + 1,
+            }
+          : {
+              claudeCodeSessions: [fetched, ...existing],
+              aiSessionHighlightRequest: s.aiSessionHighlightRequest + 1,
+            };
+      });
+    } catch (err) {
+      console.error('[showAiSessionsForPane] fetch by id failed:', err);
+    }
   },
 
   toggleCopilotPanel: () => {
@@ -3425,8 +3862,23 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set({ copilotSessions: sessions });
   },
 
-  updateTerminalTitleFromSession: (session: CopilotSessionSummary, _sessionType?: 'copilot' | 'claude') => {
-    if (!session.summary) return;
+  updateTerminalTitleFromSession: (session: CopilotSessionSummary, sessionType?: 'copilot' | 'claude') => {
+    try {
+      (window as any).terminalAPI?.diagLog?.('renderer:ai-link-call', {
+        sessionId: session.id,
+        sessionType,
+        provider: session.provider,
+        cwd: session.cwd,
+        messageCount: session.messageCount,
+        status: session.status,
+        hasSummary: !!session.summary,
+      });
+    } catch { /* ignore */ }
+    // Note: we used to early-return on empty summary, but that prevented
+    // the link itself from happening for brand-new sessions that hadn't
+    // generated a summary yet. The rename code below already gracefully
+    // falls back to current.title when summary is empty, so it's safe to
+    // proceed.
     const { terminals, focusedTerminalId } = get();
     const newTerminals = new Map(terminals);
     let changed = false;
@@ -3463,6 +3915,13 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     // session can't poach a fresh pwsh you just opened.
     const sessionActive = session.status !== 'idle';
 
+    // TASK-154: a pane that has process-tree-detected Copilot/Claude was
+    // started by the user; the auto-link should match it to a session that
+    // came into being *after* the pane started, not to a long-running
+    // session that happens to be active in the same cwd (e.g. a
+    // backgrounded ClawPilot meeting helper). 30s of slack absorbs clock
+    // skew between aiProcessDetectedAt and the session's `created_at`.
+    const OLDER_SESSION_GRACE_MS = 30_000;
     let candidateId: string | null = null;
     if (!alreadyLinked && session.cwd && sessionActive) {
       const sessionCwd = normCwd(session.cwd);
@@ -3486,6 +3945,24 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
             || ccs.find((s) => s.id === t.aiSessionId);
           if (prevSession && prevSession.status !== 'idle') continue;
         }
+        // TASK-154 guard: if the pane has a process-tree stamp, only
+        // accept sessions that were created at or after that stamp.
+        if (
+          t.aiProcessDetectedAt != null
+          && session.createdAt != null
+          && t.aiProcessDetectedAt - session.createdAt > OLDER_SESSION_GRACE_MS
+        ) {
+          try {
+            (window as any).terminalAPI?.diagLog?.('renderer:ai-link-skip-older', {
+              sessionId: session.id,
+              terminalId: id,
+              sessionCreatedAt: session.createdAt,
+              paneDetectedAt: t.aiProcessDetectedAt,
+              ageGapMs: t.aiProcessDetectedAt - session.createdAt,
+            });
+          } catch { /* ignore */ }
+          continue;
+        }
         eligible.push(id);
       }
       if (eligible.length > 0) {
@@ -3504,6 +3981,60 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         candidateId = focusedTerminalId && pool.includes(focusedTerminalId)
           ? focusedTerminalId
           : pool[0];
+      }
+    }
+
+    // TASK-171 bridge: when cwd matching fails, fall back to panes that
+    // process-tree-detection has confirmed are running the matching AI.
+    // Multiple guards stack to make this safe against the poaching cases
+    // TASK-172 originally chased:
+    //   1. Pane has aiProcessKind == session.provider (Copilot pane only
+    //      attaches Copilot sessions, Claude pane only Claude).
+    //   2. aiProcessDetectedAt is recent (within 5 min) - if user closed
+    //      Copilot and started something else, the stale stamp will have
+    //      aged out OR been cleared on a prior link.
+    //   3. session.messageCount <= 2 - the session is genuinely brand new,
+    //      not some long-running chat in another tmax window.
+    //   4. Pane has no existing AI link.
+    const PROCESS_STAMP_FRESHNESS_MS = 5 * 60_000;
+    const FRESH_SESSION_MAX_MESSAGES = 2;
+    if (!candidateId && !alreadyLinked && sessionActive) {
+      const sessionProvider = sessionType === 'claude' ? 'claude-code' : 'copilot';
+      const sessionIsBrandNew = typeof session.messageCount === 'number'
+        && session.messageCount <= FRESH_SESSION_MAX_MESSAGES;
+      const stampedPanes = [...terminals.values()].filter((t) => t.aiProcessKind === sessionProvider).length;
+      try {
+        (window as any).terminalAPI?.diagLog?.('renderer:ai-link-bridge-check', {
+          sessionId: session.id,
+          provider: sessionProvider,
+          messageCount: session.messageCount,
+          stampedPanes,
+        });
+      } catch { /* ignore */ }
+      if (sessionIsBrandNew) {
+        const now = Date.now();
+        // Prefer focused pane, else any matching pane.
+        const candidates: TerminalId[] = [];
+        for (const [id, t] of terminals) {
+          if (t.aiSessionId) continue;
+          if (t.mode !== 'tiled' && t.mode !== 'floating') continue;
+          if (t.aiProcessKind !== sessionProvider) continue;
+          if (t.aiProcessDetectedAt == null) continue;
+          if (now - t.aiProcessDetectedAt > PROCESS_STAMP_FRESHNESS_MS) continue;
+          candidates.push(id);
+        }
+        if (candidates.length > 0) {
+          candidateId = focusedTerminalId && candidates.includes(focusedTerminalId)
+            ? focusedTerminalId
+            : candidates[0];
+          try {
+            (window as any).terminalAPI?.diagLog?.('renderer:ai-link-bridge-attach', {
+              sessionId: session.id,
+              terminalId: candidateId,
+              candidates: candidates.length,
+            });
+          } catch { /* ignore */ }
+        }
       }
     }
 
@@ -3546,8 +4077,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
           aiAutoTitle: isRelink ? true : !hasUserRename,
           customTitle: true,
           // The pane is now AI-linked. Clear the first-command marker so
-          // a later UI rename behaves like a normal user rename.
+          // a later UI rename behaves like a normal user rename. Clear
+          // the process-tree stamp too - future decisions go through
+          // aiSessionId rather than this fallback.
           firstCommandTitle: false,
+          aiProcessKind: undefined,
+          aiProcessDetectedAt: undefined,
         };
         newTerminals.set(id, current);
         matched = true;
@@ -3564,9 +4099,21 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
           title = override;
         } else {
           // Strip XML/HTML tags from summary (e.g. slash command markup)
-          const clean = session.summary.replace(/<[^>]+>/g, '').trim();
+          const clean = (session.summary || '').replace(/<[^>]+>/g, '').trim();
           const summary = clean.length > 60 ? clean.slice(0, 57) + '...' : clean;
-          title = summary || current.title;
+          // Fresh Copilot sessions can have an empty `summary` for the
+          // first turn or two while the CLI generates one. Fall back to
+          // the latest user prompt so the pane title still reflects
+          // session content instead of staying at the process-detect
+          // tentative title ("GitHub Copilot").
+          if (summary) {
+            title = summary;
+          } else if (session.latestPrompt) {
+            const promptClean = session.latestPrompt.replace(/<[^>]+>/g, '').trim();
+            title = promptClean.length > 60 ? promptClean.slice(0, 57) + '...' : promptClean || current.title;
+          } else {
+            title = current.title;
+          }
         }
         if (current.title !== title) {
           newTerminals.set(id, { ...newTerminals.get(id)!, title });
@@ -3825,13 +4372,20 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   togglePinSession: (sessionId: string) => {
+    let pinned = false;
     set((s) => {
       const next = { ...s.sessionPinned };
-      if (next[sessionId]) delete next[sessionId];
-      else next[sessionId] = true;
+      if (next[sessionId]) {
+        delete next[sessionId];
+        pinned = false;
+      } else {
+        next[sessionId] = true;
+        pinned = true;
+      }
       return { sessionPinned: next };
     });
     get().saveSession();
+    get().addToast(pinned ? 'Pinned to top' : 'Unpinned');
   },
 
   checkStaleActiveSessions: () => {

@@ -112,6 +112,7 @@ export class CopilotSessionMonitor {
             repository: row.repository || '',
             name: row.summary || row.id,
             summary: row.summary || '',
+            createdAt: summary.createdAt,
           },
           messageCount: turnStats?.message_count ?? 0,
           toolCallCount: 0,
@@ -313,6 +314,7 @@ export class CopilotSessionMonitor {
                 repository: row.repository || '',
                 name: row.summary || row.id,
                 summary: row.summary || '',
+                createdAt: summary.createdAt,
               },
               messageCount: turnStats?.message_count ?? 0,
               toolCallCount: 0,
@@ -531,6 +533,14 @@ export class CopilotSessionMonitor {
           case 'user_named':
             result.userNamed = value === 'true' || value === 'True' || value === '1';
             break;
+          // TASK-154: surface session creation time so the auto-link path
+          // can tell a freshly-spawned session apart from a long-running
+          // one that just happens to be active in the same cwd.
+          case 'created_at': {
+            const t = Date.parse(value);
+            if (!Number.isNaN(t)) result.createdAt = t;
+            break;
+          }
         }
       }
 
@@ -570,6 +580,7 @@ export class CopilotSessionMonitor {
       messageCount: session.messageCount,
       toolCallCount: session.toolCallCount,
       lastActivityTime: session.lastActivityTime,
+      createdAt: session.workspace.createdAt,
     };
 
     if (this.wslDistro) {

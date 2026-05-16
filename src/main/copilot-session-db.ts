@@ -337,6 +337,12 @@ export function sessionRowToSummary(
     lastActivityTime = 0;
   }
 
+  let createdAt: number | undefined;
+  try {
+    const t = new Date(row.created_at).getTime();
+    if (!Number.isNaN(t)) createdAt = t;
+  } catch { /* leave undefined */ }
+
   return {
     id: row.id,
     provider: 'copilot',
@@ -350,5 +356,6 @@ export function sessionRowToSummary(
     lastActivityTime,
     latestPrompt,
     latestPromptTime,
+    createdAt,
   };
 }

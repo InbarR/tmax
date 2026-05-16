@@ -25,6 +25,13 @@ export interface CopilotSessionSummary {
   messageCount: number;
   toolCallCount: number;
   lastActivityTime: number;
+  /** Session creation time (ms since epoch) - sourced from workspace.yaml
+   *  `created_at` or the SQLite `created_at` column. Used by the cwd
+   *  auto-link path to tell a freshly-spawned session apart from a
+   *  long-running session that's just been re-activated in the same
+   *  folder. Optional for backwards compatibility with restored sessions
+   *  that pre-date this field. */
+  createdAt?: number;
   model?: string;
   wsl?: boolean;
   wslDistro?: string;
@@ -76,6 +83,8 @@ export interface CopilotWorkspaceMetadata {
    * skips any auto-derivation from summary/repo/cwd. Issue #2 follow-up.
    */
   userNamed?: boolean;
+  /** Parsed from workspace.yaml `created_at:` (ms since epoch). */
+  createdAt?: number;
 }
 
 export interface CopilotActivityEntry {
