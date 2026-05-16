@@ -188,6 +188,24 @@ const App: React.FC = () => {
       useTerminalStore.getState().reattachTerminal(id);
     });
 
+    // TASK-163: when another tmax window writes to tmax-session.json, main
+    // sends a SESSION_FILE_CHANGED ping. Re-hydrate just the cross-window
+    // syncable maps so renames / archives / pins from window A appear in
+    // window B without a restart. The store's own-write ignore guard
+    // suppresses the echo from our own saveSession.
+    let pendingReloadTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsubSessionFile = (window.terminalAPI as any).onSessionFileChanged?.(() => {
+      if (pendingReloadTimer) clearTimeout(pendingReloadTimer);
+      pendingReloadTimer = setTimeout(() => {
+        pendingReloadTimer = null;
+        try {
+          useTerminalStore.getState().reloadSessionSyncMaps?.();
+        } catch (err) {
+          console.warn('[session-sync] reload failed:', err);
+        }
+      }, 150);
+    });
+
     // Periodic stale session check (every 6 hours)
     const staleCheckInterval = setInterval(() => {
       useTerminalStore.getState().checkStaleActiveSessions();
@@ -201,6 +219,8 @@ const App: React.FC = () => {
       clearInterval(heartbeatInterval);
       clearInterval(staleCheckInterval);
       unsubDetached?.();
+      unsubSessionFile?.();
+      if (pendingReloadTimer) clearTimeout(pendingReloadTimer);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -212,24 +232,12 @@ const App: React.FC = () => {
 
     const store = useTerminalStore.getState;
 
-    // In-app toast on status transition to needs-attention.
-    // Edge-triggered: only fires when transitioning INTO awaitingApproval /
-    // waitingForUser, not on every update. Works for both Copilot and Claude.
-    const prevStatus = new Map<string, string>();
-    const maybeNotify = (session: CopilotSessionSummary, provider: string) => {
-      const prev = prevStatus.get(session.id);
-      prevStatus.set(session.id, session.status);
-      const attention = session.status === 'awaitingApproval' || session.status === 'waitingForUser';
-      const wasAttention = prev === 'awaitingApproval' || prev === 'waitingForUser';
-      if (!attention || wasAttention) return;
-      const label = session.status === 'awaitingApproval' ? 'needs approval' : 'waiting for input';
-      const title = session.summary || session.repository || session.id.slice(0, 8);
-      store().addToast(`${provider}: ${title} - ${label}`);
-    };
+    // OS-level notifications are fired from main (copilot-notification.ts)
+    // on the same status transitions, so an in-app toast on top of that is
+    // just duplicate noise. The renderer just mirrors the session state.
 
     const unsubCopilotUpdated = api.onCopilotSessionUpdated?.((session: CopilotSessionSummary) => {
       store().updateCopilotSession(session);
-      maybeNotify(session, 'Copilot');
     });
     const unsubCopilotAdded = api.onCopilotSessionAdded?.((session: CopilotSessionSummary) => {
       store().addCopilotSession(session);
@@ -239,7 +247,6 @@ const App: React.FC = () => {
     });
     const unsubClaudeUpdated = api.onClaudeCodeSessionUpdated?.((session: CopilotSessionSummary) => {
       store().updateClaudeCodeSession(session);
-      maybeNotify(session, 'Claude');
     });
     const unsubClaudeAdded = api.onClaudeCodeSessionAdded?.((session: CopilotSessionSummary) => {
       store().addClaudeCodeSession(session);

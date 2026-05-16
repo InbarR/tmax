@@ -432,8 +432,13 @@ export class CopilotSessionMonitor {
 
     const parsed = fs.existsSync(eventsPath) ? parseSessionEvents(eventsPath) : null;
 
-    // If no summary from workspace.yaml, use first prompt as the display name
-    if (!workspace.summary && workspace.name === id) {
+    // If no summary from workspace.yaml, use first prompt as the display name.
+    // The previous `workspace.name === id` gate skipped this fallback whenever
+    // parseWorkspace derived a name from `repository`/`cwd` (which it does for
+    // every fresh session before Copilot CLI writes `summary:` to yaml), so
+    // the sidebar/notification fell back to repo/cwd even when a prompt was
+    // already on disk.
+    if (!workspace.summary) {
       const prompts = extractCopilotPrompts(eventsPath, 1);
       if (prompts.length > 0) {
         workspace.summary = prompts[0].slice(0, 60);
