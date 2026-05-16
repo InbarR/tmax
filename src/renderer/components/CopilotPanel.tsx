@@ -316,7 +316,17 @@ const CopilotPanel: React.FC = () => {
     let all = [
       ...copilotSessions.filter((s) => s.messageCount > 0).map((s) => ({ ...s, provider: s.provider || 'copilot' as const })),
       ...claudeCodeSessions.filter((s) => s.messageCount > 0).map((s) => ({ ...s, provider: s.provider || 'claude-code' as const })),
-    ].map((s) => summaryOverrides[s.id] ? { ...s, summary: summaryOverrides[s.id] } : s);
+    ].map((s) => {
+      // If user has a sidebar override, use it
+      if (summaryOverrides[s.id]) return { ...s, summary: summaryOverrides[s.id] };
+      // If a linked terminal has a custom title (user renamed via tab), derive from it
+      for (const [, t] of terminals) {
+        if (t.aiSessionId === s.id && t.customTitle && !t.aiAutoTitle) {
+          return { ...s, summary: t.title };
+        }
+      }
+      return s;
+    });
 
     // Filter by provider
     if (filterTab !== 'all') {
@@ -344,7 +354,7 @@ const CopilotPanel: React.FC = () => {
       : deduped.filter((s) => getSessionLifecycle(s) === lifecycleTab);
 
     return sortSessions(lifecycleFiltered, openSessionIds, pinnedSessions, sortMode);
-  }, [copilotSessions, claudeCodeSessions, query, filterTab, showRunningOnly, summaryOverrides, lifecycleTab, getSessionLifecycle, openSessionIds, pinnedSessions, sortMode]);
+  }, [copilotSessions, claudeCodeSessions, query, filterTab, showRunningOnly, summaryOverrides, terminals, lifecycleTab, getSessionLifecycle, openSessionIds, pinnedSessions, sortMode]);
 
   // #69: when groupByRepo is on, reorder filtered so sessions sharing a cwd
   // folder are contiguous. Group order depends on `groupOrder`:
@@ -574,6 +584,10 @@ const CopilotPanel: React.FC = () => {
     if (!renaming) return;
     const newSummary = renaming.value.trim();
     if (newSummary) {
+      // setSessionNameOverride atomically writes the sidebar override AND
+      // updates every linked terminal's title/customTitle/aiAutoTitle in one
+      // set(). No need to call renameTerminal() — that would trigger a
+      // redundant second setSessionNameOverride via its side effect.
       useTerminalStore.getState().setSessionNameOverride(renaming.id, newSummary);
     }
     setRenaming(null);
