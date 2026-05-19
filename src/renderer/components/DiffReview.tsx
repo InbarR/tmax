@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { useTerminalStore } from '../state/terminal-store';
+import { useTerminalStore, getEffectiveCwd } from '../state/terminal-store';
 import { tokenizeAnd, matchesAllTokens } from '../../shared/and-filter';
 import type {
   DiffMode,
@@ -404,21 +404,13 @@ const DiffReview: React.FC = () => {
   const diffReviewMode = useTerminalStore(s => s.diffReviewMode);
   const closeDiffReview = useTerminalStore(s => s.closeDiffReview);
   const setDiffReviewMode = useTerminalStore(s => s.setDiffReviewMode);
-  // Prefer the AI session's CWD when the terminal is linked to an active session.
-  // The CLI changes directory internally without emitting OSC sequences, so
-  // terminal.cwd (shell CWD) stays stale. The session monitor tracks the real
-  // working directory via workspace metadata. Falls back to shell CWD when no
-  // AI session is linked. See: https://github.com/yoziv/tmax/issues/3
-  const terminalCwd = useTerminalStore(s => {
-    const t = diffReviewTerminalId ? s.terminals.get(diffReviewTerminalId) : null;
-    if (!t) return '';
-    if (t.aiSessionId) {
-      const sess = s.copilotSessions.find(x => x.id === t.aiSessionId)
-                ?? s.claudeCodeSessions.find(x => x.id === t.aiSessionId);
-      if (sess?.cwd) return sess.cwd;
-    }
-    return t.cwd ?? '';
-  });
+  const terminalCwd = useTerminalStore(s =>
+    getEffectiveCwd(
+      diffReviewTerminalId ? s.terminals.get(diffReviewTerminalId) : undefined,
+      s.copilotSessions,
+      s.claudeCodeSessions,
+    )
+  );
   const agentLabel = useTerminalStore(s => {
     if (!diffReviewTerminalId) return 'Agent';
     const t = s.terminals.get(diffReviewTerminalId);
