@@ -759,6 +759,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         // at 4 rows so a screen full of path-shaped tokens can't glue together.
         const PATH_BODY = /[A-Za-z0-9._\-+~/\\]/;
         const MAX_HARD_NEWLINE = 4;
+        // TASK-166: TASK-132/137 always inserts a seam space when the
+        // continuation row has leading whitespace, on the assumption that the
+        // WS is a wrap-eaten space from a path with embedded spaces. But Ink
+        // also leaves leading WS as pure layout indent (no eaten space), so
+        // for a no-space path like `.../files/reddit-...md` we end up with a
+        // phantom space (`.../fi les/...`) and fileRead 404s. Track each
+        // inserted seam offset so activate() can retry without them.
+        const seamSpaceOffsets: number[] = [];
         let stitchedFwd = 0;
         while (stitchedFwd < MAX_HARD_NEWLINE) {
           const lastSeg = segs[segs.length - 1];
@@ -780,8 +788,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           // TASK-132: paths with literal embedded spaces (e.g. `OneDrive -
           // Microsoft\...`) survive the wrap iff Ink kept the space on the
           // post-wrap side as leading whitespace. Restore one seam space so
-          // the stitched path keeps the on-disk spelling.
+          // the stitched path keeps the on-disk spelling. We can't tell here
+          // whether the WS is a real eaten space or just layout indent, so
+          // record the seam and let activate() try both forms.
           const seamSpace = wsMatch[1].length > 0 ? ' ' : '';
+          if (seamSpace) seamSpaceOffsets.push(logical.length);
           segs.push({ rowIdx: nextRow, logicalStart: logical.length + seamSpace.length, soft: false, leadingWS: wsMatch[1].length - seamSpace.length });
           logical += seamSpace + trimmed;
           stitchedFwd++;
@@ -819,9 +830,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             // Other segs shift left in `logical` by wsLen.
             firstSeg.leadingWS += wsLen;
             for (let i = 1; i < segs.length; i++) segs[i].logicalStart -= wsLen;
+            // Existing forward-stitch seam offsets shifted too.
+            for (let i = 0; i < seamSpaceOffsets.length; i++) seamSpaceOffsets[i] -= wsLen;
           }
           const shift = prevText.length + seamSpace.length;
           for (const s of segs) s.logicalStart += shift;
+          for (let i = 0; i < seamSpaceOffsets.length; i++) seamSpaceOffsets[i] += shift;
+          // The newly prepended seam space (if any) sits right after prevText.
+          if (seamSpace) seamSpaceOffsets.push(prevText.length);
           segs.unshift({ rowIdx: prevRow, logicalStart: 0, soft: false, leadingWS: 0 });
           logical = prevText + seamSpace + logical;
           stitchedBack++;
@@ -862,6 +878,21 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           const startX = lineIdx0 === a.row ? a.col + 1 : 1;
           const endX = lineIdx0 === b.row ? b.col + 1 : term.cols;
 
+          // TASK-166: build the seam-stripped variant for this match so
+          // activate() can fall back when the seam-space heuristic added a
+          // phantom space inside a no-space path (Ink's layout indent gets
+          // misread as a wrap-eaten space). Offsets are relative to the path.
+          const matchStart = match.index;
+          const matchEnd = match.index + matchedPath.length;
+          const seamsInPath = seamSpaceOffsets
+            .filter((o) => o >= matchStart && o < matchEnd)
+            .map((o) => o - matchStart)
+            .sort((x, y) => y - x); // descending so splices don't shift
+          let strippedPath = matchedPath;
+          for (const o of seamsInPath) {
+            strippedPath = strippedPath.slice(0, o) + strippedPath.slice(o + 1);
+          }
+
           links.push({
             range: {
               start: { x: startX, y: bufferLineNumber },
@@ -872,23 +903,34 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             activate() {
               const termInst = useTerminalStore.getState().terminals.get(terminalId);
               const cwd = termInst?.cwd || '';
-              let fullPath = matchedPath;
-              if (!/^[a-zA-Z]:/.test(matchedPath) && !matchedPath.startsWith('/') && !matchedPath.startsWith('~')) {
-                const sep = cwd.includes('\\') ? '\\' : '/';
-                fullPath = cwd + sep + matchedPath;
-              }
-              (window.terminalAPI as any).fileRead(fullPath).then((content: string | null) => {
-                if (content === null) {
-                  // eslint-disable-next-line no-console
-                  console.warn('[md-link] fileRead returned null', { fullPath });
-                  return;
+              const resolve = (p: string) => {
+                if (!/^[a-zA-Z]:/.test(p) && !p.startsWith('/') && !p.startsWith('~')) {
+                  const sep = cwd.includes('\\') ? '\\' : '/';
+                  return cwd + sep + p;
                 }
-                const fileName = fullPath.split(/[/\\]/).pop() || fullPath;
-                useTerminalStore.setState({ markdownPreview: { filePath: fullPath, content, fileName } });
-              }).catch((err: unknown) => {
-                // eslint-disable-next-line no-console
-                console.error('[md-link] fileRead threw', { fullPath, err });
-              });
+                return p;
+              };
+              const primary = resolve(matchedPath);
+              const fallback = strippedPath !== matchedPath ? resolve(strippedPath) : null;
+              const tryRead = (p: string): Promise<{ path: string; content: string } | null> =>
+                (window.terminalAPI as any).fileRead(p).then((c: string | null) =>
+                  c === null ? null : { path: p, content: c },
+                );
+              tryRead(primary)
+                .then((res) => (res ? res : fallback ? tryRead(fallback) : null))
+                .then((res) => {
+                  if (!res) {
+                    // eslint-disable-next-line no-console
+                    console.warn('[md-link] fileRead returned null', { primary, fallback });
+                    return;
+                  }
+                  const fileName = res.path.split(/[/\\]/).pop() || res.path;
+                  useTerminalStore.setState({ markdownPreview: { filePath: res.path, content: res.content, fileName } });
+                })
+                .catch((err: unknown) => {
+                  // eslint-disable-next-line no-console
+                  console.error('[md-link] fileRead threw', { primary, fallback, err });
+                });
             },
             decorations: { underline: true, pointerCursor: true },
           });
