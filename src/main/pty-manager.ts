@@ -132,6 +132,13 @@ export class PtyManager {
   create(opts: PtyCreateOpts): { id: string; pid: number } {
     // Validate cwd is an existing directory; fall back to home dir
     let cwd = opts.cwd;
+    // Expand a leading ~ so users can type ~/repos in Settings → Default
+    // Start Folder without having to spell out the full home path. Without
+    // this, existsSync(~) fails and we silently fall through to homedir(),
+    // which makes the setting look broken to Mac/Linux users.
+    if (cwd && (cwd === '~' || cwd.startsWith('~/') || cwd.startsWith('~\\'))) {
+      cwd = join(homedir(), cwd.slice(1));
+    }
     try {
       if (!cwd || !existsSync(cwd) || !statSync(cwd).isDirectory()) {
         cwd = homedir();
@@ -189,9 +196,18 @@ export class PtyManager {
     // CMD: relies on prompt regex fallback (no hook mechanism)
 
     // Inject shell integration for zsh (precmd hook for OSC 7)
-    // zsh doesn't support PROMPT_COMMAND; use precmd_functions array instead
+    // zsh doesn't support PROMPT_COMMAND; use precmd_functions array instead.
+    //
+    // Many zsh prompt themes (oh-my-zsh, p10k variants) populate their cwd
+    // segment from a `chpwd` hook that only fires after an actual `cd`.
+    // tmax spawns the shell directly into the target cwd via the PTY, so
+    // no `cd` happens and the prompt's cwd segment stays empty until the
+    // user manually changes folder. The injected precmd fires `chpwd` and
+    // every `chpwd_functions` entry exactly once on the first prompt so
+    // theme state is populated. Guarded by _TMAX_CHPWD_FIRED so it only
+    // runs on the first prompt and doesn't double-trigger thereafter.
     if (!shellName.includes('wsl') && shellName.includes('zsh') && !shellName.includes('pwsh')) {
-      const zshSnippet = `__tmax_precmd() { printf '\\e]7;file:///%s\\a' "$PWD" }; precmd_functions+=(__tmax_precmd)`;
+      const zshSnippet = `__tmax_precmd() { printf '\\e]7;file:///%s\\a' "$PWD"; if [[ -z "$_TMAX_CHPWD_FIRED" ]]; then _TMAX_CHPWD_FIRED=1; (( \${+functions[chpwd]} )) && chpwd; [[ -n "\${chpwd_functions+x}" ]] && for _f in "\${chpwd_functions[@]}"; do (( \${+functions[\$_f]} )) && "$_f"; done; fi }; precmd_functions+=(__tmax_precmd)`;
       setTimeout(() => ptyProcess.write(zshSnippet + '\r'), 200);
       setTimeout(() => ptyProcess.write('clear\r'), 400);
     }

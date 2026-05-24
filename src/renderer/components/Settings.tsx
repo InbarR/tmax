@@ -214,9 +214,9 @@ const TerminalSettings: React.FC = () => {
             {config.shells.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </SettingRow>
-        <SettingRow label="Default Start Folder" description="Global default working directory (shell-specific overrides this)">
+        <SettingRow label="Default Start Folder" description="Global default working directory (shell-specific overrides this). Leading ~ is expanded to your home folder.">
           <input type="text" className="settings-input" value={(config as any).defaultCwd || ''}
-            placeholder="e.g. C:\Projects"
+            placeholder={(window as any).platformInfo?.platform === 'win32' ? 'e.g. C:\\Projects' : 'e.g. ~/repos'}
             onChange={(e) => update({ defaultCwd: e.target.value } as any)} />
         </SettingRow>
       </SectionGroup>
