@@ -4,7 +4,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { SerializeAddon } from '@xterm/addon-serialize';
-import { useTerminalStore } from '../state/terminal-store';
+import { useTerminalStore, findSessionById, getSessionProvider } from '../state/terminal-store';
 import { registerTerminal, unregisterTerminal } from '../terminal-registry';
 import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache';
 import { isMac, formatKeyForPlatform } from '../utils/platform';
@@ -2495,31 +2495,19 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   );
   const latestPrompt = useTerminalStore((s) => {
     if (!aiSessionId) return undefined;
-    const cc = s.claudeCodeSessions.find((x) => x.id === aiSessionId);
-    if (cc?.latestPrompt) return cc.latestPrompt;
-    const cp = s.copilotSessions.find((x) => x.id === aiSessionId);
-    return cp?.latestPrompt;
+    return findSessionById(s.copilotSessions, s.claudeCodeSessions, aiSessionId)?.latestPrompt;
   });
   const latestPromptTime = useTerminalStore((s) => {
     if (!aiSessionId) return undefined;
-    const cc = s.claudeCodeSessions.find((x) => x.id === aiSessionId);
-    if (cc?.latestPromptTime) return cc.latestPromptTime;
-    const cp = s.copilotSessions.find((x) => x.id === aiSessionId);
-    return cp?.latestPromptTime;
+    return findSessionById(s.copilotSessions, s.claudeCodeSessions, aiSessionId)?.latestPromptTime;
   });
   const sessionStatus = useTerminalStore((s) => {
     if (!aiSessionId) return undefined;
-    const cc = s.claudeCodeSessions.find((x) => x.id === aiSessionId);
-    if (cc) return cc.status;
-    const cp = s.copilotSessions.find((x) => x.id === aiSessionId);
-    return cp?.status;
+    return findSessionById(s.copilotSessions, s.claudeCodeSessions, aiSessionId)?.status;
   });
-  const aiProvider = useTerminalStore((s): 'copilot' | 'claude-code' | undefined => {
-    if (!aiSessionId) return undefined;
-    if (s.copilotSessions.find((x) => x.id === aiSessionId)) return 'copilot';
-    if (s.claudeCodeSessions.find((x) => x.id === aiSessionId)) return 'claude-code';
-    return undefined;
-  });
+  const aiProvider = useTerminalStore((s): 'copilot' | 'claude-code' | undefined =>
+    getSessionProvider(s.copilotSessions, s.claudeCodeSessions, aiSessionId),
+  );
   // Force a re-render every 30s so the relative time stays fresh even when
   // nothing else in the session changes.
   const [, tickForClock] = useReducer((n: number) => n + 1, 0);

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { useTerminalStore, getEffectiveCwd } from '../state/terminal-store';
+import { useTerminalStore, getEffectiveCwd, getSessionProvider } from '../state/terminal-store';
 import { tokenizeAnd, matchesAllTokens } from '../../shared/and-filter';
 import type {
   DiffMode,
@@ -416,10 +416,9 @@ const DiffReview: React.FC = () => {
     const t = s.terminals.get(diffReviewTerminalId);
     if (!t) return 'Agent';
     // Primary: check session lists via aiSessionId (authoritative)
-    if (t.aiSessionId) {
-      if (s.copilotSessions.some(x => x.id === t.aiSessionId)) return 'Copilot';
-      if (s.claudeCodeSessions.some(x => x.id === t.aiSessionId)) return 'Claude';
-    }
+    const provider = getSessionProvider(s.copilotSessions, s.claudeCodeSessions, t.aiSessionId);
+    if (provider === 'copilot') return 'Copilot';
+    if (provider === 'claude-code') return 'Claude';
     // Fallback: process/title heuristic (before session linking completes)
     const proc = (t.lastProcess ?? '').toLowerCase();
     const title = (t.title ?? '').toLowerCase();

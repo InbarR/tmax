@@ -2,7 +2,7 @@ import React, { useCallback, useState, useEffect, useRef, useMemo } from 'react'
 import ReactDOM from 'react-dom';
 import { SortableContext, useSortable, horizontalListSortingStrategy, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useTerminalStore, TAB_COLORS } from '../state/terminal-store';
+import { useTerminalStore, TAB_COLORS, findSessionById } from '../state/terminal-store';
 import type { TerminalId } from '../state/types';
 import TabContextMenu, { type ContextMenuPosition } from './TabContextMenu';
 import { isMac } from '../utils/platform';
@@ -70,11 +70,7 @@ const Tab: React.FC<TabProps> = ({
   const aiSessionId = terminal?.aiSessionId;
   const aiStatus = useTerminalStore((s) => {
     if (!aiSessionId) return null;
-    const copilot = s.copilotSessions.find((x) => x.id === aiSessionId);
-    if (copilot) return copilot.status;
-    const claude = s.claudeCodeSessions.find((x) => x.id === aiSessionId);
-    if (claude) return claude.status;
-    return null;
+    return findSessionById(s.copilotSessions, s.claudeCodeSessions, aiSessionId)?.status ?? null;
   });
   const needsAttention = aiStatus === 'waitingForUser' || aiStatus === 'awaitingApproval';
   const isThinking = aiStatus === 'thinking' || aiStatus === 'executingTool';

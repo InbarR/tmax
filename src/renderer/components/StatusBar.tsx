@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { useTerminalStore } from '../state/terminal-store';
+import { useTerminalStore, findSessionById } from '../state/terminal-store';
 import { getLeafOrder } from '../state/terminal-store';
 import { formatKeyForPlatform, isDev } from '../utils/platform';
 import InputDialog from './InputDialog';
@@ -400,11 +400,7 @@ const StatusBar: React.FC = () => {
   // ai:true only appear when the focused pane is linked to an AI session.
   const focusedAiSession = useTerminalStore((s) => {
     if (!focused?.aiSessionId) return null;
-    return (
-      s.claudeCodeSessions.find((x) => x.id === focused.aiSessionId) ||
-      s.copilotSessions.find((x) => x.id === focused.aiSessionId) ||
-      null
-    );
+    return findSessionById(s.copilotSessions, s.claudeCodeSessions, focused.aiSessionId);
   });
   const TIPS: { text: string; ai?: boolean }[] = React.useMemo(() => [
     { text: 'Ctrl+U clears the input line in Claude Code / Copilot CLI (Ctrl+C interrupts the agent).', ai: true },
@@ -470,9 +466,7 @@ const StatusBar: React.FC = () => {
   const terminalListEntries = React.useMemo<TerminalListEntry[]>(() => {
     const findStatus = (aiSessionId: string | undefined): CopilotSessionStatus | null => {
       if (!aiSessionId) return null;
-      const found = copilotSessions.find((s: CopilotSessionSummary) => s.id === aiSessionId)
-        || claudeCodeSessions.find((s: CopilotSessionSummary) => s.id === aiSessionId);
-      return found ? found.status : null;
+      return findSessionById(copilotSessions, claudeCodeSessions, aiSessionId)?.status ?? null;
     };
     const out: TerminalListEntry[] = [];
     for (const [id, t] of terminals) {
