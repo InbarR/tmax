@@ -90,6 +90,16 @@ export interface TerminalInstance {
   aiSessionId?: string;
   aiAutoTitle?: boolean;
   /**
+   * True once the pane title has been derived from a user prompt
+   * fallback (because the AI session's own `summary` was empty at link
+   * time). Latches the title so subsequent prompts in the session don't
+   * keep rewriting it to whatever the user just typed - the title
+   * should reflect the session's opening ask, not its latest turn.
+   * Cleared when the session's `summary` populates (so a real curated
+   * summary still takes over) or when the user renames the pane.
+   */
+  aiPromptTitleLatched?: boolean;
+  /**
    * True when the pane title was auto-derived from the user's first
    * shell command (TASK-23) rather than explicitly set by the user.
    * customTitle is also true in that case (so OSC titles don't override),

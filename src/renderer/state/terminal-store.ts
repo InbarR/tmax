@@ -2372,6 +2372,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       firstCommandTitle: custom ? isFirstCmd : instance.firstCommandTitle,
     };
     if (custom) updatedInstance.aiAutoTitle = false;
+    // Explicit rename clears the prompt-title latch: the user is making a
+    // new choice, so a future relink with an empty summary should be free
+    // to set its own auto-title again.
+    if (custom && !isFirstCmd) updatedInstance.aiPromptTitleLatched = false;
     newTerminals.set(id, updatedInstance);
     set({ terminals: newTerminals });
     // Propagate custom rename to linked AI session - but only for
@@ -4263,6 +4267,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
           firstCommandTitle: false,
           aiProcessKind: undefined,
           aiProcessDetectedAt: undefined,
+          // Fresh link or relink: clear the prompt-title latch so the new
+          // session's first prompt (or its summary, when it arrives) can
+          // claim the title.
+          aiPromptTitleLatched: false,
         };
         newTerminals.set(id, current);
         matched = true;
@@ -4275,28 +4283,33 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         // session list).
         const override = get().sessionNameOverrides[session.id];
         let title: string;
+        let nextLatched = current.aiPromptTitleLatched;
         if (override) {
           title = override;
         } else {
           // Strip XML/HTML tags from summary (e.g. slash command markup)
           const clean = (session.summary || '').replace(/<[^>]+>/g, '').trim();
           const summary = clean.length > 60 ? clean.slice(0, 57) + '...' : clean;
-          // Fresh Copilot sessions can have an empty `summary` for the
-          // first turn or two while the CLI generates one. Fall back to
-          // the latest user prompt so the pane title still reflects
-          // session content instead of staying at the process-detect
-          // tentative title ("GitHub Copilot").
+          // Fresh sessions can have an empty `summary` while the CLI
+          // generates one (Copilot) or never (some Claude session shapes).
+          // Use the latest prompt as a fallback, but LATCH it after the
+          // first set so later prompts don't keep rewriting the title -
+          // the pane title should reflect the session's opening ask, not
+          // its latest turn. A real curated summary still takes over and
+          // clears the latch when it eventually populates.
           if (summary) {
             title = summary;
-          } else if (session.latestPrompt) {
+            nextLatched = false;
+          } else if (session.latestPrompt && !current.aiPromptTitleLatched) {
             const promptClean = session.latestPrompt.replace(/<[^>]+>/g, '').trim();
             title = promptClean.length > 60 ? promptClean.slice(0, 57) + '...' : promptClean || current.title;
+            if (title && title !== current.title) nextLatched = true;
           } else {
             title = current.title;
           }
         }
-        if (current.title !== title) {
-          newTerminals.set(id, { ...newTerminals.get(id)!, title });
+        if (current.title !== title || nextLatched !== current.aiPromptTitleLatched) {
+          newTerminals.set(id, { ...newTerminals.get(id)!, title, aiPromptTitleLatched: nextLatched });
           changed = true;
         }
       }
