@@ -723,6 +723,30 @@ const AppearanceSettings: React.FC = () => {
             </button>
           </div>
         </SettingRow>
+        {/* TASK-170: single knob that drives the tint strength for every
+            pane tint (per-pane, per-workspace, per-group, default). 40 is
+            the original behavior so existing setups don't regress. 100
+            pushes neutrals (black/white/gray) to fully solid panes;
+            vivid colors cap their body fill by chroma so terminal text
+            stays readable. */}
+        <SettingRow label="Tab color intensity" description={`Strength of every tab tint (per-pane, per-workspace, per-group, default): ${(config as any).tabColorIntensity ?? 40}`}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%' }}>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={(config as any).tabColorIntensity ?? 40}
+              onChange={(e) => update({ tabColorIntensity: parseInt(e.target.value, 10) } as any)}
+              style={{ flex: 1 }}
+            />
+            <span style={{ minWidth: 40, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+              {(config as any).tabColorIntensity ?? 40}
+            </span>
+            <button className="settings-reset-btn" onClick={() => update({ tabColorIntensity: 40 } as any)}>
+              Reset
+            </button>
+          </div>
+        </SettingRow>
       </SectionGroup>
 
       {platformSupported !== false && (

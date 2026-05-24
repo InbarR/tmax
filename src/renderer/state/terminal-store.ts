@@ -282,8 +282,14 @@ export const TAB_COLORS = [
   { name: 'Teal', value: '#00B7C3' },
   { name: 'Magenta', value: '#C239B3' },
   { name: 'Orange', value: '#D83B01' },
+  { name: 'Pink', value: '#E3008C' },
+  { name: 'Indigo', value: '#4F32B5' },
+  { name: 'Brown', value: '#8E562E' },
+  { name: 'Lime', value: '#BAD80A' },
   { name: 'Gray', value: '#737373' },
   { name: 'Dark', value: '#323130' },
+  { name: 'Black', value: '#000000' },
+  { name: 'White', value: '#FFFFFF' },
 ];
 
 // ── Theme → CSS variable sync ────────────────────────────────────────
@@ -342,6 +348,126 @@ export function applyThemeToChromeVars(theme: Record<string, string>, transparen
 
   // Sync every live xterm.js instance so canvases match the new transparency
   syncTerminalTransparency(theme, useTransparency && transparencyOpacity !== undefined ? transparencyOpacity : undefined);
+}
+
+// ── Tab-color tint blending (TASK-170) ───────────────────────────────
+//
+// The pane tint is one user-facing knob ("Tab color intensity", 0-100,
+// default 40) that fans out into several blends:
+//   - Title-bar background    -> tintAlpha (rgba over the chrome bg)
+//   - Pane body (xterm theme.background) -> bodyAlpha (color-mix with
+//                                            the theme background)
+//   - xterm foreground/cursor -> flipped to a dark tone when the
+//                                resulting body bg is light enough to
+//                                make pale text unreadable
+//
+// Two policies live in here:
+//   1) Neutrals (very-low-chroma colors like Black / White / Gray /
+//      Dark) honor the full intensity for the body fill too - users
+//      asked for "a black tab is a real black pane regardless of
+//      slider" and capping black would just make it dark gray.
+//   2) Vivid colors cap their body alpha by chroma so an intense
+//      orange/red/pink doesn't drown the terminal in saturated color
+//      that fights the text.
+const NEUTRAL_CHROMA_THRESHOLD = 32;
+
+function chroma(hex: string): number {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 0;
+  return Math.max(rgb.r, rgb.g, rgb.b) - Math.min(rgb.r, rgb.g, rgb.b);
+}
+
+function blendRgb(
+  fg: { r: number; g: number; b: number },
+  bg: { r: number; g: number; b: number },
+  alpha: number,
+): { r: number; g: number; b: number } {
+  return {
+    r: Math.round(fg.r * alpha + bg.r * (1 - alpha)),
+    g: Math.round(fg.g * alpha + bg.g * (1 - alpha)),
+    b: Math.round(fg.b * alpha + bg.b * (1 - alpha)),
+  };
+}
+
+function rgbToHex({ r, g, b }: { r: number; g: number; b: number }): string {
+  const c = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
+  return `#${c(r)}${c(g)}${c(b)}`;
+}
+
+function luminanceRgb({ r, g, b }: { r: number; g: number; b: number }): number {
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+export interface TabTintResult {
+  /** rgba string for the pane title-bar background. */
+  titleBg: string;
+  /** Solid hex (or rgba if baseBg is rgba) for xterm.theme.background. */
+  terminalBg: string;
+  /** xterm.theme.foreground override (dark tone when bg is too light). */
+  terminalFg?: string;
+  /** xterm.theme.cursor override (dark tone when bg is too light). */
+  terminalCursor?: string;
+}
+
+/**
+ * Compute the tint applied to a pane that has a tab color.
+ *
+ * - intensity: 0-100, defaults to 40 (preserves the original look for
+ *   users who never touch the slider).
+ * - focused: drives title-bar alpha. Focused panes get the full
+ *   intensity; unfocused panes get half so out-of-focus chrome stays
+ *   subtle.
+ * - tintHex: the per-pane / group / workspace / default color.
+ * - baseBgHex: theme.background (already opacity-adjusted by the caller
+ *   if window transparency is on).
+ */
+export function computeTabTint(
+  tintHex: string,
+  baseBgHex: string,
+  intensity: number,
+  focused: boolean,
+): TabTintResult {
+  const tint = hexToRgb(tintHex);
+  const base = hexToRgb(baseBgHex);
+  // Defensive: malformed colors → fall back to base bg untouched.
+  if (!tint || !base) {
+    return { titleBg: tintHex, terminalBg: baseBgHex };
+  }
+  const i = Math.max(0, Math.min(100, intensity)) / 100;
+  const isNeutral = chroma(tintHex) <= NEUTRAL_CHROMA_THRESHOLD;
+
+  // Title bar: focused = full intensity, unfocused = half. Cap at 0.95
+  // so the bar still reads as chrome rather than a void.
+  const titleAlpha = Math.min(0.95, focused ? i : i / 2);
+
+  // Body fill: vivid colors cap alpha by chroma so they read as accents,
+  // not walls. Neutrals (black/white/gray) bypass the cap so the user
+  // can dial them in fully.
+  let bodyAlpha = i;
+  if (!isNeutral) {
+    // Scale chroma 0..255 → 0..0.65 cap so the most saturated colors
+    // still bottom out at a tolerable 0.65 fill.
+    const c = chroma(tintHex);
+    const cap = Math.min(0.65, 0.25 + (c / 255) * 0.4);
+    bodyAlpha = Math.min(i, cap);
+  }
+
+  const blendedBody = blendRgb(tint, base, bodyAlpha);
+  const terminalBg = rgbToHex(blendedBody);
+  const titleBg = `rgba(${tint.r}, ${tint.g}, ${tint.b}, ${titleAlpha})`;
+
+  // Light pane: flip xterm foreground / cursor to dark so text stays
+  // readable. Threshold tuned at 0.55 - matches the user-verified value
+  // from the original task notes.
+  const useDarkText = luminanceRgb(blendedBody) > 0.55;
+  return useDarkText
+    ? {
+        titleBg,
+        terminalBg,
+        terminalFg: '#1a1a1a',
+        terminalCursor: '#1a1a1a',
+      }
+    : { titleBg, terminalBg };
 }
 
 /**

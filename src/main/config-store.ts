@@ -66,6 +66,19 @@ export interface AppConfig {
   backgroundMaterial?: BackgroundMaterial;
   backgroundOpacity?: number; // 0.0-1.0, default 0.8
   /**
+   * Default background tint for all panes that don't have a per-pane,
+   * per-group, or per-workspace color. Hex string (e.g. '#1e1e2e').
+   * Empty string / undefined disables the default tint. (TASK-170)
+   */
+  defaultTabColor?: string;
+  /**
+   * Strength of the tab-color tint (per-pane, per-workspace, per-group,
+   * and default), 0-100. 0 = no tint, 100 = solid (neutral colors only;
+   * vivid colors cap body alpha by chroma so terminal text stays
+   * readable). Default 40. (TASK-170)
+   */
+  tabColorIntensity?: number;
+  /**
    * Show OS notifications on AI session state transitions (Copilot
    * awaitingApproval / waitingForUser, Claude Code waitingForUser i.e.
    * turn finished). Default true. Set to false if you run an external
@@ -262,6 +275,7 @@ export const defaultConfig: AppConfig = {
   claudeCodeCommand: 'claude',
   backgroundMaterial: 'none',
   backgroundOpacity: 0.8,
+  tabColorIntensity: 40,
   aiSessionNotifications: true,
   notificationExcludeStrings: [],
   aiShimmerEnabled: true,

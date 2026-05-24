@@ -1096,11 +1096,11 @@ html.transparency-active .input-dialog {
   color: var(--text-primary);
 }
 
-.terminal-color-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
+/* TASK-170: .terminal-color-overlay used to paint a fixed-opacity pane
+   tint above the xterm canvas. Removed - the tint now blends directly
+   into xterm's theme.background (see TerminalPanel.tsx + computeTabTint
+   in terminal-store.ts) so even intensity=100 with neutral colors
+   produces a true-solid pane. */
 
 /* TASK-160: floating arrow that appears when the pane is scrolled away
    from live output. Anchored to the pane (terminal-panel is position:

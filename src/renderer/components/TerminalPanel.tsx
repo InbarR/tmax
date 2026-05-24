@@ -4,7 +4,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { SerializeAddon } from '@xterm/addon-serialize';
-import { useTerminalStore } from '../state/terminal-store';
+import { useTerminalStore, TAB_COLORS, computeTabTint } from '../state/terminal-store';
 import { registerTerminal, unregisterTerminal } from '../terminal-registry';
 import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache';
 import { isMac, formatKeyForPlatform } from '../utils/platform';
@@ -278,6 +278,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   // destination without losing the parent context. Coords are the right edge
   // of the parent submenu trigger so the panel hangs to the right of it.
   const [moveToWsSubmenuPos, setMoveToWsSubmenuPos] = useState<{ x: number; y: number } | null>(null);
+  // TASK-170: inline pane-color swatch grid inside the overflow menu.
+  // Mirrors the TabContextMenu / WorkspaceTabBar swatch-grid pattern so
+  // the three color-picker surfaces stay consistent. Auto-resets when the
+  // pane menu closes so reopening lands on the regular menu items again.
+  const [showPaneColorPicker, setShowPaneColorPicker] = useState(false);
+  useEffect(() => {
+    if (!paneMenuPos) setShowPaneColorPicker(false);
+  }, [paneMenuPos]);
   const [, tickDiag] = useReducer((x: number) => x + 1, 0);
   const diagRef = useRef({ keystrokeCount: 0, lastKeystrokeTime: 0, outputEventCount: 0, lastOutputTime: 0, outputBytes: 0, focusEventCount: 0, lastFocusTime: 0 });
   const mainDiagRef = useRef<{ pid: number; writeCount: number; lastWriteTime: number; dataCount: number; lastDataTime: number; dataBytes: number } | null>(null);
@@ -2564,12 +2572,19 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     return () => clearInterval(id);
   }, [showDiag, terminalId]);
 
-  // Apply tab color or default color as terminal background tint via CSS overlay
+  // Apply tab color or default color as terminal background tint. (TASK-170)
+  // The tint hex feeds three surfaces:
+  //   1) pane title bar background (rgba over the chrome)
+  //   2) xterm theme.background blended down (so #000 at intensity 100
+  //      paints the actual terminal body solid black, not just an overlay)
+  //   3) xterm foreground/cursor (flipped to dark when bg luminance is
+  //      high enough that the default pale-on-dark text would wash out)
   const title = useTerminalStore((s) => s.terminals.get(terminalId)?.title);
   const tabColor = useTerminalStore((s) => s.terminals.get(terminalId)?.tabColor);
   const groupId = useTerminalStore((s) => s.terminals.get(terminalId)?.groupId);
   const groupColor = useTerminalStore((s) => groupId ? s.tabGroups.get(groupId)?.color : undefined);
-  const defaultTabColor = useTerminalStore((s) => (s.config as any)?.defaultTabColor);
+  const defaultTabColor = useTerminalStore((s) => s.config?.defaultTabColor);
+  const tabColorIntensity = useTerminalStore((s) => s.config?.tabColorIntensity ?? 40);
   // Workspace tint: only applies when in workspaces mode (TASK-40). Falls
   // through tab/group color so per-tab overrides still win.
   const workspaceColor = useTerminalStore((s) => {
@@ -2578,6 +2593,40 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     return s.workspaces.get(wsId)?.color;
   });
   const bgTint = groupColor || workspaceColor || tabColor || defaultTabColor;
+  const themeBgHex = (config?.theme?.background ?? '#1e1e2e').replace(/^(#[0-9a-f]{6})[0-9a-f]{2}$/i, '$1');
+  // computeTabTint returns null-safe defaults when bgTint is missing - we
+  // just skip when there's no tint and let xterm/title bar fall through to
+  // the theme defaults.
+  const tint = bgTint
+    ? computeTabTint(bgTint, themeBgHex, tabColorIntensity, isFocused)
+    : null;
+
+  // Push the tint into the live xterm instance's theme so the pane body
+  // actually paints the blended color (not just an overlay). We also flip
+  // foreground/cursor to a dark tone on light blended backgrounds so text
+  // stays readable on white/lime panes. When the tint is cleared, restore
+  // the user's configured theme colors so the pane goes back to default.
+  useEffect(() => {
+    const term = terminalRef.current;
+    if (!term) return;
+    try {
+      const themeCfg = config?.theme;
+      const rawBg = themeCfg?.background ?? '#1e1e2e';
+      const materialActive = config?.backgroundMaterial && config.backgroundMaterial !== 'none';
+      const bgOpacity = materialActive ? (config?.backgroundOpacity ?? 0.8) : 1;
+      const defaultBg = bgOpacity < 1 ? hexToTerminalRgba(rawBg, bgOpacity) : rawBg;
+      const nextTheme = {
+        ...term.options.theme,
+        background: tint?.terminalBg
+          ? (bgOpacity < 1 ? hexToTerminalRgba(tint.terminalBg, bgOpacity) : tint.terminalBg)
+          : defaultBg,
+        foreground: tint?.terminalFg ?? themeCfg?.foreground ?? '#cdd6f4',
+        cursor: tint?.terminalCursor ?? themeCfg?.cursor ?? '#f5e0dc',
+      };
+      term.options.theme = nextTheme;
+      term.refresh(0, term.rows - 1);
+    } catch { /* terminal may be disposed */ }
+  }, [tint?.terminalBg, tint?.terminalFg, tint?.terminalCursor, config?.theme, config?.backgroundMaterial, config?.backgroundOpacity]);
 
   // Latest prompt from the AI session (if any) linked to this pane. Surfaces
   // the most recent user message so you don't have to scroll up through a
@@ -2754,7 +2803,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       {title && (
         <div
           className={`terminal-pane-title${floatTitleBar ? ' float-titlebar' : ''}${isMultiSelected ? ' multi-selected' : ''}`}
-          style={bgTint ? { background: bgTint + (isFocused ? '66' : '33') } : undefined}
+          style={tint ? { background: tint.titleBg } : undefined}
           onMouseDown={(e) => {
             // TASK-107: Middle-click on the title bar closes the pane,
             // mirroring the tab middle-click-close UX in TabBar. Bail when
@@ -2953,6 +3002,39 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
           >
+            {showPaneColorPicker ? (
+              // TASK-170: inline swatch grid - same pattern as TabContextMenu
+              // and WorkspaceTabBar. Picking applies the per-pane color and
+              // closes the menu; ✕ clears it.
+              <div className="context-menu-colors">
+                <div className="context-menu-label">Pane Color</div>
+                <div className="color-picker-grid">
+                  {TAB_COLORS.map((c) => (
+                    <button
+                      key={c.value}
+                      className="color-swatch"
+                      style={{ background: c.value }}
+                      title={c.name}
+                      onClick={() => {
+                        useTerminalStore.getState().setTabColor(terminalId, c.value);
+                        setPaneMenuPos(null);
+                      }}
+                    />
+                  ))}
+                  <button
+                    className="color-swatch clear"
+                    title="Clear color"
+                    onClick={() => {
+                      useTerminalStore.getState().setTabColor(terminalId, undefined);
+                      setPaneMenuPos(null);
+                    }}
+                  >
+                    &#10005;
+                  </button>
+                </div>
+              </div>
+            ) : (
+            <>
             <button className="context-menu-item" onClick={() => {
               setPaneMenuPos(null);
               useTerminalStore.getState().openDiffReview(terminalId);
@@ -3046,6 +3128,32 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
                 window.terminalAPI.openPath(paneCwd);
               }} title={paneCwd}>📂 Open folder in explorer</button>
             )}
+            {/* TASK-170: Change pane color - expands the swatch grid in
+                place. ✕ on the right clears any per-pane color so the
+                pane falls back to group / workspace / default tint. */}
+            <div className="context-menu-item" style={{ display: 'flex', alignItems: 'center', padding: 0 }}>
+              <button
+                className="context-menu-item"
+                style={{ flex: 1, border: 'none', background: 'transparent' }}
+                onClick={() => setShowPaneColorPicker(true)}
+              >
+                🎨 Change pane color
+                {tabColor && <span className="color-dot" style={{ background: tabColor }} />}
+              </button>
+              {tabColor && (
+                <button
+                  className="color-clear-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    useTerminalStore.getState().setTabColor(terminalId, undefined);
+                    setPaneMenuPos(null);
+                  }}
+                  title="Clear color"
+                >
+                  &#10005;
+                </button>
+              )}
+            </div>
             <button className="context-menu-item" onClick={() => {
               setPaneMenuPos(null);
               useTerminalStore.getState().moveToDormant(terminalId);
@@ -3096,6 +3204,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               setPaneMenuPos(null);
               useTerminalStore.getState().closeTerminal(terminalId);
             }}>🗑 Close pane <span className="context-menu-shortcut">Ctrl+Shift+W</span></button>
+            </>
+            )}
           </div>
           {/* TASK-78: Move-to-workspace submenu. Same overlay layer as the
               parent menu, anchored to the right of the trigger row. Lists
@@ -3147,7 +3257,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       )}
       {showDiag && <DiagnosticsOverlay terminalId={terminalId} diagRef={diagRef} mainDiag={mainDiagRef.current} logPath={logPathRef.current} onClose={() => setShowDiag(false)} />}
       <div ref={containerRef} className="xterm-container" />
-      {bgTint && <div className="terminal-color-overlay" style={{ background: bgTint + '18' }} />}
+      {/* TASK-170: the per-pane tint used to live in a fixed-opacity
+          .terminal-color-overlay div above the xterm canvas. Replaced by
+          a real blend into xterm's theme.background so the slider can
+          reach a true-solid color (#000000 at intensity 100 → solid
+          black pane) without ever painting on top of terminal text. */}
       {isScrolledAway && (
         <button
           className="terminal-jump-to-bottom"

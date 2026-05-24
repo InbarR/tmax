@@ -217,6 +217,13 @@ export interface AppConfig {
   hideTabCloseButtons?: boolean;
   backgroundMaterial?: BackgroundMaterial;
   backgroundOpacity?: number; // 0.0–1.0, default 0.8
+  // Default background tint for panes without a per-pane / group / workspace
+  // color. Empty string disables. (TASK-170)
+  defaultTabColor?: string;
+  // Strength of every tab-color tint (per-pane, per-workspace, per-group,
+  // default), 0-100. Default 40. Neutrals (black/white/gray) ignore the
+  // chroma cap and go solid at 100; vivid colors stay readable. (TASK-170)
+  tabColorIntensity?: number;
 }
 
 // ── Drag & drop ──────────────────────────────────────────────────────
