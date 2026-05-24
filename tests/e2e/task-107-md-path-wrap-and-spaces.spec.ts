@@ -61,6 +61,24 @@ async function installFileReadSpy(window: Page): Promise<void> {
   });
 }
 
+// Spy that returns content only when the requested path matches `acceptPath`,
+// null otherwise. Lets us assert that the link-provider's fallback retry
+// (phantom-seam-stripped path) is what actually opens the preview.
+async function installSelectiveFileReadSpy(window: Page, acceptPath: string): Promise<void> {
+  await window.evaluate((accept: string) => {
+    (window as any).__fileReadCalls = [];
+    const api = (window as any).terminalAPI;
+    Object.defineProperty(api, 'fileRead', {
+      value: async (p: string) => {
+        (window as any).__fileReadCalls.push(p);
+        return p === accept ? 'mock-content' : null;
+      },
+      configurable: true,
+      writable: true,
+    });
+  }, acceptPath);
+}
+
 async function getFileReadCalls(window: Page): Promise<string[]> {
   return window.evaluate(() => ((window as any).__fileReadCalls || []).slice());
 }
@@ -355,6 +373,71 @@ test.describe('TASK-107: .md path click survives spaces and soft-wrap', () => {
       expect(mdTexts).toContain(a);
       expect(mdTexts).toContain(b);
       expect(mdTexts.length).toBe(2);
+    } finally {
+      await close();
+    }
+  });
+
+  // TASK-166: Ink-style TUIs (Copilot CLI, Claude Code) hard-wrap a long
+  // no-space path and emit the continuation row with layout indent. The
+  // TASK-132/137 seam-space heuristic could not distinguish "wrap-eaten
+  // space" from "pure layout indent", so it always inserted a phantom space
+  // at the join (`.../files/...` -> `.../fi les/...`) and fileRead 404'd.
+  // Fix: track each inserted seam offset; activate() retries with the seam
+  // stripped if the first read returns null.
+  test('phantom seam: hard-newline-wrapped no-space path falls back to stripped path on fileRead null', async () => {
+    const { window, close } = await launchTmax();
+    try {
+      await window.waitForSelector('.terminal-panel', { timeout: 15_000 });
+      await window.waitForTimeout(800);
+
+      // The on-disk path: no embedded spaces. Stripped path must succeed.
+      const realPath = '/Users/mimer/.copilot/session-state/abc/files/reddit-scout-2026-05-21.md';
+      await installSelectiveFileReadSpy(window, realPath);
+
+      // Simulate Ink output: write the head of the path, a hard newline,
+      // then leading whitespace (layout indent) + the tail. No isWrapped
+      // flag - this triggers the hard-newline stitch where the seam-space
+      // heuristic used to misfire.
+      const head = '/Users/mimer/.copilot/session-state/abc/fi';
+      const tailIndent = '    ';
+      const tail = 'les/reddit-scout-2026-05-21.md';
+      await parkCursorAt(window, 28, 1);
+      await writeToTerminal(window, head + '\r\n' + tailIndent + tail);
+      await window.waitForTimeout(400);
+
+      // Find the tail row and click somewhere on it (e.g., inside `les/`).
+      const tailRows = await findRowsWithText(window, 'reddit-scout');
+      expect(tailRows.length).toBe(1);
+      const tailY = tailRows[0].y;
+
+      const links = await getLinksOnRow(window, tailY);
+      const mdLinks = links.filter(l => l.text.endsWith('reddit-scout-2026-05-21.md'));
+      console.log('phantom-seam link texts:', mdLinks.map(l => l.text));
+      expect(mdLinks.length).toBeGreaterThanOrEqual(1);
+      // Stitched text still contains the phantom space (the heuristic
+      // can't tell at provideLinks time) - the fix lives in activate().
+      expect(mdLinks[0].text).toContain('fi les/');
+
+      const pt = await cellPixel(window, tailY, tailIndent.length + 2);
+      await window.mouse.move(pt.x, pt.y);
+      await window.waitForTimeout(120);
+      await window.mouse.click(pt.x, pt.y);
+      await window.waitForTimeout(500);
+
+      const calls = await getFileReadCalls(window);
+      console.log('phantom-seam fileRead calls:', calls);
+      // First attempt is the with-seam path (fails); second is the stripped
+      // path (succeeds). Order matters - the primary must be tried first so
+      // legitimate `OneDrive - Microsoft` paths still resolve normally.
+      expect(calls.length).toBe(2);
+      expect(calls[0]).toContain('fi les/');
+      expect(calls[1]).toBe(realPath);
+
+      const preview = await getMarkdownPreview(window);
+      expect(preview).not.toBeNull();
+      expect(preview!.filePath).toBe(realPath);
+      expect(preview!.fileName).toBe('reddit-scout-2026-05-21.md');
     } finally {
       await close();
     }
