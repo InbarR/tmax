@@ -263,38 +263,6 @@ const TerminalSettings: React.FC = () => {
               update({ aiSessionLoadLimit: clamped } as any);
             }} />
         </SettingRow>
-        {/* Pane summary (Task pane-summary) — hover tooltip + ⋯ menu show
-            a 1-sentence AI-distilled summary of each pane's session.
-            v1 supports Copilot only. */}
-        <SettingRow label="Pane summary" description="Hover a tab/pane title or open the ⋯ menu to see a 1-line AI summary of the session. v1: Copilot only; uses a sandboxed `copilot -p` invocation.">
-          <label className="toggle-switch">
-            <input type="checkbox"
-              checked={(config as any).paneSummary?.enabled !== false}
-              onChange={(e) => update({
-                paneSummary: {
-                  ...((config as any).paneSummary ?? {}),
-                  enabled: e.target.checked,
-                  delayMs: (config as any).paneSummary?.delayMs ?? 5 * 60 * 1000,
-                },
-              } as any)} />
-            <span className="toggle-track" />
-          </label>
-        </SettingRow>
-        <SettingRow label="Pane summary delay (minutes)" description="How long after a session starts before the first auto-summary fires. Also requires ≥3 user prompts in the session.">
-          <input type="number" className="settings-input small" min={0} step={1}
-            value={Math.round(((config as any).paneSummary?.delayMs ?? 5 * 60 * 1000) / 60_000)}
-            onChange={(e) => {
-              const n = parseInt(e.target.value, 10);
-              const minutes = Number.isFinite(n) && n >= 0 ? n : 5;
-              update({
-                paneSummary: {
-                  enabled: (config as any).paneSummary?.enabled !== false,
-                  ...((config as any).paneSummary ?? {}),
-                  delayMs: minutes * 60_000,
-                },
-              } as any);
-            }} />
-        </SettingRow>
         <SettingRow label="Old session threshold" description="Days of inactivity before a session is marked as Old">
           <input type="number" className="settings-input small" value={(config as any).oldSessionDays ?? 30}
             onChange={(e) => update({ oldSessionDays: parseInt(e.target.value) || 30 } as any)} />

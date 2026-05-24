@@ -4,7 +4,6 @@ import { useTerminalStore } from '../state/terminal-store';
 import { getTerminalEntry } from '../terminal-registry';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { renderWithMdLinks } from '../utils/md-link-parser';
-import SessionTitleTooltip from './SessionTitleTooltip';
 import { tokenizeAnd, matchesAllTokens } from '../../shared/and-filter';
 import type { CopilotSessionSummary, CopilotSessionStatus, SessionProvider, SessionLifecycle } from '../../shared/copilot-types';
 import { detectSessionHost, stripClawpilotContext } from '../../shared/copilot-types';
@@ -195,17 +194,6 @@ const CopilotPanel: React.FC = () => {
   const claudeCodeSessions = useTerminalStore((s) => s.claudeCodeSessions);
   const terminals = useTerminalStore((s) => s.terminals);
   const summaryOverrides = useTerminalStore((s) => s.sessionNameOverrides);
-  const paneSummaries = useTerminalStore((s) => s.paneSummaries);
-  // Build a {sessionId → AI summary text} map keyed on session id. Lets
-  // the list rows derive the display title cheaply without scanning the
-  // whole paneSummaries map per row.
-  const aiSummaryBySessionId = useMemo(() => {
-    const out = new Map<string, string>();
-    for (const ps of Object.values(paneSummaries)) {
-      if (ps.status === 'ready' && ps.text) out.set(ps.sessionId, ps.text);
-    }
-    return out;
-  }, [paneSummaries]);
   const lifecycleOverrides = useTerminalStore((s) => s.sessionLifecycleOverrides);
   const pinnedSessions = useTerminalStore((s) => s.sessionPinned);
   const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
@@ -537,28 +525,18 @@ const CopilotPanel: React.FC = () => {
 
   // Sessions that share the exact same title - automation scripts often spawn
   // many `claude` runs with the same initial prompt, making them visually
-  // indistinguishable.
-  //
-  // Disambiguation suffix - when multiple sessions resolve to the same
-  // visible title (e.g. several sessions in the same repo, all using
-  // their cwd as fallback because no override or AI summary yet), the
-  // titles become indistinguishable. Flag duplicates so the render can
-  // append a short session-ID suffix to disambiguate.
-  //
-  // IMPORTANT: this MUST use the same precedence as the rendered title
-  // (manual override > AI summary > getTitle fallback), otherwise we'd
-  // either fail to flag real visual duplicates or flag false ones.
+  // indistinguishable. Flag duplicates so the render can append a short
+  // session-ID suffix to disambiguate.
   const dupTitles = useMemo(() => {
     const counts = new Map<string, number>();
     for (const s of displayList) {
-      const ai = aiSummaryBySessionId.get(s.id);
-      const t = summaryOverrides[s.id] ? getTitle(s) : (ai || getTitle(s));
+      const t = getTitle(s);
       counts.set(t, (counts.get(t) || 0) + 1);
     }
     const dups = new Set<string>();
     for (const [t, n] of counts) if (n > 1) dups.add(t);
     return dups;
-  }, [displayList, aiSummaryBySessionId, summaryOverrides]);
+  }, [displayList]);
 
   // Lifecycle counts (for tab badges) — computed from all sessions regardless of provider/running filter
   const lifecycleCounts = useMemo(() => {
@@ -730,14 +708,7 @@ const CopilotPanel: React.FC = () => {
   }, []);
 
   const handleStartRename = useCallback((session: CopilotSessionSummary) => {
-    setRenaming({
-      id: session.id,
-      provider: session.provider,
-      value: summaryOverrides[session.id]
-        || aiSummaryBySessionId.get(session.id)
-        || session.summary
-        || getTitle(session),
-    });
+    setRenaming({ id: session.id, provider: session.provider, value: summaryOverrides[session.id] || session.summary || getTitle(session) });
     setCtxMenu(null);
   }, []);
 
@@ -1259,22 +1230,7 @@ const CopilotPanel: React.FC = () => {
 
       <div className="dir-panel-list" ref={listRef}>
         {displayList.slice(0, renderLimit).map((session, index) => {
-          // Title precedence:
-          //   1. Manual rename (sessionNameOverride) - user is always in
-          //      control if they explicitly set a name.
-          //   2. AI one-line summary (Task pane-summary), when ready.
-          //   3. Original derivation from session.summary / cwd / id.
-          //
-          // Note that the displayList already has the override merged
-          // into session.summary (mapping at the filter step), so we
-          // look at the raw override map here to detect "user has set a
-          // title" without confusing it with Copilot's own auto-summary.
-          const hasManualOverride = !!summaryOverrides[session.id];
-          const aiSummaryText = aiSummaryBySessionId.get(session.id);
-          const fallbackTitle = getTitle(session);
-          const title = hasManualOverride
-            ? fallbackTitle
-            : (aiSummaryText || fallbackTitle);
+          const title = getTitle(session);
           const subtitle = getSubtitle(session);
           const active = isActiveStatus(session.status);
           const isOpen = openSessionIds.has(session.id);
@@ -1373,18 +1329,12 @@ const CopilotPanel: React.FC = () => {
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <SessionTitleTooltip
-                      sessionId={session.id}
-                      provider={session.provider as 'copilot' | 'claude-code'}
-                      messageCount={session.messageCount || 0}
-                    >
-                      <span className="ai-session-name">
-                        {renderWithMdLinks(title, session.cwd)}
-                        {dupTitles.has(title) && (
-                          <span className="ai-session-iddup" title={session.id}> · {session.id.slice(0, 6)}</span>
-                        )}
-                      </span>
-                    </SessionTitleTooltip>
+                    <span className="ai-session-name" title={title}>
+                      {renderWithMdLinks(title, session.cwd)}
+                      {dupTitles.has(title) && (
+                        <span className="ai-session-iddup" title={session.id}> · {session.id.slice(0, 6)}</span>
+                      )}
+                    </span>
                   )}
                   {isOpen && <span className="ai-open-badge">OPEN</span>}
                   {session.wsl && (

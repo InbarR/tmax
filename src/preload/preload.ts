@@ -2,11 +2,6 @@ import { contextBridge, ipcRenderer, clipboard } from 'electron';
 import { IPC } from '../shared/ipc-channels';
 import type { DiffMode, DiffResult, AnnotatedFile } from '../shared/diff-types';
 import type { RepoWorktrees } from '../shared/worktree-types';
-import type {
-  PaneSummaryRequest,
-  PaneSummaryResult,
-  PaneSummaryError,
-} from '../shared/pane-summary-types';
 
 export interface PtyDiag {
   pid: number;
@@ -83,13 +78,6 @@ export interface TerminalAPI {
   onSessionFileChanged(cb: () => void): () => void;
   // ── Child process tree query (TASK-171) ────────────────────────────
   getPtyChildProcesses(ptyId: string): Promise<string[]>;
-  // ── Pane summary (AI-distilled 1-liner) ────────────────────────────
-  /** Request a fresh summary. Fire-and-forget; the response arrives via
-   *  `onPaneSummaryResult` or `onPaneSummaryError`. Safe to call repeatedly:
-   *  the main service deduplicates by sessionId+transcriptVersion. */
-  requestPaneSummary(req: PaneSummaryRequest): void;
-  onPaneSummaryResult(cb: (result: PaneSummaryResult) => void): () => void;
-  onPaneSummaryError(cb: (err: PaneSummaryError) => void): () => void;
 }
 
 const terminalAPI: TerminalAPI = {
@@ -463,23 +451,6 @@ const terminalAPI: TerminalAPI = {
   // ── Child process tree query (TASK-171) ────────────────────────────
   getPtyChildProcesses(ptyId: string) {
     return ipcRenderer.invoke(IPC.PTY_GET_CHILD_PROCESSES, ptyId);
-  },
-
-  // ── Pane summary (AI-distilled 1-liner) ────────────────────────────
-  requestPaneSummary(req: PaneSummaryRequest) {
-    ipcRenderer.send(IPC.PANE_SUMMARY_REQUEST, req);
-  },
-
-  onPaneSummaryResult(cb: (result: PaneSummaryResult) => void): () => void {
-    const listener = (_e: Electron.IpcRendererEvent, result: PaneSummaryResult) => cb(result);
-    ipcRenderer.on(IPC.PANE_SUMMARY_RESULT, listener);
-    return () => ipcRenderer.removeListener(IPC.PANE_SUMMARY_RESULT, listener);
-  },
-
-  onPaneSummaryError(cb: (err: PaneSummaryError) => void): () => void {
-    const listener = (_e: Electron.IpcRendererEvent, err: PaneSummaryError) => cb(err);
-    ipcRenderer.on(IPC.PANE_SUMMARY_ERROR, listener);
-    return () => ipcRenderer.removeListener(IPC.PANE_SUMMARY_ERROR, listener);
   },
 
 };

@@ -87,10 +87,6 @@ export const IPC = {
   KEYBINDINGS_OPEN_FILE: 'keybindings:openFile',
   KEYBINDINGS_RESET: 'keybindings:reset',
   KEYBINDINGS_CHANGED: 'keybindings:changed',
-  // ── Pane summary (AI-distilled 1-liner per pane) ───────────────────
-  PANE_SUMMARY_REQUEST: 'paneSummary:request',
-  PANE_SUMMARY_RESULT: 'paneSummary:result',
-  PANE_SUMMARY_ERROR: 'paneSummary:error',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

@@ -21,12 +21,6 @@ import { DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from './types';
 import type { CopilotSessionSummary } from '../../shared/copilot-types';
 import type { DiffMode } from '../../shared/diff-types';
 import type { RepoWorktrees } from '../../shared/worktree-types';
-import type {
-  PaneSummary,
-  PaneSummaryResult,
-  PaneSummaryError,
-} from '../../shared/pane-summary-types';
-import { buildTranscriptVersion } from '../../shared/pane-summary-types';
 import { getAllTerminals, getTerminalEntry } from '../terminal-registry';
 import { confirmDialog } from '../components/AppDialog';
 
@@ -775,10 +769,6 @@ interface TerminalStore {
   // lives in main, so the underlying shell process is untouched. Soft
   // escape hatch for input-freezes (GH #101 / TASK-156).
   refreshGenerations: Record<string, number>;
-  /** AI-distilled 1-line pane summaries, keyed by TerminalId. In-memory
-   *  only — not persisted across restarts (see Task pane-summary plan).
-   *  Cleared per-pane on closeTerminal. */
-  paneSummaries: Record<TerminalId, PaneSummary>;
   selectedCopilotSessionId: string | null;
   // Prompts dialog state. Either terminalId (for the per-pane Ctrl+Shift+K
   // shortcut) or sessionId (for opening from the session summary popover).
@@ -978,18 +968,6 @@ interface TerminalStore {
   updateClaudeCodeSession: (session: CopilotSessionSummary) => void;
   removeClaudeCodeSession: (sessionId: string) => void;
   setSessionNameOverride: (sessionId: string, name: string) => void;
-  // ── Pane summary actions (Task pane-summary) ──────────────────────
-  /** Fire-and-forget request to the main summarizer service for the
-   *  pane's linked AI session. Marks the pane status as 'pending' and
-   *  short-circuits when an in-flight request for the same
-   *  transcriptVersion already exists (unless force=true). */
-  requestPaneSummary: (terminalId: TerminalId, opts?: { force?: boolean }) => void;
-  /** Apply a result that arrived from main via IPC. */
-  applyPaneSummaryResult: (result: PaneSummaryResult) => void;
-  /** Apply an error that arrived from main via IPC. */
-  applyPaneSummaryError: (err: PaneSummaryError) => void;
-  /** Drop the summary entry for a closed pane. */
-  clearPaneSummary: (terminalId: TerminalId) => void;
   setSessionLifecycle: (sessionId: string, lifecycle: import('../../shared/copilot-types').SessionLifecycle) => void;
   // Move stale AI sessions to the 'old' (Archived) lifecycle on app start
   // so the Active tab stays scrollable. Skips pinned sessions and any
@@ -1147,7 +1125,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   copilotSearching: false,
   copilotSqliteActive: false,
   refreshGenerations: {},
-  paneSummaries: {},
   selectedCopilotSessionId: null,
   tabGroups: new Map(),
   markdownPreview: null,
@@ -1429,10 +1406,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const newTerminals = new Map(terminals);
     newTerminals.delete(id);
 
-    // Drop any in-memory pane summary tied to this terminal.
-    const newPaneSummaries = { ...get().paneSummaries };
-    delete newPaneSummaries[id];
-
     let newRoot = layout.tilingRoot;
     let newFloating = layout.floatingPanels;
 
@@ -1475,7 +1448,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       focusedTerminalId: newFocus,
       preGridRoot: newPreGridRoot,
       closedTerminals: newClosedTerminals,
-      paneSummaries: newPaneSummaries,
     });
 
     // After React processes the layout change, force-focus the new terminal.
@@ -4330,164 +4302,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     try {
       (window.terminalAPI as any).syncSessionNameOverrides?.(get().sessionNameOverrides);
     } catch { /* ignore - main side falls back to summary if not synced */ }
-  },
-
-  // ── Pane summary actions (Task pane-summary) ────────────────────────
-  requestPaneSummary: (terminalId: TerminalId, opts?: { force?: boolean }) => {
-    const state = get();
-    const terminal = state.terminals.get(terminalId);
-    if (!terminal || !terminal.aiSessionId) return;
-
-    // Look up the live session to get provider + transcriptVersion. We
-    // refuse to request if the linked session has gone away — the
-    // service would only fail anyway.
-    let provider: 'copilot' | 'claude-code' | null = null;
-    let session: CopilotSessionSummary | undefined = state.copilotSessions.find((s) => s.id === terminal.aiSessionId);
-    if (session) provider = 'copilot';
-    else {
-      session = state.claudeCodeSessions.find((s) => s.id === terminal.aiSessionId);
-      if (session) provider = 'claude-code';
-    }
-    if (!session || !provider) return;
-
-    const transcriptVersion = buildTranscriptVersion(session.messageCount, session.latestPromptTime);
-    const existing = state.paneSummaries[terminalId];
-
-    // Short-circuit: same transcriptVersion already ready or pending, and
-    // caller didn't force a refresh.
-    if (!opts?.force && existing
-      && existing.sessionId === session.id
-      && existing.transcriptVersion === transcriptVersion
-      && (existing.status === 'pending' || existing.status === 'ready')
-    ) {
-      return;
-    }
-
-    // Mark pending so the UI can show a shimmer before the IPC round-trip.
-    set((s) => ({
-      paneSummaries: {
-        ...s.paneSummaries,
-        [terminalId]: {
-          provider,
-          sessionId: session!.id,
-          transcriptVersion,
-          text: existing?.text ?? '',
-          generatedAt: existing?.generatedAt ?? 0,
-          status: 'pending',
-          lastError: undefined,
-        },
-      },
-    }));
-
-    try {
-      window.terminalAPI.requestPaneSummary?.({
-        terminalId,
-        sessionId: session.id,
-        provider,
-        force: opts?.force,
-        wslDistro: terminal.wslDistro,
-      });
-
-      // Safety net: the service has 60s timeout × (1 + MAX_RETRIES=1) = 120s
-      // worst case. Give it 150s before declaring the renderer state stuck
-      // — that way a slow-but-eventually-successful spawn still wins.
-      const sessionIdSnapshot = session.id;
-      const transcriptVersionSnapshot = transcriptVersion;
-      setTimeout(() => {
-        const cur = get().paneSummaries[terminalId];
-        if (
-          cur
-          && cur.status === 'pending'
-          && cur.sessionId === sessionIdSnapshot
-          && cur.transcriptVersion === transcriptVersionSnapshot
-        ) {
-          set((s) => ({
-            paneSummaries: {
-              ...s.paneSummaries,
-              [terminalId]: {
-                ...s.paneSummaries[terminalId]!,
-                status: 'error',
-                lastError: 'no response from main process; check Copilot CLI is installed',
-              },
-            },
-          }));
-        }
-      }, 150_000);
-    } catch {
-      // Preload bridge missing (older build) — surface gracefully.
-      set((s) => ({
-        paneSummaries: {
-          ...s.paneSummaries,
-          [terminalId]: {
-            ...s.paneSummaries[terminalId]!,
-            status: 'error',
-            lastError: 'preload bridge unavailable',
-          },
-        },
-      }));
-    }
-  },
-
-  applyPaneSummaryResult: (result: PaneSummaryResult) => {
-    set((s) => {
-      // Only accept if the pane still exists and is still linked to the
-      // session this summary was generated for. Avoids racing with a
-      // pane that closed or got re-linked to a different session during
-      // the spawn.
-      const t = s.terminals.get(result.terminalId);
-      if (!t || t.aiSessionId !== result.sessionId) return s;
-      return {
-        paneSummaries: {
-          ...s.paneSummaries,
-          [result.terminalId]: {
-            provider: result.provider,
-            sessionId: result.sessionId,
-            transcriptVersion: result.transcriptVersion,
-            text: result.text,
-            generatedAt: result.generatedAt,
-            status: 'ready',
-            lastError: undefined,
-          },
-        },
-      };
-    });
-  },
-
-  applyPaneSummaryError: (err: PaneSummaryError) => {
-    set((s) => {
-      // Reject error if the pane no longer exists OR was re-linked to a
-      // different session since this request was filed. Otherwise an old
-      // unavailable/error from a session we just unlinked from would
-      // poison the new linkage forever.
-      const t = s.terminals.get(err.terminalId);
-      if (!t || t.aiSessionId !== err.sessionId) return s;
-      const existing = s.paneSummaries[err.terminalId];
-      return {
-        paneSummaries: {
-          ...s.paneSummaries,
-          [err.terminalId]: {
-            provider: err.provider,
-            sessionId: err.sessionId,
-            transcriptVersion: existing?.transcriptVersion ?? '',
-            // Retain prior good text on error so the tooltip doesn't go
-            // blank just because a refresh failed.
-            text: existing?.text ?? '',
-            generatedAt: existing?.generatedAt ?? 0,
-            status: err.unavailable ? 'unavailable' : 'error',
-            lastError: err.message,
-          },
-        },
-      };
-    });
-  },
-
-  clearPaneSummary: (terminalId: TerminalId) => {
-    set((s) => {
-      if (!(terminalId in s.paneSummaries)) return s;
-      const next = { ...s.paneSummaries };
-      delete next[terminalId];
-      return { paneSummaries: next };
-    });
   },
 
   setSessionLifecycle: (sessionId: string, lifecycle: import('../../shared/copilot-types').SessionLifecycle) => {

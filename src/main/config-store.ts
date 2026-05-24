@@ -1,6 +1,4 @@
 import Store from 'electron-store';
-import type { PaneSummaryConfig } from '../shared/pane-summary-types';
-import { DEFAULT_PANE_SUMMARY_CONFIG } from '../shared/pane-summary-types';
 
 export interface ShellProfile {
   id: string;
@@ -111,14 +109,6 @@ export interface AppConfig {
    * ('alpha'). (TASK-135)
    */
   aiGroupByRepoOrder?: 'activity' | 'alpha';
-  /**
-   * AI-distilled 1-line pane summary feature (Task pane-summary). When
-   * `enabled` (default true), tmax spawns a sandboxed `copilot -p` per
-   * AI pane after `delayMs` and ≥3 user turns, and surfaces the result
-   * on hover of the tab/pane title. v1 = Copilot only; Claude panes
-   * report `unavailable`. The result is in-memory only, not persisted.
-   */
-  paneSummary?: PaneSummaryConfig;
 }
 
 function findPwsh(): string | null {
@@ -276,7 +266,6 @@ export const defaultConfig: AppConfig = {
   notificationExcludeStrings: [],
   aiShimmerEnabled: true,
   aiSessionLoadLimit: 314,
-  paneSummary: DEFAULT_PANE_SUMMARY_CONFIG,
 };
 
 export class ConfigStore {

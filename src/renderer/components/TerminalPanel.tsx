@@ -5,7 +5,6 @@ import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { SerializeAddon } from '@xterm/addon-serialize';
 import { useTerminalStore } from '../state/terminal-store';
-import PaneSummaryTooltip from './PaneSummaryTooltip';
 import { registerTerminal, unregisterTerminal } from '../terminal-registry';
 import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache';
 import { isMac, formatKeyForPlatform } from '../utils/platform';
@@ -2525,24 +2524,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
 
   // Apply tab color or default color as terminal background tint via CSS overlay
   const title = useTerminalStore((s) => s.terminals.get(terminalId)?.title);
-  // Task pane-summary: derive an effective title that uses the AI
-  // one-liner when the user hasn't manually renamed the linked AI
-  // session. Source of truth for "user renamed" is
-  // sessionNameOverrides[aiSessionId] - the TerminalInstance flags
-  // (customTitle / aiAutoTitle / firstCommandTitle) are too noisy to
-  // rely on here because OSC and auto-link paths flip them too.
-  const titleAiSessionId = useTerminalStore((s) => s.terminals.get(terminalId)?.aiSessionId);
-  const aiSummaryTitleText = useTerminalStore(
-    (s) => s.paneSummaries[terminalId]?.status === 'ready'
-      ? s.paneSummaries[terminalId].text
-      : null,
-  );
-  const sessionRenamedByUser = useTerminalStore(
-    (s) => !!titleAiSessionId && !!s.sessionNameOverrides[titleAiSessionId],
-  );
-  const displayTitle = sessionRenamedByUser
-    ? (title || '')
-    : (aiSummaryTitleText || title || '');
   const tabColor = useTerminalStore((s) => s.terminals.get(terminalId)?.tabColor);
   const groupId = useTerminalStore((s) => s.terminals.get(terminalId)?.groupId);
   const groupColor = useTerminalStore((s) => groupId ? s.tabGroups.get(groupId)?.color : undefined);
@@ -2838,19 +2819,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               onFocus={(e) => e.target.select()}
             />
           ) : (
-            <PaneSummaryTooltip terminalId={terminalId}>
-              <span
-                className="terminal-pane-title-text"
-                onDoubleClick={(e) => {
-                  // In float mode the parent has its own dblclick handler
-                  // (maximize-toggle); we don't want both rename AND maximize
-                  // on a single dblclick.
-                  e.stopPropagation();
-                  setRenameValue(displayTitle || '');
-                  setIsRenamingPane(true);
-                }}
-              >{displayTitle}</span>
-            </PaneSummaryTooltip>
+            <span
+              className="terminal-pane-title-text"
+              onDoubleClick={(e) => {
+                // In float mode the parent has its own dblclick handler
+                // (maximize-toggle); we don't want both rename AND maximize
+                // on a single dblclick.
+                e.stopPropagation();
+                setRenameValue(title || '');
+                setIsRenamingPane(true);
+              }}
+            >{title}</span>
           )}
           {(() => {
             // TASK-139: Float / Restore button next to the ⋯ menu. Tooltip

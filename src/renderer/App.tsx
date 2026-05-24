@@ -8,10 +8,8 @@ import { useTerminalStore } from './state/terminal-store';
 import { getTerminalEntry } from './terminal-registry';
 import { applyChromeFromTheme } from './utils/theme-presets';
 import type { CopilotSessionSummary } from '../shared/copilot-types';
-import type { PaneSummaryResult, PaneSummaryError } from '../shared/pane-summary-types';
 import { useKeybindings } from './hooks/useKeybindings';
 import { useDragTerminal } from './hooks/useDragTerminal';
-import { useAutoPaneSummary } from './hooks/useAutoPaneSummary';
 import TabBar from './components/TabBar';
 import WorkspaceTabBar from './components/WorkspaceTabBar';
 import TilingLayout from './components/TilingLayout';
@@ -90,7 +88,6 @@ const App: React.FC = () => {
   }, []);
 
   useKeybindings();
-  useAutoPaneSummary();
 
   const {
     activeId,
@@ -270,14 +267,6 @@ const App: React.FC = () => {
       store().addToast('Keybindings reloaded');
     });
 
-    // ── Pane summary IPC subscriptions (Task pane-summary) ──────────
-    const unsubPaneSummaryResult = api.onPaneSummaryResult?.((result: PaneSummaryResult) => {
-      store().applyPaneSummaryResult(result);
-    });
-    const unsubPaneSummaryError = api.onPaneSummaryError?.((err: PaneSummaryError) => {
-      store().applyPaneSummaryError(err);
-    });
-
     return () => {
       api.stopCopilotWatching?.();
       api.stopClaudeCodeWatching?.();
@@ -288,8 +277,6 @@ const App: React.FC = () => {
       unsubClaudeAdded?.();
       unsubClaudeRemoved?.();
       unsubKeybindings?.();
-      unsubPaneSummaryResult?.();
-      unsubPaneSummaryError?.();
     };
   }, []);
 

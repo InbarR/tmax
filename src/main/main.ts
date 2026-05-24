@@ -10,7 +10,6 @@ import { KeybindingsFile } from './keybindings-file';
 import { IPC } from '../shared/ipc-channels';
 import { CopilotSessionMonitor } from './copilot-session-monitor';
 import { CopilotSessionWatcher } from './copilot-session-watcher';
-import { PaneSummaryService } from './pane-summary-service';
 import { notifyCopilotSession, clearNotificationCooldowns, setAiSessionNotificationsEnabled, setNotificationClickHandler, setSessionNameOverrides, setNotificationExcludeStrings } from './copilot-notification';
 import { ClaudeCodeSessionMonitor } from './claude-code-session-monitor';
 import { ClaudeCodeSessionWatcher } from './claude-code-session-watcher';
@@ -134,7 +133,6 @@ let configStore: ConfigStore | null = null;
 let keybindingsFile: KeybindingsFile | null = null;
 let copilotMonitor: CopilotSessionMonitor | null = null;
 let copilotWatcher: CopilotSessionWatcher | null = null;
-let paneSummaryService: PaneSummaryService | null = null;
 let claudeCodeMonitor: ClaudeCodeSessionMonitor | null = null;
 let claudeCodeWatcher: ClaudeCodeSessionWatcher | null = null;
 let wslSessionManager: WslSessionManager | null = null;
@@ -620,29 +618,6 @@ function registerIpcHandlers(): void {
     const pid = ptyManager?.getPid(id);
     if (typeof pid !== 'number') return [];
     return await getDescendantNames(pid);
-  });
-
-  // ── Pane summary (Task pane-summary). Routes renderer requests to
-  // the PaneSummaryService (lazily instantiated once the copilot monitor
-  // is up). Falls back to an `unavailable` error if the service couldn't
-  // be created (e.g. monitor never initialised).
-  ipcMain.on(IPC.PANE_SUMMARY_REQUEST, (event, req: import('../shared/pane-summary-types').PaneSummaryRequest) => {
-    diagLog('paneSummary.request', {
-      terminalId: sanitize(req?.terminalId),
-      provider: req?.provider,
-      force: !!req?.force,
-    });
-    if (!paneSummaryService) {
-      event.sender.send(IPC.PANE_SUMMARY_ERROR, {
-        terminalId: req.terminalId,
-        sessionId: req.sessionId,
-        provider: req.provider,
-        message: 'pane summary service not initialised',
-        unavailable: true,
-      });
-      return;
-    }
-    paneSummaryService.request(req, event.sender);
   });
 
   ipcMain.on(IPC.DIAG_LOG, (_event, event: string, data?: Record<string, unknown>) => {
@@ -1261,12 +1236,6 @@ function registerIpcHandlers(): void {
 function setupCopilotMonitor(): void {
   copilotMonitor = new CopilotSessionMonitor();
 
-  // Lazily wire pane-summary service now that the monitor exists.
-  paneSummaryService = new PaneSummaryService({
-    monitor: copilotMonitor,
-    config: () => configStore?.get('paneSummary'),
-  });
-
   copilotMonitor.setCallbacks({
     onSessionUpdated(session) {
       mainWindow?.webContents.send(IPC.COPILOT_SESSION_UPDATED, session);
@@ -1577,8 +1546,6 @@ app.on('window-all-closed', async () => {
   sessionFileWatcher = null;
   await copilotWatcher?.stop();
   copilotMonitor?.dispose();
-  paneSummaryService?.dispose();
-  paneSummaryService = null;
   await claudeCodeWatcher?.stop();
   claudeCodeMonitor?.dispose();
   await wslSessionManager?.stop();
