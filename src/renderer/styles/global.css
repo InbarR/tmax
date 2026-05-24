@@ -1744,13 +1744,22 @@ html.transparency-active .input-dialog {
   pointer-events: none;
 }
 
+/* GH #115: drop zones must only intercept pointer events while a drag is
+   actually active. data-dragging is set by PaneDropZones from the live
+   store flag; CSS gates pointer-events so even if the React flag gets
+   stuck the worst case is "no drop targets briefly", never "pane input
+   is dead". */
 .pane-drop-zone {
   position: absolute;
-  pointer-events: auto;
+  pointer-events: none;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.pane-drop-zones-container[data-dragging="true"] .pane-drop-zone {
+  pointer-events: auto;
 }
 
 .pane-drop-zone.zone-left {

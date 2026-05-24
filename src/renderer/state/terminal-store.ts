@@ -3576,6 +3576,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         // Clear multi-pane selection when switching to a new workspace,
         // matching the behavior in setActiveWorkspace (TASK-72).
         selectedTerminalIds: {} as Record<TerminalId, true>,
+        // GH #115: also reset dnd-kit drag flag here for the same reason
+        // as setActiveWorkspace - a drag in flight when the user clicks
+        // "+ new tab" could leave PaneDropZones overlays covering every
+        // existing pane.
+        isDragging: false,
+        draggedTerminalId: null,
       };
     });
     get().saveSession();
@@ -3609,6 +3615,17 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       // a stale selection from a previous workspace leaking into the next
       // one (where IDs would not match anyway).
       selectedTerminalIds: {},
+      // GH #115: a dnd-kit drag in flight when a workspace switch happens
+      // (e.g. drag a tab, hover a workspace-switch shortcut, the active
+      // pane re-renders out from under the drag) sometimes never gets an
+      // onDragEnd / onDragCancel fired. The flag stays true, PaneDropZones
+      // stay mounted on every pane with pointer-events: auto, and the user
+      // can no longer wheel-scroll or text-select the previously focused
+      // pane. Force the reset on every workspace switch as a hard fallback;
+      // even if dnd-kit's own cleanup also fires, this is a no-op when the
+      // flag is already false.
+      isDragging: false,
+      draggedTerminalId: null,
     });
   },
 
