@@ -1426,6 +1426,66 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     wheelRecoveryEl?.addEventListener('wheel', wheelClampHandler, { passive: true });
     wheelRecoveryEl?.addEventListener('dblclick', manualSyncHandler);
 
+    // GH #117 + TASK-179: when a TUI (Copilot CLI, Claude Code, fzf inline)
+    // enables xterm mouse tracking, xterm normally encodes wheel events as
+    // mouse-button reports and forwards them to the PTY child instead of
+    // scrolling the buffer. Two failure modes used to surface here:
+    //   1. TUIs that enable mouse tracking but ignore wheel reports - the
+    //      wheel looked dead because xterm sent reports nobody read.
+    //   2. Ink-based TUIs (Claude Code, Copilot CLI) that DO handle wheel
+    //      reports for their internal scroller - the previous universal
+    //      suppression blocked wheel events from ever reaching them.
+    // Resolution: route via xterm's public scrollLines() in the normal
+    // case (so the .xterm-viewport scrollbar tracks and we match the
+    // drag-select code path), but for the Ink case - mouse tracking on
+    // AND xterm has no scrollback (baseY === 0, content redrawn in place) -
+    // return true so xterm forwards the wheel as a mouse-button report.
+    // The TUI's own scroller takes it from there. Shift+wheel always
+    // falls through to xterm so a TUI that legitimately wants raw wheel
+    // input can opt back in. term.modes.mouseTrackingMode is the public
+    // xterm 5.x API; an earlier _core.coreMouseService probe returned
+    // undefined through the TS facade and made the heuristic unreliable.
+    term.attachCustomWheelEventHandler((e: WheelEvent): boolean => {
+      if (e.shiftKey) return true;
+      // TASK-179: Ink-based TUIs (Claude Code, Copilot CLI) render their
+      // entire UI in place via CUU + erase + redraw, so nothing flows
+      // into xterm's scrollback (baseY stays at 0). They DO handle
+      // wheel events themselves though - Claude's bundle has a parser
+      // that turns SGR mouse button codes 64/65 into wheelup/wheeldown
+      // key events, and Copilot CLI (same Ink stack) is the same. Detect
+      // "TUI owns the viewport" via baseY === 0 with mouse tracking on,
+      // and let xterm forward the wheel to the PTY as a mouse-button
+      // report. The TUI's own scroller takes it from there. For panes
+      // with real xterm scrollback (baseY > 0) we still use scrollLines
+      // so the user navigates xterm's buffer.
+      const tracking = term.modes.mouseTrackingMode;
+      const buf = term.buffer.active;
+      if (tracking !== 'none' && buf.baseY === 0) {
+        // Let xterm's native handler forward the wheel as a mouse-
+        // button report. xterm WON'T scroll its own viewport because
+        // mouse tracking is on - it just encodes and writes to the PTY.
+        return true;
+      }
+      // Normal path: scrollLines moves xterm's ydisp via the buffer
+      // service. xterm's own refresh syncs viewport.scrollTop on the
+      // next rAF, so the scrollbar tracks. Same path drag-select uses,
+      // so we get parity. Returning false also blocks the wheel-to-PTY
+      // forwarding for the mouse-tracking-with-scrollback case (rare,
+      // but means the user can still navigate xterm history without
+      // sending stray wheel reports to whatever's reading the PTY).
+      const rowHeight =
+        (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { height?: number } } } } } })
+          ._core?._renderService?.dimensions?.css?.cell?.height || 16;
+      const linesRaw = e.deltaY / rowHeight;
+      const lines = linesRaw === 0
+        ? 0
+        : (linesRaw > 0 ? Math.max(1, Math.round(linesRaw)) : Math.min(-1, Math.round(linesRaw)));
+      if (lines !== 0) {
+        try { term.scrollLines(lines); } catch { /* term disposed */ }
+      }
+      return false;
+    });
+
     // TASK-171: AI process-tree scan scheduler. Shared between the burst
     // trigger (in onPtyData below) and the Enter-keystroke trigger (in
     // term.onData below). Single in-flight check + throttle keeps the
