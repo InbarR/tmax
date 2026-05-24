@@ -440,16 +440,15 @@ export function computeTabTint(
   // so the bar still reads as chrome rather than a void.
   const titleAlpha = Math.min(0.95, focused ? i : i / 2);
 
-  // Body fill: vivid colors cap alpha by chroma so they read as accents,
-  // not walls. Neutrals (black/white/gray) bypass the cap so the user
-  // can dial them in fully.
+  // Body fill: vivid colors are accents, never walls. Hard cap at 0.20
+  // alpha so a colored pane reads as "tinted" rather than "filled". At
+  // default intensity 40, a vivid tab paints body bg at ~0.08 alpha -
+  // matches the pre-TASK-170 per-pane overlay feel.
+  // Neutrals (black/white/gray) bypass the cap so the user can dial them
+  // in fully: Black at intensity 100 paints a truly solid black pane.
   let bodyAlpha = i;
   if (!isNeutral) {
-    // Scale chroma 0..255 → 0..0.65 cap so the most saturated colors
-    // still bottom out at a tolerable 0.65 fill.
-    const c = chroma(tintHex);
-    const cap = Math.min(0.65, 0.25 + (c / 255) * 0.4);
-    bodyAlpha = Math.min(i, cap);
+    bodyAlpha = Math.min(0.20, i * 0.20);
   }
 
   const blendedBody = blendRgb(tint, base, bodyAlpha);
