@@ -2675,18 +2675,29 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   const aiProvider = useTerminalStore((s): 'copilot' | 'claude-code' | undefined =>
     getSessionProvider(s.copilotSessions, s.claudeCodeSessions, aiSessionId),
   );
-  // Native browser tooltip on the pane title bar: surface the session's
-  // opening ask (firstPrompt) so the user gets the untruncated topic.
-  // We deliberately use firstPrompt instead of session.summary because
-  // Copilot rewrites row.summary to the latest user message every turn,
-  // so it's not a stable session label. firstPrompt is sticky once set
-  // by the parser. Suppress when it equals the visible (latched) title
-  // to avoid a duplicate hint.
+  // Multi-line native tooltip on the pane title bar with the session's
+  // opening ask + workspace + activity context. firstPrompt is the
+  // sticky opening message; we deliberately prefer it over session.summary
+  // because Copilot rewrites summary to the latest message every turn.
+  // Falls back to summary then latestPrompt so the tooltip is never empty
+  // when a session is linked.
   const aiSessionSummary = useTerminalStore((s) => {
     if (!aiSessionId) return null;
     const session = findSessionById(s.copilotSessions, s.claudeCodeSessions, aiSessionId);
-    const raw = session?.firstPrompt?.trim();
-    return raw && raw !== title ? raw : null;
+    if (!session) return null;
+    const opener = (session.firstPrompt || session.summary || session.latestPrompt || '').trim();
+    const lines: string[] = [];
+    if (opener) lines.push(opener);
+    const where: string[] = [];
+    if (session.repository) where.push(session.repository);
+    else if (session.cwd) where.push(session.cwd);
+    if (session.branch) where.push(`(${session.branch})`);
+    if (where.length) lines.push(where.join(' '));
+    const stats: string[] = [];
+    if (session.messageCount) stats.push(`${session.messageCount} msg${session.messageCount === 1 ? '' : 's'}`);
+    if (session.status) stats.push(session.status);
+    if (stats.length) lines.push(stats.join(' · '));
+    return lines.length ? lines.join('\n') : null;
   });
   // Force a re-render every 30s so the relative time stays fresh even when
   // nothing else in the session changes.

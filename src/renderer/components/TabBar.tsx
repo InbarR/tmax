@@ -72,18 +72,28 @@ const Tab: React.FC<TabProps> = ({
     if (!aiSessionId) return null;
     return findSessionById(s.copilotSessions, s.claudeCodeSessions, aiSessionId)?.status ?? null;
   });
-  // Show the AI session's opening ask (firstPrompt) as the tab's hover
-  // tooltip so the user gets the full untruncated topic of the session.
-  // We deliberately use firstPrompt rather than session.summary because
-  // Copilot rewrites row.summary to the latest user message on every
-  // turn - so summary isn't a stable session label. firstPrompt is
-  // sticky once set by the parser. No tooltip when it equals the visible
-  // title (no duplicate hint).
+  // Multi-line native tooltip with the session's opening ask + workspace
+  // + activity. firstPrompt is the sticky opener (Copilot rewrites
+  // row.summary to the latest user message every turn, so it's not a
+  // stable label). Falls back to summary then latestPrompt so the tooltip
+  // is never empty when a session is linked.
   const aiSessionSummary = useTerminalStore((s) => {
     if (!aiSessionId) return null;
     const session = findSessionById(s.copilotSessions, s.claudeCodeSessions, aiSessionId);
-    const raw = session?.firstPrompt?.trim();
-    return raw && raw !== title ? raw : null;
+    if (!session) return null;
+    const opener = (session.firstPrompt || session.summary || session.latestPrompt || '').trim();
+    const lines: string[] = [];
+    if (opener) lines.push(opener);
+    const where: string[] = [];
+    if (session.repository) where.push(session.repository);
+    else if (session.cwd) where.push(session.cwd);
+    if (session.branch) where.push(`(${session.branch})`);
+    if (where.length) lines.push(where.join(' '));
+    const stats: string[] = [];
+    if (session.messageCount) stats.push(`${session.messageCount} msg${session.messageCount === 1 ? '' : 's'}`);
+    if (session.status) stats.push(session.status);
+    if (stats.length) lines.push(stats.join(' · '));
+    return lines.length ? lines.join('\n') : null;
   });
   const needsAttention = aiStatus === 'waitingForUser' || aiStatus === 'awaitingApproval';
   const isThinking = aiStatus === 'thinking' || aiStatus === 'executingTool';
