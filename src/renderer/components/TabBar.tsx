@@ -6,6 +6,7 @@ import { useTerminalStore, TAB_COLORS, findSessionById } from '../state/terminal
 import type { TerminalId } from '../state/types';
 import TabContextMenu, { type ContextMenuPosition } from './TabContextMenu';
 import { isMac } from '../utils/platform';
+import { buildSessionHoverText } from '../utils/session-tooltip';
 
 interface TabProps {
   terminalId: TerminalId;
@@ -72,28 +73,11 @@ const Tab: React.FC<TabProps> = ({
     if (!aiSessionId) return null;
     return findSessionById(s.copilotSessions, s.claudeCodeSessions, aiSessionId)?.status ?? null;
   });
-  // Multi-line native tooltip with the session's opening ask + workspace
-  // + activity. firstPrompt is the sticky opener (Copilot rewrites
-  // row.summary to the latest user message every turn, so it's not a
-  // stable label). Falls back to summary then latestPrompt so the tooltip
-  // is never empty when a session is linked.
+  // Native tab tooltip - same plain-text Session Summary layout as the
+  // pane title bar uses. See utils/session-tooltip.ts.
   const aiSessionSummary = useTerminalStore((s) => {
     if (!aiSessionId) return null;
-    const session = findSessionById(s.copilotSessions, s.claudeCodeSessions, aiSessionId);
-    if (!session) return null;
-    const opener = (session.firstPrompt || session.summary || session.latestPrompt || '').trim();
-    const lines: string[] = [];
-    if (opener) lines.push(opener);
-    const where: string[] = [];
-    if (session.repository) where.push(session.repository);
-    else if (session.cwd) where.push(session.cwd);
-    if (session.branch) where.push(`(${session.branch})`);
-    if (where.length) lines.push(where.join(' '));
-    const stats: string[] = [];
-    if (session.messageCount) stats.push(`${session.messageCount} msg${session.messageCount === 1 ? '' : 's'}`);
-    if (session.status) stats.push(session.status);
-    if (stats.length) lines.push(stats.join(' · '));
-    return lines.length ? lines.join('\n') : null;
+    return buildSessionHoverText(findSessionById(s.copilotSessions, s.claudeCodeSessions, aiSessionId));
   });
   const needsAttention = aiStatus === 'waitingForUser' || aiStatus === 'awaitingApproval';
   const isThinking = aiStatus === 'thinking' || aiStatus === 'executingTool';

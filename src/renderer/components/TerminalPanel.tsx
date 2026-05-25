@@ -13,6 +13,7 @@ import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { prepareClipboardPaste, resolveClipboardPaste } from '../utils/paste';
 import { smartUnwrapForCopy } from '../utils/smart-unwrap';
 import { MD_PATH_PATTERN } from '../utils/md-link-parser';
+import { buildSessionHoverText } from '../utils/session-tooltip';
 import type { AppConfig } from '../state/types';
 import '@xterm/xterm/css/xterm.css';
 
@@ -2675,29 +2676,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   const aiProvider = useTerminalStore((s): 'copilot' | 'claude-code' | undefined =>
     getSessionProvider(s.copilotSessions, s.claudeCodeSessions, aiSessionId),
   );
-  // Multi-line native tooltip on the pane title bar with the session's
-  // opening ask + workspace + activity context. firstPrompt is the
-  // sticky opening message; we deliberately prefer it over session.summary
-  // because Copilot rewrites summary to the latest message every turn.
-  // Falls back to summary then latestPrompt so the tooltip is never empty
-  // when a session is linked.
+  // Native tooltip on the pane title bar - mirrors the Session Summary
+  // popup's layout in plain text (header / workspace / activity / opener
+  // / latest). See utils/session-tooltip.ts for the formatter.
   const aiSessionSummary = useTerminalStore((s) => {
     if (!aiSessionId) return null;
-    const session = findSessionById(s.copilotSessions, s.claudeCodeSessions, aiSessionId);
-    if (!session) return null;
-    const opener = (session.firstPrompt || session.summary || session.latestPrompt || '').trim();
-    const lines: string[] = [];
-    if (opener) lines.push(opener);
-    const where: string[] = [];
-    if (session.repository) where.push(session.repository);
-    else if (session.cwd) where.push(session.cwd);
-    if (session.branch) where.push(`(${session.branch})`);
-    if (where.length) lines.push(where.join(' '));
-    const stats: string[] = [];
-    if (session.messageCount) stats.push(`${session.messageCount} msg${session.messageCount === 1 ? '' : 's'}`);
-    if (session.status) stats.push(session.status);
-    if (stats.length) lines.push(stats.join(' · '));
-    return lines.length ? lines.join('\n') : null;
+    return buildSessionHoverText(findSessionById(s.copilotSessions, s.claudeCodeSessions, aiSessionId));
   });
   // Force a re-render every 30s so the relative time stays fresh even when
   // nothing else in the session changes.
