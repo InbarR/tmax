@@ -58,12 +58,24 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
         fontFamily:
           (termConfig?.fontFamily as string) ??
           "'CaskaydiaCove Nerd Font', 'Cascadia Code', 'Consolas', monospace",
-        scrollback: (termConfig?.scrollback as number) ?? 5000,
+        scrollback: (termConfig?.scrollback as number) ?? 50000,
         cursorStyle: (termConfig?.cursorStyle as 'block') ?? 'block',
         cursorBlink: (termConfig?.cursorBlink as boolean) ?? true,
         cursorInactiveStyle: 'none',
         allowTransparency: bgOpacity < 1,
         allowProposedApi: true,
+        // TASK-174: see TerminalPanel.tsx - tell xterm.js ConPTY is the
+        // backend on Windows and pass the real build number so reflow is
+        // enabled on modern Windows. Without buildNumber, reflow is off
+        // and ConPTY wrap sequences misparse, swallowing scrollback.
+        ...((window as { platformInfo?: { platform?: string; windowsBuildNumber?: number } }).platformInfo?.platform === 'win32'
+          ? {
+              windowsPty: {
+                backend: 'conpty' as const,
+                buildNumber: (window as { platformInfo?: { windowsBuildNumber?: number } }).platformInfo?.windowsBuildNumber || undefined,
+              },
+            }
+          : {}),
       });
 
       const fitAddon = new FitAddon();

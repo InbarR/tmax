@@ -1018,9 +1018,32 @@ html.transparency-active .input-dialog {
   overflow: hidden;
 }
 
-/* Thin scrollbar for xterm terminals */
+/* Thin scrollbar for xterm terminals. Force scrollbar always present:
+   - overflow-y: scroll so the scrollbar gutter is always reserved
+   - scrollbar-gutter: stable for browsers that honor it
+   - explicit minimum width so the bar is clearly visible
+   Bumped specificity with the .terminal-panel parent so xterm's inline
+   styles or any later rule can't silently win. Issue: in TUI panes
+   (Copilot/Claude/Ink) the rendered region equals the viewport exactly
+   so xterm's default overflow:auto hides the bar entirely. Forcing it
+   visible gives the user a stable scroll affordance AND a draggable
+   handle they can use even if wheel scrolling is being intercepted by
+   a mouse-tracking TUI (TASK-174). */
+.terminal-panel .xterm .xterm-viewport,
+.xterm .xterm-viewport {
+  overflow-y: scroll !important;
+  scrollbar-gutter: stable !important;
+}
+.terminal-panel .xterm .xterm-viewport::-webkit-scrollbar,
 .xterm .xterm-viewport::-webkit-scrollbar {
   width: 12px !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+.terminal-panel .xterm .xterm-viewport::-webkit-scrollbar-thumb,
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25) !important;
+  border-radius: 4px;
+  min-height: 30px !important;
 }
 
 .xterm .xterm-viewport::-webkit-scrollbar-thumb {
@@ -1149,6 +1172,12 @@ html.transparency-active .input-dialog {
   inset: 0;
   pointer-events: none;
   z-index: 100;
+  /* Defensive clip: floating panels can carry stale bounds (e.g. a saved
+     `width: window.innerWidth` from a maximize done before a side panel
+     opened). overflow:hidden here keeps the panel visually within the
+     layout-area even when its saved geometry would otherwise spill into
+     adjacent side-panel columns (TASK-166). */
+  overflow: hidden;
 }
 
 /* ===== Floating Panel ===== */
@@ -1162,6 +1191,12 @@ html.transparency-active .input-dialog {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
+  /* A saved width/height from a previous viewport (e.g. a maximize done
+     while side panels were closed) can exceed the current floating-layer
+     size after a panel opens. Cap to the container so it never spills
+     into adjacent columns (TASK-166). */
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .floating-panel.focused {

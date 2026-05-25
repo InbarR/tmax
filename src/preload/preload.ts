@@ -456,6 +456,17 @@ const terminalAPI: TerminalAPI = {
 };
 
 contextBridge.exposeInMainWorld('terminalAPI', terminalAPI);
+// On Windows, parse the build number from os.release() (e.g. "10.0.22631")
+// so the renderer can pass it to xterm.js as `windowsPty.buildNumber`. xterm
+// uses this to decide whether ConPTY is modern enough to support reflow:
+// builds >= 21376 (mid-2021 Windows 11) get reflow on resize; older builds
+// get the legacy "lines may be wrapped" heuristic. Defaults to 0 on non-
+// Windows so the renderer can just feed it straight through.
+const _release = require('os').release() as string;
+const _winBuild = process.platform === 'win32'
+  ? Number.parseInt(_release.split('.')[2] ?? '0', 10) || 0
+  : 0;
+
 contextBridge.exposeInMainWorld('platformInfo', {
   platform: process.platform,
   homeDir: require('os').homedir(),
@@ -463,4 +474,5 @@ contextBridge.exposeInMainWorld('platformInfo', {
   // This is authoritative (main has app.isPackaged) where process.defaultApp
   // can vary depending on how electron is launched.
   isDev: process.argv.includes('--tmax-is-dev=true'),
+  windowsBuildNumber: _winBuild,
 });

@@ -268,7 +268,7 @@ export const defaultConfig: AppConfig = {
   terminal: {
     fontSize: 14,
     fontFamily: 'CaskaydiaCove Nerd Font, CaskaydiaCove NF, Cascadia Code, Consolas, monospace',
-    scrollback: 5000,
+    scrollback: 50000,
     smartUnwrapCopy: true,
   },
   copilotCommand: 'copilot',
@@ -292,6 +292,22 @@ export class ConfigStore {
     });
     this.migratePwsh();
     this.migrateKeybindings();
+    this.migrateScrollback();
+  }
+
+  /**
+   * TASK-174: bump scrollback from the legacy 5000 default to 50000.
+   * Ink-based TUIs (Copilot CLI, Claude Code) emit lots of redrawn rows,
+   * and 5000 lines runs out part-way through a long AI session - users
+   * can't scroll back to the start of the conversation. Only migrate the
+   * exact old default; any other value is assumed to be a deliberate user
+   * choice (e.g. someone capping at 2000 for memory) and is left alone.
+   */
+  private migrateScrollback(): void {
+    const terminal = this.store.get('terminal') as TerminalDefaults | undefined;
+    if (terminal && terminal.scrollback === 5000) {
+      this.store.set('terminal', { ...terminal, scrollback: 50000 });
+    }
   }
 
   /** If PowerShell 7 is installed but not in the saved shells, inject it at the top */
