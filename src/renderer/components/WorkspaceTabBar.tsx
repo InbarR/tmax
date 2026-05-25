@@ -158,13 +158,37 @@ const WorkspaceTabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }>
   const selectedTerminalIds = useTerminalStore((s) => s.selectedTerminalIds);
   const viewMode = useTerminalStore((s) => s.viewMode);
   const preGridRoot = useTerminalStore((s) => s.preGridRoot);
+  const gridTabIds = useTerminalStore((s) => s.gridTabIds);
   const showSelectedPanes = useTerminalStore((s) => s.showSelectedPanes);
   const showAllPanes = useTerminalStore((s) => s.showAllPanes);
   const clearSelection = useTerminalStore((s) => s.clearSelection);
   const selectionCount = Object.keys(selectedTerminalIds).length;
-  // Filter-active = grid plumbing engaged AND we still hold a selection
-  // (showSelectedPanes preserves it; gridSelectedTabs clears it).
-  const isFilterActive = viewMode === 'grid' && !!preGridRoot && selectionCount >= 2;
+  // Workspace pane count (tiled, in active workspace when workspaces mode is
+  // on). Used to detect whether the current grid view is showing a STRICT
+  // SUBSET of the workspace (filter active) vs every pane (show-all state).
+  // The earlier check `viewMode==grid && preGridRoot && selectionCount>=2`
+  // false-positived after Show All: preGridRoot stayed set (so user can
+  // exit the grid), selection got re-added by the user, and the toolbar
+  // wrongly said "Show All" even though all panes were already visible.
+  const workspacePaneCount = useTerminalStore((s) => {
+    const tabMode = (s.config as { tabMode?: 'flat' | 'workspaces' } | undefined)?.tabMode ?? 'flat';
+    const activeWs = s.activeWorkspaceId;
+    let n = 0;
+    for (const t of s.terminals.values()) {
+      if (t.mode !== 'tiled') continue;
+      if (tabMode === 'workspaces' && (t.workspaceId ?? activeWs) !== activeWs) continue;
+      n++;
+    }
+    return n;
+  });
+  const gridTabCount = Object.keys(gridTabIds).length;
+  // Filter active = we're in a grid that explicitly tracks gridTabIds AND
+  // that set is a strict subset of the workspace. preGridRoot alone isn't
+  // enough: it's also set when the grid has been widened to all panes.
+  const isFilterActive = viewMode === 'grid'
+    && !!preGridRoot
+    && gridTabCount > 0
+    && gridTabCount < workspacePaneCount;
 
   const [renamingId, setRenamingId] = useState<WorkspaceId | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -272,7 +296,7 @@ const WorkspaceTabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }>
       >
         +
       </button>
-      {selectionCount >= 2 && (
+      {(selectionCount >= 2 || isFilterActive) && (
         <div
           className={`workspace-show-selected${isFilterActive ? ' active' : ''}`}
           title={

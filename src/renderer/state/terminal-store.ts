@@ -2706,25 +2706,52 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   showAllPanes: () => {
-    // TASK-72: exit the showSelectedPanes filter by restoring preGridRoot.
-    // No-op if there's nothing to restore.
-    const { viewMode, layout, preGridRoot, focusedTerminalId } = get();
+    // TASK-173: "Show All" must actually SHOW ALL panes - earlier behavior
+    // dropped back to focus mode (one pane visible), which contradicted
+    // the button label and surprised users who'd selected 3 panes, hit
+    // "Show All" expecting to see all 4. We now widen the existing grid
+    // to include every tiled pane in the active workspace (mirroring the
+    // Focus->Grid branch of toggleViewMode). The user can still leave
+    // grid mode entirely via the separate "Switch to tabs" button.
+    const { viewMode, layout, preGridRoot, gridColumns } = get();
     if (viewMode !== 'grid' || !preGridRoot) return;
-    let restored = preGridRoot;
-    // Defensive guard (mirrors toggleViewMode): if preGridRoot is stale and
-    // doesn't contain the focused terminal, fall back to the live tilingRoot
-    // so we never end up rendering a tree that excludes the user's focus.
-    if (focusedTerminalId) {
-      const preIds = getLeafOrder(preGridRoot);
-      if (!preIds.includes(focusedTerminalId) && layout.tilingRoot) {
-        restored = layout.tilingRoot;
-      }
+    const tabMode = (get().config as { tabMode?: 'flat' | 'workspaces' } | undefined)?.tabMode ?? 'flat';
+    const activeWsId = get().activeWorkspaceId;
+    const allIds = Array.from(get().terminals.entries())
+      .filter(([, t]) => {
+        if (t.mode !== 'tiled') return false;
+        if (tabMode === 'workspaces') {
+          return (t.workspaceId ?? activeWsId) === activeWsId;
+        }
+        return true;
+      })
+      .map(([id]) => id);
+    if (allIds.length < 2) {
+      // Only one (or zero) panes left in the workspace - a grid view doesn't
+      // make sense, so fall back to restoring focus mode the old way.
+      set({
+        viewMode: 'focus',
+        layout: { ...layout, tilingRoot: preGridRoot },
+        preGridRoot: null,
+        gridTabIds: {},
+      });
+      return;
     }
+    const gridRoot = buildGridTree(allIds, gridColumns || undefined);
+    if (!gridRoot) return;
+    const gridIds: Record<string, true> = {};
+    for (const id of allIds) gridIds[id] = true;
     set({
-      viewMode: 'focus',
-      layout: { ...layout, tilingRoot: restored },
-      preGridRoot: null,
-      gridTabIds: {},
+      // Stay in grid mode but with every pane now visible. preGridRoot is
+      // preserved so "Switch to tabs" can still exit the grid back to the
+      // pre-grid focus layout. Selection is PRESERVED (TASK-173 follow-up)
+      // so the workspace toolbar can immediately offer "Show Selected (N)"
+      // as the reverse toggle - clearing here would make the user re-pick
+      // panes just to narrow again, and break the show-all <-> show-selected
+      // toggle UX.
+      viewMode: 'grid',
+      layout: { ...layout, tilingRoot: gridRoot },
+      gridTabIds: gridIds,
     });
   },
 
