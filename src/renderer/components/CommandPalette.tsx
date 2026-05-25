@@ -8,9 +8,10 @@ import { confirmDialog } from './AppDialog';
 
 // Mouse-mode reset sequence: turns off every DEC mouse-tracking protocol
 // (?1000 / ?1002 / ?1003 / ?1006 / ?1015). Used by the "Reset Mouse Mode"
-// command palette action to unstick panes whose TUI (Ink-based Copilot CLI,
-// Claude Code, etc.) enabled mouse tracking and never reset it (GH #117).
-const MOUSE_RESET_SEQUENCE = '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l';
+// command palette action AND by TerminalPanel's auto-reset path (which fires
+// when a detected AI CLI child process disappears from a pane's process
+// tree without sending the matching reset itself). GH #117.
+export const MOUSE_RESET_SEQUENCE = '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l';
 
 interface Command {
   id: string;

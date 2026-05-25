@@ -5,7 +5,8 @@ import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { SerializeAddon } from '@xterm/addon-serialize';
 import { useTerminalStore, TAB_COLORS, computeTabTint, findSessionById, getSessionProvider } from '../state/terminal-store';
-import { registerTerminal, unregisterTerminal } from '../terminal-registry';
+import { registerTerminal, unregisterTerminal, getTerminalEntry } from '../terminal-registry';
+import { MOUSE_RESET_SEQUENCE } from './CommandPalette';
 import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache';
 import { isMac, formatKeyForPlatform } from '../utils/platform';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
@@ -49,6 +50,21 @@ function detectAiInChildren(names: string[]): { title: string; kind: 'copilot' |
     if (hit) return hit;
   }
   return null;
+}
+
+// Inverse of detectAiInChildren: true when the descendant list still
+// contains a process matching the given kind. Used by the auto-reset
+// path (GH #117) to decide whether a previously-detected AI CLI child
+// has disappeared from the pane's process tree.
+function aiKindStillRunning(
+  names: string[],
+  kind: 'copilot' | 'claude-code',
+): boolean {
+  for (const n of names) {
+    const hit = AI_PROCESS_NAMES[n];
+    if (hit && hit.kind === kind) return true;
+  }
+  return false;
 }
 
 // TASK-172: format a dropped file path for typing into the PTY.
@@ -2667,6 +2683,86 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     const id = setInterval(() => tickForClock(), 30_000);
     return () => clearInterval(id);
   }, [latestPromptTime]);
+
+  // GH #117: auto-reset mouse mode when a detected AI CLI child exits.
+  // Once TerminalPanel's process-tree scan (TASK-171) stamps the pane with
+  // aiProcessKind, we poll the descendant list on a slow cadence. When the
+  // matching process name is no longer present but the pane's shell is
+  // still alive, the AI CLI almost certainly died without sending the
+  // matching ?1000l/?1006l reset - so we write the reset ourselves so the
+  // recovered shell prompt gets working wheel + drag-select back without
+  // the user having to invoke the Command Palette manually.
+  //
+  // Two consecutive empty/missing scans gate the reset to absorb a one-off
+  // wmic/pgrep hiccup that returns an empty list mid-burst.
+  const aiProcessKindForPoll = useTerminalStore(
+    (s) => s.terminals.get(terminalId)?.aiProcessKind,
+  );
+  useEffect(() => {
+    if (!aiProcessKindForPoll) return;
+    const POLL_INTERVAL_MS = 5000;
+    const MISSING_THRESHOLD = 2;
+    let missingScans = 0;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      // Pane closed or stamp already cleared by the auto-link path - stop.
+      const current = useTerminalStore.getState().terminals.get(terminalId);
+      if (!current || current.aiProcessKind !== aiProcessKindForPoll) {
+        return;
+      }
+      let names: string[] | undefined;
+      try {
+        names = await (window.terminalAPI as any).getPtyChildProcesses?.(
+          terminalId,
+        ) as string[] | undefined;
+      } catch {
+        names = undefined;
+      }
+      if (cancelled) return;
+      const stillRunning = !!names && aiKindStillRunning(names, aiProcessKindForPoll);
+      if (stillRunning) {
+        missingScans = 0;
+        return;
+      }
+      missingScans += 1;
+      if (missingScans < MISSING_THRESHOLD) return;
+      // AI child has been absent for two consecutive scans. Write the
+      // mouse-mode reset directly to this pane's xterm and clear the
+      // stamp so we stop polling. Mirrors the Command Palette's manual
+      // reset path but targets a specific terminal id, not the focused
+      // one.
+      const entry = getTerminalEntry(terminalId);
+      if (entry) {
+        try {
+          entry.terminal.write(MOUSE_RESET_SEQUENCE);
+          window.terminalAPI.diagLog?.('renderer:mouse-mode-reset-ai-gone', {
+            terminalId,
+            kind: aiProcessKindForPoll,
+          });
+        } catch {
+          // Terminal already disposed - nothing to reset, just stop.
+        }
+      }
+      useTerminalStore.setState((s) => {
+        const cur = s.terminals.get(terminalId);
+        if (!cur || cur.aiProcessKind !== aiProcessKindForPoll) return {};
+        const next = new Map(s.terminals);
+        next.set(terminalId, {
+          ...cur,
+          aiProcessKind: undefined,
+          aiProcessDetectedAt: undefined,
+        });
+        return { terminals: next };
+      });
+      cancelled = true;
+    };
+    const intervalId = setInterval(() => { void tick(); }, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [terminalId, aiProcessKindForPoll]);
 
   const handleSearch = useCallback((query: string, backward?: boolean) => {
     if (!searchAddonRef.current || !query) return;
