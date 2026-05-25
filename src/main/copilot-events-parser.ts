@@ -121,6 +121,11 @@ function processEvent(raw: Record<string, unknown>, state: ParserCache): void {
     case 'session.start':
     case 'session.resume':
       state.status = 'idle';
+      // GH #118: a fresh session must start with a clean tool-call counter -
+      // a previous parse round (or stale cache state) could otherwise carry
+      // pendingToolCalls > 0 into a new session and leave the pane stuck on
+      // executingTool from the moment it starts.
+      state.pendingToolCalls = 0;
       break;
     case 'assistant.turn_start':
       state.status = 'thinking';
@@ -131,6 +136,12 @@ function processEvent(raw: Record<string, unknown>, state: ParserCache): void {
       // pane status dot and the AI shimmer reflect that this session is
       // ready for input. Goes back to 'thinking' on the next user.message.
       state.status = 'waitingForUser';
+      // GH #118: zero out pendingToolCalls on turn_end. The previous logic
+      // relied solely on a matching tool.execution_complete to decrement
+      // back to 0, but interruption / cancellation / Copilot crash leaves
+      // tools "pending" forever - the pane status then sticks on
+      // executingTool even though the turn is over.
+      state.pendingToolCalls = 0;
       break;
     case 'user.message': {
       state.messageCount++;
@@ -176,9 +187,27 @@ function processEvent(raw: Record<string, unknown>, state: ParserCache): void {
   }
 }
 
+// GH #118: mirror the Claude Code parser's ACTIVE_THRESHOLD_MS guard so a
+// crashed / abandoned Copilot session can't show "executingTool" or
+// "thinking" forever. If we haven't seen an event in this window, force
+// the status back to idle - the Copilot CLI is no longer writing to the
+// events log, so the pane is not actually busy.
+const ACTIVE_THRESHOLD_MS = 30_000;
+
 function cacheToResult(cached: ParserCache): ParsedSessionEvents {
+  // Active = latest event seen recently. Use lastActivityTime if it was
+  // populated (events carry timestamps); fall back to wall-clock skip
+  // (no events ever = treat as fresh, status stays whatever the parser
+  // decided).
+  const isStale =
+    cached.lastActivityTime > 0 &&
+    Date.now() - cached.lastActivityTime > ACTIVE_THRESHOLD_MS;
+  // Only downgrade "busy" statuses on staleness. waitingForUser is a valid
+  // long-running state (assistant ended its turn, user hasn't responded
+  // yet) and idle is already idle - no need to override either.
+  const isBusy = cached.status === 'executingTool' || cached.status === 'thinking';
   return {
-    status: cached.status,
+    status: isStale && isBusy ? 'idle' : cached.status,
     messageCount: cached.messageCount,
     toolCallCount: cached.toolCallCount,
     lastActivityTime: cached.lastActivityTime,

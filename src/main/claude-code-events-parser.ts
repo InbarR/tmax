@@ -196,7 +196,15 @@ function processLine(line: string, state: CacheEntry): void {
 
   state.lastLineType = type;
   state.lastLineHasEndTurn = false;
-  if (type === 'user') state.awaitingInput = false;
+  // GH #118: clear awaitingInput by default on every line. Previously only
+  // user events cleared it, so a `progress` / `system` / non-end_turn
+  // `assistant` event after an `end_turn` would leave the flag stuck true.
+  // deriveResult's early-return then locked the pane on `waitingForUser`
+  // for 10 minutes even though the session was actively executing tools.
+  // The `assistant` branch below re-sets the flag when the line is a real
+  // end_turn, so the only state that survives is "we genuinely just ended
+  // a turn and no other event has come in since".
+  state.awaitingInput = false;
 
   // Extract timestamp
   let lineTs = 0;
