@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeTheme, net, powerMonitor, session, shell } from 'electron';
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeTheme, net, powerMonitor, screen, session, shell } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -207,17 +207,152 @@ function broadcastPtyEvent(channel: string, id: string, ...args: unknown[]) {
   }
 }
 
+// TASK-171: persist window bounds + maximized state across launches, keyed
+// off the user's last-used display. When the user invokes tmax (taskbar,
+// shortcut, second-launch) on a secondary monitor, the OS-supplied
+// cursor position is the only reliable signal of "which screen did they
+// just click on" - Electron's BrowserWindow constructor with x:0,y:0
+// defaults always lands on the primary display, then maximize() expands
+// in-place on whichever display contains the current bounds. So we
+// (a) prefer restored bounds when they intersect a currently-connected
+// display, (b) otherwise position the (still-hidden) window in the
+// work-area of the display under the cursor, and (c) only then call
+// maximize(). Same logic works on win32 / darwin / linux because
+// Electron's screen API normalises everything to DIP coords.
+interface SavedWindowState {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  maximized: boolean;
+}
+
+function isValidSavedState(value: unknown): value is SavedWindowState {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.x === 'number' &&
+    typeof v.y === 'number' &&
+    typeof v.width === 'number' && v.width > 0 &&
+    typeof v.height === 'number' && v.height > 0 &&
+    typeof v.maximized === 'boolean'
+  );
+}
+
+function loadSavedWindowState(): SavedWindowState | null {
+  if (NO_RESTORE) return null;
+  try {
+    const raw = sessionStore.get('windowState');
+    return isValidSavedState(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistWindowState(win: BrowserWindow): void {
+  if (NO_RESTORE) return;
+  if (win.isDestroyed()) return;
+  try {
+    // Use the *normal* (un-maximized) bounds so a restore-from-maximize
+    // doesn't snap the user back to a primary-display 1200x800. On Windows
+    // getNormalBounds returns the pre-maximize rect; on other platforms it
+    // falls back to getBounds when the window isn't maximized.
+    const bounds = win.getNormalBounds();
+    const state: SavedWindowState = {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+      maximized: win.isMaximized(),
+    };
+    sessionStore.set('windowState', state);
+  } catch {
+    // Best-effort - don't crash the window event handler on persist failure.
+  }
+}
+
+/**
+ * Decide where to put the new window. The cursor's display is the
+ * authoritative signal - whatever the user just clicked (taskbar /
+ * shortcut / launcher) moved the cursor onto the screen they want
+ * tmax to appear on. Saved bounds are only honored when they belong
+ * to that same display, so a previous-session "maximized on primary"
+ * state cannot yank us back to the primary monitor when the user
+ * launches from a secondary one.
+ *
+ * Returns the rect plus whether we should maximize after positioning.
+ * The rect is always within a valid display's workArea so a subsequent
+ * maximize() expands on the right monitor.
+ */
+function pickInitialWindowPlacement(saved: SavedWindowState | null): {
+  bounds: { x: number; y: number; width: number; height: number };
+  maximized: boolean;
+} {
+  // Where did the user just click? getCursorScreenPoint() returns the OS
+  // cursor location, which the launching click moved onto the user's
+  // intended screen a moment before the app started.
+  let cursorDisplay;
+  try {
+    const cursor = screen.getCursorScreenPoint();
+    cursorDisplay = screen.getDisplayNearestPoint(cursor);
+  } catch {
+    cursorDisplay = screen.getPrimaryDisplay();
+  }
+
+  // Restore saved bounds ONLY when they sit on the same display as the
+  // cursor. Without this, a previous-session "maximized on primary" state
+  // wins forever - even if the user launches the new instance by clicking
+  // a taskbar / shortcut on the secondary monitor. Comparing the
+  // saved-rect's center display avoids edge cases where a snapped window
+  // technically straddles two monitors.
+  if (saved) {
+    const savedCenter = {
+      x: Math.round(saved.x + saved.width / 2),
+      y: Math.round(saved.y + saved.height / 2),
+    };
+    let savedDisplay;
+    try {
+      savedDisplay = screen.getDisplayNearestPoint(savedCenter);
+    } catch {
+      savedDisplay = null;
+    }
+    if (savedDisplay && savedDisplay.id === cursorDisplay.id) {
+      return {
+        bounds: { x: saved.x, y: saved.y, width: saved.width, height: saved.height },
+        maximized: saved.maximized,
+      };
+    }
+  }
+
+  // Cursor display fallback: 1200x800 centred in the workArea, then
+  // maximize on top of it so the un-maximize rect also lives on the
+  // intended display.
+  const wa = cursorDisplay.workArea;
+  const width = Math.min(1200, wa.width);
+  const height = Math.min(800, wa.height);
+  const x = wa.x + Math.max(0, Math.round((wa.width - width) / 2));
+  const y = wa.y + Math.max(0, Math.round((wa.height - height) / 2));
+  return { bounds: { x, y, width, height }, maximized: true };
+}
+
 function createWindow(): void {
   // Omit backgroundMaterial from constructor — passing it at creation time
   // causes Windows 11 to grey-out the native maximize button (Electron bug).
   // We apply the material *after* the window is shown via applyMaterialToWindow().
   const { backgroundMaterial: _mat, ...constructorOpts } = getWindowMaterialOpts();
 
+  // TASK-171: pick a target display BEFORE constructing the window so the
+  // initial x/y land on the screen the user actually launched from. Without
+  // this, the hardcoded (100, 100) origin always anchored us to the primary
+  // display and maximize() then expanded in-place there.
+  const savedState = loadSavedWindowState();
+  const placement = pickInitialWindowPlacement(savedState);
+
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    x: 100,
-    y: 100,
+    width: placement.bounds.width,
+    height: placement.bounds.height,
+    x: placement.bounds.x,
+    y: placement.bounds.y,
     show: false,
     title: 'tmax',
     icon: path.join(__dirname, '../../assets/icon.png'),
@@ -272,7 +407,13 @@ function createWindow(): void {
       mainWindow!.setSkipTaskbar(true);
       mainWindow!.showInactive();
     } else {
-      mainWindow!.maximize();
+      // TASK-171: respect the user's saved maximized preference. The window
+      // is already sized + positioned in the right display's workArea by
+      // createWindow(), so maximize() now expands on that display instead
+      // of being yanked back to the primary monitor.
+      if (placement.maximized) {
+        mainWindow!.maximize();
+      }
       mainWindow!.show();
       mainWindow!.focus();
     }
@@ -285,6 +426,32 @@ function createWindow(): void {
   // Re-apply background material after maximize / restore state transitions
   mainWindow.on('maximize', () => { applyMaterialToWindow(mainWindow!); });
   mainWindow.on('unmaximize', () => { applyMaterialToWindow(mainWindow!); });
+
+  // TASK-171: persist window placement so the next launch can restore the
+  // user's last-used display + size. Debounced to avoid hammering disk
+  // during a drag-resize. Skipped in E2E mode - the test fixture parks
+  // the window off-screen and we don't want to overwrite real user state.
+  if (process.env.TMAX_E2E !== '1') {
+    let persistTimer: ReturnType<typeof setTimeout> | null = null;
+    const schedulePersist = () => {
+      if (persistTimer) clearTimeout(persistTimer);
+      persistTimer = setTimeout(() => {
+        persistTimer = null;
+        if (mainWindow && !mainWindow.isDestroyed()) persistWindowState(mainWindow);
+      }, 400);
+    };
+    mainWindow.on('move', schedulePersist);
+    mainWindow.on('resize', schedulePersist);
+    mainWindow.on('maximize', schedulePersist);
+    mainWindow.on('unmaximize', schedulePersist);
+    mainWindow.on('close', () => {
+      if (persistTimer) {
+        clearTimeout(persistTimer);
+        persistTimer = null;
+      }
+      if (mainWindow && !mainWindow.isDestroyed()) persistWindowState(mainWindow);
+    });
+  }
 
   // Prevent Chromium's built-in zoom — reset zoom level after any zoom attempt
   mainWindow.webContents.on('before-input-event', (_event, input) => {
