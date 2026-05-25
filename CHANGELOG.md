@@ -1,5 +1,39 @@
 # Changelog
 
+## v1.9.1
+
+A mid-week patch focused on AI-pane recovery, smarter pane titles, and the long-tail polish that landed since v1.9.0.
+
+### New Features
+
+- **Hover an AI pane's title (or its tab)** for a rich session summary - opener, workspace / branch, message count, last-active time, and current status. Same content as the Session Summary popup, just on hover, no click needed.
+- **`firstPrompt` is now captured for Copilot sessions** (it was already there for Claude Code), giving every AI session a stable "what was this about?" line independent of Copilot's churning `summary` field.
+- **Auto-reset mouse mode when an AI CLI exits a pane** - no more dropping to a shell with dead wheel + drag-select after Copilot CLI or Claude Code quits. The pane recovers silently within ~10 seconds.
+- **"Reset Mouse Mode" Command Palette action** - manual escape hatch for the same recovery, available any time even while a TUI is still alive.
+- **Tab color UX refresh** - 16-color palette (Pink / Indigo / Brown / Lime / Black / White added), a "Change pane color" picker in the pane overflow menu, a Tab color intensity slider in Settings, and true-black panes at intensity 100.
+- **Window restores on the display under your cursor** when launched off-primary - no more popping over to the primary monitor on every taskbar / shortcut launch.
+- **Centralised `getEffectiveCwd()`** so the diff panel and other CWD-sensitive surfaces consistently fall back to the shell's CWD once an AI session goes idle (PR #114, thanks @yoziv!).
+
+### Bug Fixes
+
+- **`.md` preview links work again when an Ink TUI hard-wraps a no-space path** - we retry with a seam-stripped variant when the first read returns null, so paths like `…/OneDrive - Microsoft\…` and `…/fi les/…` both resolve (PR #119, thanks @mpmisha!).
+- **macOS pane stops going dead after a new tab opens** (#115) - stuck dnd-kit drag overlays cleared via global `pointercancel` / window-blur / visibility-change listeners, and the drop zones default to `pointer-events: none` so a stuck flag at worst means "no drop targets briefly," never "the pane is dead."
+- **Mouse wheel works again in Claude Code / Copilot CLI panes** - Ink-based TUIs own the viewport (baseY===0 with mouse tracking on), so the wheel handler now lets xterm forward wheel reports to the TUI's own scroller instead of swallowing them.
+- **AI session status no longer sticks** on `executingTool` (Copilot) or `waitingForUser` (Claude Code) when turns end with pending tools or when progress events arrive after `end_turn` (#118). Adds a 30s staleness fallback for Copilot mirroring the Claude parser.
+- **Pane title latches on the session's opening ask** - no more rewriting to whatever the user just typed. Copilot's `row.summary` churns on every turn; the latch holds the first prompt until the user renames or relinks.
+- **`Ctrl+Shift+W` closes every selected pane** when multiple panes are selected (was only closing the focused one).
+- **"Show All" in workspaces mode widens the grid to every tiled pane** instead of dropping back to focus mode on one pane.
+- **`~` in Default Start Folder expands to homedir** on Mac/Linux (and `~\` on Windows). Settings placeholder is now platform-aware.
+- **zsh prompt themes that use `chpwd` hooks** (oh-my-zsh, p10k variants) render their cwd segment on the first prompt when tmax spawns directly into a folder.
+- **Smart-copy keeps code-block lines separate** when the source has a container indent - no more 10-line code blocks collapsing into one giant line on paste.
+
+### Polish
+
+- **`TERM_PROGRAM=vscode`** so Ink-based AI CLIs switch to their non-Ink renderer where available - real scrollback through long AI sessions on Windows.
+- **Default scrollback bumped from 5,000 to 50,000 lines** with a one-shot migration that preserves explicit user overrides. Memory cost stays lazy and small for quiet panes.
+- **Always-visible terminal scrollbar** so the drag handle is there even when a TUI is intercepting the wheel.
+- **`windowsPty.buildNumber`** is now passed to xterm.js so modern Windows builds (>= 21376) get the full reflow path on resize.
+
 ## v1.9.0
 
 A Sunday release focused on AI session quality-of-life and a big watcher-CPU win. Cross-instance state syncs now work properly, notifications got cleaner, and idle CPU drops from 4-6% to about 1%.

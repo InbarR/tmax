@@ -88,6 +88,7 @@ Built with Electron, React, TypeScript, xterm.js, and node-pty.
 - Pane hints for quick terminal switching (`Ctrl+Shift+J`)
 - Rename the focused pane in place with `Ctrl+Shift+R`
 - Refresh / restart the focused pane in place with `Ctrl+Alt+R` - tears down and respawns the PTY, preserving title and cwd
+- `Reset Mouse Mode` Command Palette action - escape hatch when an Ink-based TUI (Copilot CLI / Claude Code / `fzf`) leaves mouse tracking on and the pane stops scrolling
 - `Ctrl+Insert` copies the current selection - third alias alongside `Ctrl+Shift+C` and the right-click menu
 - Undo close pane / workspace (`Ctrl+Shift+T`) - 10-deep stack that restores cwd, title, color, and resumes the AI session if it's still in the live list. Confirms before restoring so an accidental keypress doesn't spawn PTYs unexpectedly
 - Split, move, resize, and navigate — all from the keyboard
@@ -97,8 +98,10 @@ Built with Electron, React, TypeScript, xterm.js, and node-pty.
 **Modern Tab Bar**
 - Rounded pill-style tabs with subtle borders
 - Hide/show tab bar (`Ctrl+Shift+B`) for maximum screen space
-- Tab colors shown as bottom line indicator
+- Tab colors shown as bottom line indicator — 16-color palette, settable from the tab context menu OR the pane overflow menu ("Change pane color")
+- `Tab color intensity` slider in Settings → Appearance (0–100) — at 100, a #000000 default tab paints a truly solid black pane
 - Drag & drop to reorder or split
+- Hover an AI-linked tab (or its pane title) for a quick Session Summary (opener, branch, message count, status)
 
 **Appearance**
 - Font picker with all installed monospace fonts
