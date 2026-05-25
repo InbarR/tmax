@@ -306,6 +306,7 @@ export class ClaudeCodeSessionMonitor {
       repository: '',
       summary: parsed.firstPrompt || parsed.slug || cwdFolder || '',
       slug: parsed.slug || undefined,
+      firstPrompt: parsed.firstPrompt || undefined,
       latestPrompt: parsed.latestPrompt || undefined,
       latestPromptTime: parsed.latestPromptTime || undefined,
       messageCount: parsed.messageCount,

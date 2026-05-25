@@ -119,6 +119,7 @@ export class CopilotSessionMonitor {
           lastActivityTime: summary.lastActivityTime,
           pendingToolCalls: 0,
           totalTokens: 0,
+          firstPrompt: summary.firstPrompt,
           latestPrompt: summary.latestPrompt,
           latestPromptTime: summary.latestPromptTime,
         });
@@ -321,6 +322,7 @@ export class CopilotSessionMonitor {
               lastActivityTime: summary.lastActivityTime,
               pendingToolCalls: 0,
               totalTokens: 0,
+              firstPrompt: summary.firstPrompt,
               latestPrompt: summary.latestPrompt,
               latestPromptTime: summary.latestPromptTime,
             });
@@ -457,6 +459,7 @@ export class CopilotSessionMonitor {
       lastActivityTime: parsed?.lastActivityTime ?? 0,
       pendingToolCalls: parsed?.pendingToolCalls ?? 0,
       totalTokens: parsed?.totalTokens ?? 0,
+      firstPrompt: parsed?.firstPrompt || undefined,
       latestPrompt: parsed?.latestPrompt || undefined,
       latestPromptTime: parsed?.latestPromptTime || undefined,
     };
@@ -575,6 +578,7 @@ export class CopilotSessionMonitor {
       branch: session.workspace.branch,
       repository: session.workspace.repository,
       summary: session.workspace.summary,
+      firstPrompt: session.firstPrompt || undefined,
       latestPrompt: session.latestPrompt || undefined,
       latestPromptTime: session.latestPromptTime || undefined,
       messageCount: session.messageCount,

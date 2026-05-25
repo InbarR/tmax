@@ -10,6 +10,10 @@ export interface ParsedSessionEvents {
   lastActivityTime: number;
   pendingToolCalls: number;
   totalTokens: number;
+  /** Very first user.message text in the session - sticky once set. Used
+   *  as the pane title hover tooltip and as the session's opening ask
+   *  fallback when row.summary churns. */
+  firstPrompt: string;
   latestPrompt: string;
   latestPromptTime: number;
 }
@@ -23,6 +27,7 @@ interface ParserCache {
   lastActivityTime: number;
   pendingToolCalls: number;
   totalTokens: number;
+  firstPrompt: string;
   latestPrompt: string;
   latestPromptTime: number;
   /** Last N prompts for search, capped to avoid unbounded growth. */
@@ -78,6 +83,7 @@ export function parseSessionEvents(eventsFilePath: string): ParsedSessionEvents 
           lastActivityTime: 0,
           pendingToolCalls: 0,
           totalTokens: 0,
+          firstPrompt: '',
           latestPrompt: '',
           latestPromptTime: 0,
           recentPrompts: [],
@@ -148,6 +154,7 @@ function processEvent(raw: Record<string, unknown>, state: ParserCache): void {
       state.status = 'thinking';
       const text = String(data?.content || data?.transformedContent || '').trim();
       if (text) {
+        if (!state.firstPrompt) state.firstPrompt = text.slice(0, 300);
         state.latestPrompt = text.slice(0, 120).replace(/\n/g, ' ');
         state.latestPromptTime = timestamp;
         state.recentPrompts.push(text.slice(0, 300));
@@ -213,6 +220,7 @@ function cacheToResult(cached: ParserCache): ParsedSessionEvents {
     lastActivityTime: cached.lastActivityTime,
     pendingToolCalls: cached.pendingToolCalls,
     totalTokens: cached.totalTokens,
+    firstPrompt: cached.firstPrompt,
     latestPrompt: cached.latestPrompt,
     latestPromptTime: cached.latestPromptTime,
   };

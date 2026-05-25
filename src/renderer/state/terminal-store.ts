@@ -4339,18 +4339,22 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
           // resets on explicit user rename or on a fresh relink.
           title = current.title;
         } else {
-          // Strip XML/HTML tags from summary (e.g. slash command markup)
-          const clean = (session.summary || '').replace(/<[^>]+>/g, '').trim();
-          const summary = clean.length > 60 ? clean.slice(0, 57) + '...' : clean;
-          // First session-derived title for this pane: prefer summary,
-          // fall back to latestPrompt for sessions whose CLI hasn't yet
-          // populated summary. Latch immediately so the next update can't
-          // overwrite.
-          if (summary) {
-            title = summary;
-          } else if (session.latestPrompt) {
-            const promptClean = session.latestPrompt.replace(/<[^>]+>/g, '').trim();
-            title = promptClean.length > 60 ? promptClean.slice(0, 57) + '...' : promptClean || current.title;
+          // First session-derived title for this pane. Source priority:
+          //   1. session.firstPrompt - the sticky opening ask, captured
+          //      once by the parser. Best fit for "what is this session?"
+          //   2. session.summary - works for Claude (parser sets it to
+          //      firstPrompt) but unreliable for Copilot (rewritten to the
+          //      latest message every turn). Used only when firstPrompt
+          //      is missing (older session shapes, or session linked
+          //      before any user.message landed).
+          //   3. session.latestPrompt - last-resort fallback.
+          // Then latch so subsequent updates can't overwrite.
+          const pickFirst = (session.firstPrompt || '').replace(/<[^>]+>/g, '').trim();
+          const pickSummary = (session.summary || '').replace(/<[^>]+>/g, '').trim();
+          const pickLatest = (session.latestPrompt || '').replace(/<[^>]+>/g, '').trim();
+          const candidate = pickFirst || pickSummary || pickLatest;
+          if (candidate) {
+            title = candidate.length > 60 ? candidate.slice(0, 57) + '...' : candidate;
           } else {
             title = current.title;
           }

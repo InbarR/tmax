@@ -2675,15 +2675,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   const aiProvider = useTerminalStore((s): 'copilot' | 'claude-code' | undefined =>
     getSessionProvider(s.copilotSessions, s.claudeCodeSessions, aiSessionId),
   );
-  // Native browser tooltip on the pane title: surface the AI session's
-  // own summary (row.summary for Copilot, firstPrompt-derived for Claude)
-  // so the user can read the full session topic even though the title
-  // itself is latched on the opening ask. Suppress when summary equals
-  // the visible title to avoid a duplicate hint.
+  // Native browser tooltip on the pane title bar: surface the session's
+  // opening ask (firstPrompt) so the user gets the untruncated topic.
+  // We deliberately use firstPrompt instead of session.summary because
+  // Copilot rewrites row.summary to the latest user message every turn,
+  // so it's not a stable session label. firstPrompt is sticky once set
+  // by the parser. Suppress when it equals the visible (latched) title
+  // to avoid a duplicate hint.
   const aiSessionSummary = useTerminalStore((s) => {
     if (!aiSessionId) return null;
     const session = findSessionById(s.copilotSessions, s.claudeCodeSessions, aiSessionId);
-    const raw = session?.summary?.trim();
+    const raw = session?.firstPrompt?.trim();
     return raw && raw !== title ? raw : null;
   });
   // Force a re-render every 30s so the relative time stays fresh even when

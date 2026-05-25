@@ -18,6 +18,10 @@ export interface CopilotSessionSummary {
   summary: string;
   /** Auto-generated session nickname (Claude Code only - e.g. "calm-river") */
   slug?: string;
+  /** Very first user.message in the session, captured once and sticky.
+   *  Provides the session's opening ask for hover tooltips on the pane /
+   *  tab title when row.summary churns on every turn. */
+  firstPrompt?: string;
   /** Most recent user prompt - useful when the terminal has scrolled past it */
   latestPrompt?: string;
   /** Timestamp (ms since epoch) of the most recent user prompt */
@@ -153,6 +157,7 @@ export interface CopilotSession {
   lastActivityTime: number;
   pendingToolCalls: number;
   totalTokens: number;
+  firstPrompt?: string;
   latestPrompt?: string;
   latestPromptTime?: number;
   /**
