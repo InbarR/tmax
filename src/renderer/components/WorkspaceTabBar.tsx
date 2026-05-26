@@ -142,6 +142,7 @@ const WorkspaceTabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }>
   const closeWorkspace = useTerminalStore((s) => s.closeWorkspace);
   const createTerminal = useTerminalStore((s) => s.createTerminal);
   const config = useTerminalStore((s) => s.config);
+  const hideWorkspaceCloseButtons = useTerminalStore((s) => s.hideWorkspaceCloseButtons);
   const tabBarPosition = useTerminalStore((s) => s.tabBarPosition);
   const setTabBarPosition = useTerminalStore((s) => (s as any).setTabBarPosition);
   // TASK-79: discoverable affordance for the multi-select / Show-Selected
@@ -267,7 +268,7 @@ const WorkspaceTabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }>
               isRenaming={renamingId === id}
               renameValue={renameValue}
               renameInputRef={renameInputRef}
-              showCloseBtn={workspaces.size > 1}
+              showCloseBtn={workspaces.size > 1 && !hideWorkspaceCloseButtons}
               onActivate={() => setActiveWorkspace(id)}
               onMiddleClick={() => handleClose(id)}
               onDoubleClick={() => {

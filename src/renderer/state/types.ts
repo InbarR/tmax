@@ -225,6 +225,7 @@ export interface AppConfig {
   // with its own grid. (TASK-40)
   tabMode?: 'flat' | 'workspaces';
   hideTabCloseButtons?: boolean;
+  hideWorkspaceCloseButtons?: boolean;
   backgroundMaterial?: BackgroundMaterial;
   backgroundOpacity?: number; // 0.0–1.0, default 0.8
   // Default background tint for panes without a per-pane / group / workspace

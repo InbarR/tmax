@@ -883,6 +883,7 @@ interface TerminalStore {
   tabBarPosition: 'top' | 'bottom' | 'left' | 'right';
   hideTabTitles: boolean;
   hideTabCloseButtons: boolean;
+  hideWorkspaceCloseButtons: boolean;
   renamingTerminalId: TerminalId | null;
   viewMode: 'split' | 'focus' | 'grid';
   broadcastMode: boolean; // when true, typing in any pane is sent to all tiled panes
@@ -1008,6 +1009,7 @@ interface TerminalStore {
   toggleTabBarPosition: () => void;
   toggleHideTabTitles: () => void;
   toggleHideTabCloseButtons: () => void;
+  toggleHideWorkspaceCloseButtons: () => void;
   setTerminalOpacity: (opacity: number) => void;
   startRenaming: (id: TerminalId | null) => void;
   toggleViewMode: () => void;
@@ -1312,6 +1314,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   tabBarPosition: 'top' as 'top' | 'bottom' | 'left' | 'right',
   hideTabTitles: false,
   hideTabCloseButtons: false,
+  hideWorkspaceCloseButtons: false,
   renamingTerminalId: null,
   viewMode: 'grid' as 'split' | 'focus' | 'grid',
   broadcastMode: false,
@@ -1335,6 +1338,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     if (config?.tabBarPosition) updates.tabBarPosition = config.tabBarPosition;
     if (typeof (config as any)?.hideTabTitles === 'boolean') updates.hideTabTitles = (config as any).hideTabTitles;
     if (typeof (config as any)?.hideTabCloseButtons === 'boolean') updates.hideTabCloseButtons = (config as any).hideTabCloseButtons;
+    if (typeof (config as any)?.hideWorkspaceCloseButtons === 'boolean') updates.hideWorkspaceCloseButtons = (config as any).hideWorkspaceCloseButtons;
     if ((config as any)?.terminalOpacity != null) {
       updates.terminalOpacity = (config as any).terminalOpacity;
       document.documentElement.style.setProperty('--terminal-opacity', String((config as any).terminalOpacity));
@@ -2564,6 +2568,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const val = !get().hideTabCloseButtons;
     set({ hideTabCloseButtons: val });
     get().updateConfig({ hideTabCloseButtons: val } as any);
+  },
+
+  toggleHideWorkspaceCloseButtons: () => {
+    const val = !get().hideWorkspaceCloseButtons;
+    set({ hideWorkspaceCloseButtons: val });
+    get().updateConfig({ hideWorkspaceCloseButtons: val } as any);
   },
 
   setTerminalOpacity: (opacity: number) => {

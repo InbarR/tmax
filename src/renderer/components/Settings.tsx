@@ -709,6 +709,13 @@ const AppearanceSettings: React.FC = () => {
             <span className="toggle-track" />
           </label>
         </SettingRow>
+        <SettingRow label="Hide workspace close buttons" description="Hide the ✕ button on workspace tabs to avoid accidentally closing them">
+          <label className="toggle-switch">
+            <input type="checkbox" checked={(config as any).hideWorkspaceCloseButtons === true}
+              onChange={() => useTerminalStore.getState().toggleHideWorkspaceCloseButtons()} />
+            <span className="toggle-track" />
+          </label>
+        </SettingRow>
         <SettingRow label="Default tab color" description="Background tint for all terminals without a custom color">
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <input type="color" className="theme-color-picker"
