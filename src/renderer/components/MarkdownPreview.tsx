@@ -70,6 +70,8 @@ interface MarkdownPreviewProps {
   kind?: 'md' | 'image';
   onClose: () => void;
   onOpenExternally?: (path: string) => void;
+  /** Re-read file from disk. When provided, a reload button is shown in the header. */
+  onReload?: () => void;
   /** Side to render on */
   side?: 'left' | 'right';
   onToggleSide?: () => void;
@@ -90,6 +92,7 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
   kind,
   onClose,
   onOpenExternally,
+  onReload,
   side = 'right',
   onToggleSide,
   width,
@@ -218,6 +221,17 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
               </div>
             )}
             <ZoomControls zoomPercent={zoomPercent} onZoomIn={zoomIn} onZoomOut={zoomOut} onZoomReset={zoomReset} />
+            {onReload && (
+              <button
+                className="file-preview-btn"
+                onClick={onReload}
+                title="Reload from disk"
+                aria-label="Reload from disk"
+                data-testid="md-preview-reload-btn"
+              >
+                &#x21BB;
+              </button>
+            )}
             {onOpenExternally && (
               <button className="file-preview-btn" onClick={() => onOpenExternally(filePath)} title="Open externally">&#8599;</button>
             )}

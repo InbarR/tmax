@@ -21,6 +21,29 @@ const MarkdownPreviewOverlay: React.FC = () => {
     (window.terminalAPI as any).openPath(path);
   };
 
+  // Re-read the underlying file from disk and refresh the preview. Only
+  // wired for markdown previews — image previews fetch their bytes
+  // internally in MarkdownPreview via a separate IPC and don't flow
+  // through this store slot's `content` field.
+  const handleReload = async () => {
+    const current = useTerminalStore.getState().markdownPreview;
+    if (!current || current.kind === 'image') return;
+    try {
+      const fresh = await (window.terminalAPI as any).fileRead(current.filePath);
+      if (typeof fresh !== 'string') return;
+      const latest = useTerminalStore.getState().markdownPreview;
+      // Don't clobber if the user closed or switched files mid-reload.
+      if (!latest || latest.filePath !== current.filePath) return;
+      useTerminalStore.setState({
+        markdownPreview: { ...latest, content: fresh },
+      });
+    } catch {
+      // Match md-link-parser behavior: swallow read errors silently.
+    }
+  };
+
+  const isImage = markdownPreview.kind === 'image';
+
   return ReactDOM.createPortal(
     <MarkdownPreview
       content={markdownPreview.content}
@@ -29,6 +52,7 @@ const MarkdownPreviewOverlay: React.FC = () => {
       kind={markdownPreview.kind}
       onClose={handleClose}
       onOpenExternally={handleOpenExternally}
+      onReload={isImage ? undefined : handleReload}
       side={side}
       onToggleSide={() => setSide((s) => s === 'right' ? 'left' : 'right')}
     />,
