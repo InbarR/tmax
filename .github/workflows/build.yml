@@ -32,6 +32,17 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    # id-token: write is required by azure/login OIDC. Harmless on non-Windows
+    # jobs since they don't call azure/login.
+    permissions:
+      contents: read
+      id-token: write
+
+    # Run Windows tag builds in the "release" environment so the federated
+    # credential subject (repo:InbarR/tmax:environment:release) matches and the
+    # OIDC exchange succeeds. Other jobs use no environment.
+    environment: ${{ (matrix.platform == 'win32' && startsWith(github.ref, 'refs/tags/v')) && 'release' || '' }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -41,6 +52,26 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+
+      # Azure OIDC login for Windows code signing. Only runs on tagged release
+      # builds for win32; PR / branch builds and other platforms skip this and
+      # therefore skip signing too.
+      - name: Azure login (OIDC for Trusted Signing)
+        if: matrix.platform == 'win32' && startsWith(github.ref, 'refs/tags/v')
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Install the TrustedSigning PowerShell module used by scripts/windows-sign.cjs.
+      - name: Install TrustedSigning PowerShell module
+        if: matrix.platform == 'win32' && startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name TrustedSigning -RequiredVersion 0.5.3 -Scope CurrentUser -Force -AllowClobber
+          Get-Module -ListAvailable TrustedSigning | Format-Table Name, Version
 
       # Linux dependencies for Electron + native modules
       - name: Install Linux build dependencies
@@ -73,6 +104,13 @@ jobs:
         run: npm run build -- --arch=${{ matrix.arch }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Sign Windows artifacts on tag builds. WINDOWS_SIGN=1 wires the hook
+          # in forge.config.ts; the TRUSTED_SIGNING_* vars are read by
+          # scripts/windows-sign.cjs and passed to Invoke-TrustedSigning.
+          WINDOWS_SIGN: ${{ (matrix.platform == 'win32' && startsWith(github.ref, 'refs/tags/v')) && '1' || '' }}
+          TRUSTED_SIGNING_ENDPOINT: ${{ vars.TRUSTED_SIGNING_ENDPOINT }}
+          TRUSTED_SIGNING_ACCOUNT: ${{ vars.TRUSTED_SIGNING_ACCOUNT }}
+          TRUSTED_SIGNING_PROFILE: ${{ vars.TRUSTED_SIGNING_PROFILE }}
 
       # Ad-hoc sign macOS app so it can run without Gatekeeper errors
       - name: Ad-hoc sign macOS app
