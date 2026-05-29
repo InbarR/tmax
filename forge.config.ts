@@ -6,6 +6,14 @@ import { MakerDeb } from "@electron-forge/maker-deb";
 import { MakerRpm } from "@electron-forge/maker-rpm";
 import { MakerDMG } from "@electron-forge/maker-dmg";
 
+// Windows code signing via Azure Trusted Signing. Only enabled when
+// WINDOWS_SIGN=1 (set in CI for tagged release builds), so local and PR
+// builds never try to sign. The hook signs the packaged app binaries
+// (during `package`) and the Squirrel Setup.exe (during `make`).
+const windowsSign = process.env.WINDOWS_SIGN === '1'
+  ? { hookModulePath: require('path').resolve(__dirname, 'scripts', 'windows-sign.cjs') }
+  : undefined;
+
 const config: ForgeConfig = {
   outDir: process.env.FORGE_OUT_DIR || 'out',
   hooks: {
@@ -107,10 +115,11 @@ const config: ForgeConfig = {
     name: "tmax",
     executableName: "tmax",
     icon: "./assets/icon",
+    ...(windowsSign ? { windowsSign } : {}),
   },
   makers: [
     // Windows
-    new MakerSquirrel({ authors: "tmax", description: "Powerful multi-terminal app", setupIcon: "./assets/icon.ico", iconUrl: "https://raw.githubusercontent.com/InbarR/tmax/main/assets/icon.ico" }),
+    new MakerSquirrel({ authors: "tmax", description: "Powerful multi-terminal app", setupIcon: "./assets/icon.ico", iconUrl: "https://raw.githubusercontent.com/InbarR/tmax/main/assets/icon.ico", ...(windowsSign ? { windowsSign } : {}) }),
     // macOS
     new MakerDMG({ format: "ULFO" }),
     // Linux
