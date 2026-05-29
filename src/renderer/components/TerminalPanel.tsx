@@ -1276,24 +1276,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // Wheel is intercepted directly via scrollLines() (see the custom wheel
     // handler below), but scrollbar drag relies on xterm's internal
     // Viewport scroll->buffer sync, which proved unreliable here - wheel
-    // scrolls while the scrollbar thumb is dead. We map the dragged
+    // scrolls while the scrollbar thumb is dead. We map the scrolled
     // scrollTop back to a buffer line and move xterm's ydisp to match.
     //
-    // Gated on an active scrollbar interaction so streaming/programmatic
-    // scrollTop changes (which xterm sets to ydisp * cellHeight) never yank
-    // the view. After any buffer scroll targetLine === viewportY anyway, so
-    // even a stray call is a no-op - the guard is belt-and-suspenders.
-    let scrollbarInteracting = false;
-    const onViewportMouseDown = (e: MouseEvent) => {
-      const vp = viewportScrollEl;
-      // The native scrollbar sits to the right of the content box, so a
-      // mousedown past clientWidth (which excludes the scrollbar) is a
-      // scrollbar/track interaction rather than a click on terminal text.
-      if (vp && e.offsetX >= vp.clientWidth) scrollbarInteracting = true;
-    };
-    const onWindowMouseUp = () => { scrollbarInteracting = false; };
+    // This runs on every scroll event, but it's a no-op for programmatic /
+    // streaming scrolls: after any buffer scroll xterm sets
+    // scrollTop = viewportY * cellHeight, so targetLine === viewportY and we
+    // skip the scrollToLine call. (An earlier attempt gated this on a
+    // mousedown in the scrollbar gutter, but native scrollbar clicks don't
+    // fire mousedown on the element in Chromium, so the sync never ran.)
     const syncBufferToScrollbar = () => {
-      if (!scrollbarInteracting) return;
       try {
         const vp = viewportScrollEl;
         if (!vp) return;
@@ -1306,8 +1298,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         if (targetLine !== buf.viewportY) term.scrollToLine(targetLine);
       } catch { /* term disposed or viewport not ready */ }
     };
-    viewportScrollEl?.addEventListener('mousedown', onViewportMouseDown);
-    window.addEventListener('mouseup', onWindowMouseUp);
     viewportScrollEl?.addEventListener('scroll', syncBufferToScrollbar, { passive: true });
 
     // Hide xterm's helper textarea from UI Automation as strongly as we can
@@ -2402,8 +2392,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       scrollDisposable.dispose();
       viewportScrollEl?.removeEventListener('scroll', updateScrolledAway);
       viewportScrollEl?.removeEventListener('scroll', syncBufferToScrollbar);
-      viewportScrollEl?.removeEventListener('mousedown', onViewportMouseDown);
-      window.removeEventListener('mouseup', onWindowMouseUp);
       clearInterval(scrollPollTimer);
       unsubscribePtyData();
       unsubscribePtyExit();
