@@ -487,11 +487,23 @@
     }
     .mac-note strong {
       color: var(--fg);
+    }
+    .mac-note-title {
       display: block;
-      margin-bottom: 4px;
+      margin-bottom: 10px;
+      font-size: 14px;
     }
     .mac-note p {
       margin: 6px 0;
+    }
+    .mac-note-shot {
+      display: block;
+      max-width: 280px;
+      width: 100%;
+      height: auto;
+      margin: 10px 0 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
     }
     .mac-note code {
       background: rgba(0,0,0,0.3);
@@ -854,8 +866,9 @@
     <br><small id="os-detail"></small>
   </a>
   <div class="mac-note" id="mac-note">
-    <strong>macOS says "tmax is damaged and can't be opened"?</strong>
-    <p>Click <strong>Cancel</strong>, not Move to Trash. tmax is not Apple Developer-signed, so macOS may block the first launch.</p>
+    <strong class="mac-note-title">macOS says "tmax is damaged and can't be opened"?</strong>
+    <img class="mac-note-shot" src="screenshots/download-warn-macos.png" alt="macOS warning dialog reading &quot;tmax is damaged and can't be opened. You should move it to the Trash.&quot;" loading="lazy">
+    <p>The app is fine. macOS requires apps to be signed with an Apple Developer certificate ($99/year), and I'm not planning to pay that evil company 😏 - so you bypass the quarantine flag yourself. Click <strong>Cancel</strong> (not Move to Trash!).</p>
     <p>Run this in Terminal, then open tmax again:</p>
     <code>xattr -cr /Applications/tmax.app</code>
     <p>If you installed it somewhere else, adjust the path, for example <code>~/Applications/tmax.app</code>.</p>
