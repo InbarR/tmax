@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.9.2
+
+Signed Windows builds, plus a batch of scrolling and AI-pane fixes that landed since v1.9.1.
+
+### New Features
+
+- **Signed Windows builds** - tmax installers and binaries are now code-signed via Azure Trusted Signing, so Windows no longer throws SmartScreen / "unknown publisher" warnings when you download and install.
+- **Reload button in the file preview** - re-read the current file from disk without closing the preview. Works for Markdown and other text files, whether opened from a terminal link, the Copilot panel, or the File Explorer.
+- **One toggle for close buttons** - "Hide tab close buttons" now also hides the ✕ on workspace tabs, so a single setting covers both.
+
+### Fixes
+
+- **Wheel and scrollbar now scroll Copilot CLI / Claude Code panes** - alt-screen TUIs using legacy mouse encoding had their wheel and drag reports silently dropped (and it broke after a split). tmax now forwards them, so scrolling works again - including dragging the scrollbar gutter to scroll the TUI's own buffer.
+- **Scrollbar drag scrolls the terminal buffer** - dragging the scrollbar thumb now moves the buffer even inside focus mode, floating panels, and the workspace grid, where xterm previously ignored the drag.
+- **Settings → Appearance no longer freezes** - the font picker enumerated every installed system font synchronously when the tab opened, freezing the window; it's now chunked and cached.
+- **Prompt search is fast and consistent** - typing no longer lags with many AI sessions loaded, and the results list no longer leaves stale rows on screen under a "0 results" count.
+
 ## v1.9.1
 
 A mid-week patch focused on AI-pane recovery, smarter pane titles, and the long-tail polish that landed since v1.9.0.

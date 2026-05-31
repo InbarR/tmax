@@ -155,32 +155,20 @@ Download the latest version from the [Releases page](https://github.com/InbarR/t
 
 ### Troubleshooting Downloads
 
-tmax is an independent open-source project and isn't code-signed (certificates cost $300-600/year on Windows and $99/year on macOS). Your browser and operating system may warn you about the download. All of these warnings are cosmetic - nothing is wrong with the file itself. Here's how to get past each one.
+tmax's **Windows builds are now code-signed** (via Azure Trusted Signing), so installers show a verified publisher and Windows no longer flags them as coming from an unknown publisher. **macOS builds aren't signed** (an Apple Developer certificate costs $99/year), so you'll still need the workaround below on a Mac. Any remaining warnings are cosmetic - nothing is wrong with the file itself. Here's how to get past each one.
 
 ---
 
 #### 🪟 Windows
 
-**"isn't commonly downloaded" (Edge / Chrome)**
+Windows installers are code-signed, so the UAC / install prompts show a verified publisher and there's no "unknown publisher" warning.
 
-![Edge SmartScreen warning](docs/screenshots/download-warn-edge.png)
+A **brand-new release** can still briefly trip [Microsoft SmartScreen's reputation filter](https://learn.microsoft.com/en-us/windows/security/operating-system-security/virus-and-threat-protection/microsoft-defender-smartscreen/) ("isn't commonly downloaded" on download, or "Windows protected your PC" on first launch) until enough people have installed it. If you see it:
 
-Your browser may silently pause the download and show the message above, or quietly stash it as `Unconfirmed *.crdownload` in your Downloads folder:
+- **On download** (Edge / Chrome): click the **⋯** menu → **Keep**, then the dropdown next to **Delete** → **Keep anyway**.
+- **On first launch**: click **More info** → **Run anyway**.
 
-![Unconfirmed crdownload](docs/screenshots/download-warn-crdownload.png)
-
-This is [Microsoft SmartScreen's reputation filter](https://learn.microsoft.com/en-us/windows/security/operating-system-security/virus-and-threat-protection/microsoft-defender-smartscreen/) - new / niche installers trigger it regardless of content.
-
-To allow the download:
-1. In the download warning, click the **⋯** menu and choose **Keep**. Edge then shows a second dialog:
-
-   ![Edge Keep confirmation](docs/screenshots/download-warn-edge-expanded.png)
-
-2. Click the **dropdown arrow** next to the red **Delete** button and choose **Keep anyway**.
-
-**"Windows protected your PC" on first launch**
-
-After installing, the first time you run tmax you'll see a blue "Windows protected your PC" dialog from SmartScreen. Click **More info** at the top, then **Run anyway** at the bottom.
+This clears up on its own as the signed release accrues reputation.
 
 ---
 
