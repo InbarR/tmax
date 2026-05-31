@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 import { tokenizeAnd, matchesAllTokens } from '../../shared/and-filter';
 import type { CopilotSessionSummary } from '../../shared/copilot-types';
@@ -54,6 +54,15 @@ const PromptSearchDialog: React.FC = () => {
   }, []);
 
   const [query, setQuery] = useState('');
+  // Debounced copy of `query` that drives all the expensive work (tokenizing,
+  // SQLite search, client-side filtering, highlighting). The input itself
+  // binds to `query` so typing stays instant, while the heavy list only
+  // recomputes when `filterQuery` catches up. Keeping a single derived query
+  // (rather than useDeferredValue) guarantees the result count and the
+  // rendered rows are always computed from the same value - otherwise frequent
+  // store-driven re-renders can leave stale rows showing under a "0 results"
+  // count (TASK-185).
+  const [filterQuery, setFilterQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [entries, setEntries] = useState<SearchEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -71,6 +80,7 @@ const PromptSearchDialog: React.FC = () => {
   useEffect(() => {
     if (!show) return;
     setQuery('');
+    setFilterQuery('');
     setSelectedIndex(0);
     setEntries([]);
     setSqliteResults(null);
@@ -140,12 +150,14 @@ const PromptSearchDialog: React.FC = () => {
   // filtering of non-SQLite results (Claude Code, fresh installs, fallback).
   // SQLite FTS5 handles AND/OR natively when the user is on the DB path.
   //
-  // Drive filtering + highlighting off a *deferred* copy of the query so the
-  // input itself stays responsive while typing - the expensive entry filter
-  // and the (up to 200) highlighted rows re-render at lower priority instead
-  // of blocking each keystroke.
-  const deferredQuery = useDeferredValue(query);
-  const tokens = useMemo(() => tokenizeAnd(deferredQuery), [deferredQuery]);
+  // Debounce query -> filterQuery so filtering/highlighting lag the keystrokes
+  // slightly instead of running on every one. ~120ms is below the threshold of
+  // feeling laggy while still collapsing bursts of fast typing.
+  useEffect(() => {
+    const id = setTimeout(() => setFilterQuery(query), 120);
+    return () => clearTimeout(id);
+  }, [query]);
+  const tokens = useMemo(() => tokenizeAnd(filterQuery), [filterQuery]);
   const matchesAll = useCallback(
     (haystack: string) => matchesAllTokens(haystack, tokens),
     [tokens],
@@ -166,14 +178,14 @@ const PromptSearchDialog: React.FC = () => {
     setSqliteResults(null);
 
     // Need 4+ chars for SQLite search (LIKE is a full table scan, short queries are too broad)
-    if (!query.trim() || query.trim().length < 4) {
+    if (!filterQuery.trim() || filterQuery.trim().length < 4) {
       return;
     }
 
     const version = ++searchVersionRef.current;
     searchDebounceRef.current = setTimeout(() => {
       const api = window.terminalAPI as any;
-      api.searchCopilotPrompts?.(query)?.then((rows: any[] | null) => {
+      api.searchCopilotPrompts?.(filterQuery)?.then((rows: any[] | null) => {
         if (searchVersionRef.current !== version) return;
         if (!rows) { setSqliteResults(null); return; }
         const results: SearchEntry[] = [];
@@ -212,7 +224,7 @@ const PromptSearchDialog: React.FC = () => {
     }, 600);
 
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
-  }, [query, show, sqliteActive]);
+  }, [filterQuery, show, sqliteActive]);
 
   // Combined match list: SQLite Copilot results blended with client-side
   // AND-filtered Claude Code entries when SQLite is active. Otherwise, client-
