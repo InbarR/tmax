@@ -1161,24 +1161,6 @@ async function loadRelease() {
     src.setAttribute('data-goatcounter-title', 'Build from source');
     grid.appendChild(src);
 
-    // Render full changelog from CHANGELOG.md (falls back to release body)
-    const changelogEl = document.getElementById('changelog-content');
-    try {
-      const clRes = await fetch(`https://raw.githubusercontent.com/${REPO}/main/CHANGELOG.md`, { cache: 'no-cache' });
-      if (clRes.ok) {
-        const clText = await clRes.text();
-        changelogEl.innerHTML = renderMarkdown(clText.replace(/^# Changelog\s*\n/, ''));
-      } else {
-        throw new Error('not found');
-      }
-    } catch {
-      if (data.body) {
-        changelogEl.innerHTML = renderMarkdown(data.body);
-      } else {
-        changelogEl.innerHTML = `<p>See <a href="${data.html_url}">release notes on GitHub</a></p>`;
-      }
-    }
-
     // Update version badge (hero) and topbar pill
     document.getElementById('version-badge').textContent = version;
     const tbv = document.getElementById('topbar-version');
@@ -1197,7 +1179,23 @@ async function loadRelease() {
     btn.href = `https://github.com/${REPO}/releases/latest`;
     document.getElementById('os-name').textContent = 'your platform';
     document.getElementById('os-detail').textContent = 'View releases on GitHub';
-    document.getElementById('changelog-content').innerHTML = '<p>Could not load changelog.</p>';
+  }
+}
+
+// Load the changelog independently of the releases API. CHANGELOG.md comes
+// from raw.githubusercontent (no API rate limit), so the changelog renders
+// even when the unauthenticated GitHub releases API is rate-limited - which
+// previously dragged the changelog down with it ("Could not load changelog").
+async function loadChangelog() {
+  const changelogEl = document.getElementById('changelog-content');
+  if (!changelogEl) return;
+  try {
+    const clRes = await fetch(`https://raw.githubusercontent.com/${REPO}/main/CHANGELOG.md`, { cache: 'no-cache' });
+    if (!clRes.ok) throw new Error(`HTTP ${clRes.status}`);
+    const clText = await clRes.text();
+    changelogEl.innerHTML = renderMarkdown(clText.replace(/^# Changelog\s*\n/, ''));
+  } catch {
+    changelogEl.innerHTML = `<p>See the <a href="https://github.com/${REPO}/blob/main/CHANGELOG.md">full changelog on GitHub</a>.</p>`;
   }
 }
 
@@ -1232,6 +1230,7 @@ function openLightbox(src) {
   lb.classList.add('active');
 }
 
+loadChangelog();
 loadRelease().then(() => {
   // Update contact links with version and OS info
   const detected = detectPlatform();
