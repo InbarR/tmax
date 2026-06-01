@@ -1300,135 +1300,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     };
     viewportScrollEl?.addEventListener('scroll', syncBufferToScrollbar, { passive: true });
 
-    // TASK-184: scrollbar drag in alt-screen TUIs (Copilot CLI, Claude
-    // Code, vim, etc).
-    //
-    // In alt-screen mouse-tracking mode, xterm's scrollback is empty (the
-    // TUI owns the viewport), so .xterm-viewport.scrollHeight equals
-    // clientHeight and the native scrollbar has no draggable thumb - just
-    // a gray gutter. Wheel works because the wheel handler above forwards
-    // it as a mouse-button report which the TUI's own pager handles, but
-    // there's no thumb to drag.
-    //
-    // Fix: inject a tall hidden spacer into .xterm-viewport so the native
-    // scrollbar renders a draggable thumb, then convert scrollTop deltas
-    // into wheel mouse-reports via coreMouseService.triggerMouseEvent and
-    // recenter scrollTop so the user can keep dragging indefinitely. The
-    // wheel reports route through onBinary/onData to the PTY, which is
-    // exactly what the TUI receives from a real wheel event.
-    let altScreenScrollSpacer: HTMLDivElement | null = null;
-    let altScrollIsResetting = false;
-    let altScrollLastTop = 0;
-    let altScrollDragActive = false;
-    const SPACER_MULTIPLIER = 20;
-    const isAltScreenScrollMode = () => {
-      try {
-        return term.modes.mouseTrackingMode !== 'none' && term.buffer.active.baseY === 0;
-      } catch { return false; }
-    };
-    const ensureSpacerForAltScreenScroll = () => {
-      try {
-        const vp = viewportScrollEl;
-        if (!vp) return;
-        const should = isAltScreenScrollMode();
-        if (should && !altScreenScrollSpacer) {
-          const spacer = document.createElement('div');
-          spacer.className = 'tmax-alt-scroll-spacer';
-          spacer.style.cssText = 'display:block;width:1px;pointer-events:none;visibility:hidden;flex-shrink:0;';
-          spacer.style.height = `${vp.clientHeight * SPACER_MULTIPLIER}px`;
-          vp.appendChild(spacer);
-          altScreenScrollSpacer = spacer;
-          altScrollIsResetting = true;
-          vp.scrollTop = Math.floor((vp.scrollHeight - vp.clientHeight) / 2);
-          altScrollLastTop = vp.scrollTop;
-          requestAnimationFrame(() => { altScrollIsResetting = false; });
-        } else if (!should && altScreenScrollSpacer) {
-          altScreenScrollSpacer.remove();
-          altScreenScrollSpacer = null;
-        } else if (should && altScreenScrollSpacer) {
-          const desired = vp.clientHeight * SPACER_MULTIPLIER;
-          const current = parseInt(altScreenScrollSpacer.style.height, 10) || 0;
-          if (Math.abs(desired - current) > 4) {
-            altScreenScrollSpacer.style.height = `${desired}px`;
-          }
-        }
-      } catch { /* term disposed */ }
-    };
-    // Tracks whether we're inside our own synthetic wheel dispatch, so the
-    // wheel event we fire doesn't recursively re-enter the scroll path.
-    let altScrollDispatchingWheel = false;
-    let altScrollRecenterTimer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleAltScrollRecenter = () => {
-      if (altScrollRecenterTimer) clearTimeout(altScrollRecenterTimer);
-      altScrollRecenterTimer = setTimeout(() => {
-        altScrollRecenterTimer = null;
-        const vp = viewportScrollEl;
-        if (!vp || !altScreenScrollSpacer) return;
-        altScrollIsResetting = true;
-        vp.scrollTop = Math.floor((vp.scrollHeight - vp.clientHeight) / 2);
-        altScrollLastTop = vp.scrollTop;
-        requestAnimationFrame(() => { altScrollIsResetting = false; });
-      }, 1500);
-    };
-    const handleAltScreenScrollbarDrag = () => {
-      if (altScrollIsResetting || altScrollDispatchingWheel || !altScreenScrollSpacer) return;
-      try {
-        const vp = viewportScrollEl;
-        if (!vp) return;
-        const deltaPx = vp.scrollTop - altScrollLastTop;
-        if (deltaPx === 0) return;
-        // Dispatch a synthetic WheelEvent on the viewport so xterm's own
-        // wheel pipeline (attachCustomWheelEventHandler + internal mouse-
-        // tracking encoder) forwards it to the PTY exactly like a real
-        // wheel event would. Same code path the user's mouse wheel uses,
-        // so the TUI receives proper SGR mouse reports.
-        altScrollDispatchingWheel = true;
-        try {
-          const rect = vp.getBoundingClientRect();
-          vp.dispatchEvent(new WheelEvent('wheel', {
-            deltaY: deltaPx,
-            deltaMode: 0,
-            bubbles: true,
-            cancelable: true,
-            clientX: rect.left + 4,
-            clientY: rect.top + 4,
-          }));
-        } finally {
-          altScrollDispatchingWheel = false;
-        }
-        altScrollLastTop = vp.scrollTop;
-        scheduleAltScrollRecenter();
-      } catch { /* term disposed */ }
-    };
-    // Mirror real wheel events onto scrollTop so the thumb visibly moves
-    // when the user scrolls with the mouse wheel. xterm intercepts the
-    // wheel in alt-screen + mouse-tracking mode and forwards to the PTY
-    // without touching scrollTop, so the thumb would otherwise stay frozen.
-    // We bump scrollTop by the wheel delta (within spacer range) and rely
-    // on altScrollDispatchingWheel to suppress double-forwarding when this
-    // wheel event came from our own drag handler.
-    const handleAltScreenWheelThumb = (e: WheelEvent) => {
-      if (!altScreenScrollSpacer || altScrollDispatchingWheel) return;
-      if (e.deltaY === 0 || e.shiftKey) return;
-      const vp = viewportScrollEl;
-      if (!vp) return;
-      const maxTop = vp.scrollHeight - vp.clientHeight;
-      const next = Math.max(0, Math.min(maxTop, vp.scrollTop + e.deltaY));
-      if (next === vp.scrollTop) return;
-      altScrollIsResetting = true;
-      vp.scrollTop = next;
-      altScrollLastTop = vp.scrollTop;
-      requestAnimationFrame(() => { altScrollIsResetting = false; });
-      scheduleAltScrollRecenter();
-    };
-    viewportScrollEl?.addEventListener('scroll', handleAltScreenScrollbarDrag, { passive: true });
-    viewportScrollEl?.addEventListener('wheel', handleAltScreenWheelThumb, { passive: true });
-    const altScreenWatchTimer = setInterval(ensureSpacerForAltScreenScroll, 250);
-    ensureSpacerForAltScreenScroll();
-    // altScrollDragActive is no longer used — we detect drag end via the
-    // scroll-idle recenter timer above.
-    void altScrollDragActive;
-
     // Hide xterm's helper textarea from UI Automation as strongly as we can
     // without breaking keyboard input. Windows Voice Access and other UIA-based
     // dictation tools discover the textarea, treat it as a real text field,
@@ -1839,28 +1710,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         tryScheduleAiProcessScan();
       }
 
-      const state = useTerminalStore.getState();
-      if (state.broadcastMode) {
-        for (const [id, t] of state.terminals) {
-          if (t.mode === 'tiled') window.terminalAPI.writePty(id, data);
-        }
-      } else {
-        window.terminalAPI.writePty(terminalId, data);
-      }
-    });
-
-    // TASK-184: mouse-report binary forwarding. When a TUI enables mouse
-    // tracking without SGR encoding (`\x1b[?1006h`), xterm.js encodes
-    // every mouse event - wheel, click, drag - through the DEFAULT
-    // (legacy x10) encoding and emits the bytes via term.onBinary, NOT
-    // term.onData. Without this listener, all DEFAULT-encoded mouse
-    // reports are silently dropped before reaching the PTY. Symptom:
-    // wheel and clicks do nothing in alt-screen TUIs like Copilot CLI,
-    // and the regression got worse after a split because the recreated
-    // xterm often comes back with activeEncoding="DEFAULT". Same
-    // broadcast-mode handling as onData so synchronize-panes stays
-    // consistent for users who navigate TUIs across panes.
-    const binaryDisposable = term.onBinary((data) => {
       const state = useTerminalStore.getState();
       if (state.broadcastMode) {
         for (const [id, t] of state.terminals) {
@@ -2540,19 +2389,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     return () => {
       resizeObserver.disconnect();
       dataDisposable.dispose();
-      binaryDisposable.dispose();
       scrollDisposable.dispose();
       viewportScrollEl?.removeEventListener('scroll', updateScrolledAway);
       viewportScrollEl?.removeEventListener('scroll', syncBufferToScrollbar);
-      viewportScrollEl?.removeEventListener('scroll', handleAltScreenScrollbarDrag);
-      viewportScrollEl?.removeEventListener('wheel', handleAltScreenWheelThumb);
-      if (altScrollRecenterTimer) { clearTimeout(altScrollRecenterTimer); altScrollRecenterTimer = null; }
       clearInterval(scrollPollTimer);
-      clearInterval(altScreenWatchTimer);
-      if (altScreenScrollSpacer) {
-        altScreenScrollSpacer.remove();
-        altScreenScrollSpacer = null;
-      }
       unsubscribePtyData();
       unsubscribePtyExit();
       wslPromptCleanupRef.current?.();

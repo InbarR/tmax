@@ -125,12 +125,6 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
       const dataDisposable = term.onData((data) => {
         window.terminalAPI.writePty(terminalId, data);
       });
-      // TASK-184: forward DEFAULT-encoded mouse reports (wheel/click/drag in
-      // alt-screen TUIs without SGR encoding). Without this, xterm fires
-      // onBinary and the bytes are dropped before reaching the PTY.
-      const binaryDisposable = term.onBinary((data) => {
-        window.terminalAPI.writePty(terminalId, data);
-      });
 
       let mouseTrackingOn = false;
       const unsubscribePtyData = window.terminalAPI.onPtyData((id, data) => {
@@ -345,7 +339,6 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
       cleanup = () => {
         resizeObserver.disconnect();
         dataDisposable.dispose();
-        binaryDisposable.dispose();
         unsubscribePtyData();
         unsubscribePtyExit();
         titleDisposable.dispose();
