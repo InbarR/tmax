@@ -1,6 +1,6 @@
 {
   "name": "tmax-terminal",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "description": "Powerful multi-terminal app with tiling, floating panels, and keyboard-driven workflow",
   "license": "MIT",
   "author": "InbarR",
