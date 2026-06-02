@@ -382,6 +382,42 @@ export function extractClaudeCodePrompts(filePath: string, limit = 10): string[]
   }
 }
 
+/**
+ * Like extractClaudeCodePrompts, but returns each user prompt paired with its
+ * timestamp (epoch ms) for the session-timeline view. Not cached - the
+ * timeline is opened on demand, not polled.
+ */
+export function extractClaudeCodePromptsWithTime(
+  filePath: string,
+  limit = 500,
+): { text: string; time: number }[] {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const out: { text: string; time: number }[] = [];
+    for (const line of content.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const o = JSON.parse(line);
+        if (o.type !== 'user' || !o.message?.content) continue;
+        const text = extractText(o.message.content);
+        if (!text) continue;
+        if (text.startsWith('[Request interrupted')) continue;
+        const stripped = stripCommandXml(text).trim();
+        if (!stripped) continue;
+        const nameMatch = text.match(/<command-name>([^<]+)<\/command-name>/);
+        const display = nameMatch
+          ? `/${nameMatch[1].replace(/^\/+/, '')}${stripped ? ` — ${stripped}` : ''}`
+          : stripped;
+        const time = o.timestamp ? new Date(o.timestamp).getTime() : 0;
+        out.push({ text: display.slice(0, 2000).replace(/\n/g, ' '), time });
+      } catch { /* skip */ }
+    }
+    return out.slice(-limit);
+  } catch {
+    return [];
+  }
+}
+
 export function clearClaudeCodeCache(filePath: string): void {
   cache.delete(filePath);
   promptsCache.delete(filePath);

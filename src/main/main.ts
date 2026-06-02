@@ -1145,6 +1145,16 @@ function registerIpcHandlers(): void {
     return wslSessionManager?.getClaudeCodePrompts(id) ?? [];
   });
 
+  // Read-only session timeline: each user prompt of a session paired with its
+  // timestamp, for either provider. Sourced from the session files (events
+  // carry per-message timestamps), so it only covers AI sessions.
+  ipcMain.handle(IPC.AI_GET_SESSION_TIMELINE, (_event, provider: string, id: string) => {
+    if (provider === 'claude-code') {
+      return claudeCodeMonitor?.getPromptsWithTime(id) ?? [];
+    }
+    return copilotMonitor?.getPromptsWithTime(id) ?? [];
+  });
+
   // ── Version check IPC handlers ──────────────────────────────────────
   ipcMain.handle(IPC.VERSION_GET_APP_VERSION, () => {
     return app.getVersion();

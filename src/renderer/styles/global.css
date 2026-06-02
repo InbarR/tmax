@@ -2984,6 +2984,71 @@ body.broadcast-on .terminal-panel {
   font-size: 13px;
 }
 
+/* Session timeline overlay - read-only list of a session's prompts with
+   timestamps (TASK-146). Reuses .switcher chrome. */
+.switcher.session-timeline { width: 620px; max-width: 90vw; }
+.session-timeline-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+.session-timeline-titles { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.session-timeline-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.session-timeline-sub { font-size: 12px; color: var(--text-secondary); }
+.session-timeline-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.session-timeline-close:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.session-timeline-list { max-height: 60vh; }
+.session-timeline-day {
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+.session-timeline-row {
+  display: flex;
+  gap: 12px;
+  padding: 7px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.session-timeline-row:hover { background: rgba(255,255,255,0.03); }
+.session-timeline-time {
+  flex-shrink: 0;
+  width: 52px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  padding-top: 1px;
+}
+.session-timeline-text {
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
 /* Prompt search dialog - reuses .switcher chrome but is wider and shows
    multi-line items (prompt text + meta row). Triggered by Ctrl+Shift+Y. */
 .switcher.prompt-search {

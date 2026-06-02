@@ -5,6 +5,7 @@ import {
   parseClaudeCodeSession,
   clearClaudeCodeCache,
   extractClaudeCodePrompts,
+  extractClaudeCodePromptsWithTime,
 } from './claude-code-events-parser';
 import type { CopilotSessionSummary } from '../shared/copilot-types';
 import { tokenizeAnd, matchesAllTokens } from '../shared/and-filter';
@@ -216,6 +217,12 @@ export class ClaudeCodeSessionMonitor {
     const filePath = this.filePaths.get(sessionId);
     if (!filePath) return [];
     return extractClaudeCodePrompts(filePath, limit);
+  }
+
+  getPromptsWithTime(sessionId: string, limit = 500): { text: string; time: number }[] {
+    const filePath = this.filePaths.get(sessionId);
+    if (!filePath) return [];
+    return extractClaudeCodePromptsWithTime(filePath, limit);
   }
 
   // ── Watcher callbacks ────────────────────────────────────────────────

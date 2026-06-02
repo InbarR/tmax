@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { parseSessionEvents, clearParserCache, extractCopilotPrompts } from './copilot-events-parser';
+import { parseSessionEvents, clearParserCache, extractCopilotPrompts, extractCopilotPromptsWithTime } from './copilot-events-parser';
 import { CopilotSessionDB, sessionRowToSummary } from './copilot-session-db';
 import { tokenizeAnd, matchesAllTokens } from '../shared/and-filter';
 import type {
@@ -364,6 +364,11 @@ export class CopilotSessionMonitor {
   getPrompts(sessionId: string, limit = 10): string[] {
     const eventsPath = path.join(this.basePath, sessionId, 'events.jsonl');
     return extractCopilotPrompts(eventsPath, limit);
+  }
+
+  getPromptsWithTime(sessionId: string, limit = 500): { text: string; time: number }[] {
+    const eventsPath = path.join(this.basePath, sessionId, 'events.jsonl');
+    return extractCopilotPromptsWithTime(eventsPath, limit);
   }
 
   handleEventsChanged(sessionId: string): void {

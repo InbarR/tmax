@@ -296,6 +296,10 @@ const terminalAPI: TerminalAPI = {
     return ipcRenderer.invoke(IPC.CLAUDE_CODE_GET_PROMPTS, id);
   },
 
+  getSessionTimeline(provider: 'copilot' | 'claude-code', id: string) {
+    return ipcRenderer.invoke(IPC.AI_GET_SESSION_TIMELINE, provider, id);
+  },
+
   onClaudeCodeSessionUpdated(cb: (session: unknown) => void): () => void {
     const listener = (_event: Electron.IpcRendererEvent, session: unknown) => {
       cb(session);

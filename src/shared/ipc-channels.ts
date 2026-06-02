@@ -45,6 +45,7 @@ export const IPC = {
   CLAUDE_CODE_START_WATCHING: 'claude-code:startWatching',
   CLAUDE_CODE_STOP_WATCHING: 'claude-code:stopWatching',
   CLAUDE_CODE_GET_PROMPTS: 'claude-code:getPrompts',
+  AI_GET_SESSION_TIMELINE: 'ai:getSessionTimeline',
   VERSION_UPDATE_STATUS: 'version:updateStatus',
   VERSION_GET_UPDATE: 'version:getUpdate',
   VERSION_CHECK_NOW: 'version:checkNow',

@@ -252,6 +252,35 @@ export function extractCopilotPrompts(eventsFilePath: string, limit = 20): strin
   }
 }
 
+/**
+ * Like extractCopilotPrompts, but returns each user prompt paired with its
+ * timestamp (epoch ms) for the session-timeline view. Reads the file directly
+ * (timeline is opened on demand, not polled).
+ */
+export function extractCopilotPromptsWithTime(
+  eventsFilePath: string,
+  limit = 500,
+): { text: string; time: number }[] {
+  try {
+    const content = fs.readFileSync(eventsFilePath, 'utf-8');
+    const out: { text: string; time: number }[] = [];
+    for (const line of content.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const o = JSON.parse(line);
+        if (o.type !== 'user.message') continue;
+        const text = String(o.data?.content || o.data?.transformedContent || '').trim();
+        if (!text) continue;
+        const time = o.timestamp ? new Date(o.timestamp).getTime() : 0;
+        out.push({ text: text.slice(0, 2000), time });
+      } catch { /* skip */ }
+    }
+    return out.slice(-limit);
+  } catch {
+    return [];
+  }
+}
+
 export function clearParserCache(eventsFilePath: string): void {
   cache.delete(eventsFilePath);
 }
