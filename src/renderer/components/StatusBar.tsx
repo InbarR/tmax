@@ -479,7 +479,19 @@ const StatusBar: React.FC = () => {
 
   return (
     <>
-      <div className="status-bar">
+      {/* GH #128 / focus-thief fix: status-bar buttons are <button>s, which
+          take focus on click and pull it off the terminal - making xterm's
+          cursor go hollow/invisible (most visible in Copilot/Claude CLI) and
+          dropping the next keystrokes (Ctrl+C, paste). preventDefault on
+          mousedown lets the button act without ever grabbing focus, so the
+          terminal keeps it. Delegated here so every status-bar button is
+          covered without touching each one. */}
+      <div
+        className="status-bar"
+        onMouseDownCapture={(e) => {
+          if ((e.target as HTMLElement).closest('button')) e.preventDefault();
+        }}
+      >
         <div className="status-section status-left">
           <button
             className="status-mode-btn"
