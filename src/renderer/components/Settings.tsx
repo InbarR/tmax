@@ -247,6 +247,17 @@ const TerminalSettings: React.FC = () => {
         </SettingRow>
       </SectionGroup>
 
+      <SectionGroup title="Startup">
+        <SettingRow label="Restore previous session on launch" description="Reopen the tabs and panes from your last session when tmax starts. Turn off to start with a fresh window each time (your session is still saved, so turning this back on restores it).">
+          <label className="toggle-switch">
+            <input type="checkbox"
+              checked={(config as any).restoreSessionOnLaunch !== false}
+              onChange={(e) => update({ restoreSessionOnLaunch: e.target.checked } as any)} />
+            <span className="toggle-track" />
+          </label>
+        </SettingRow>
+      </SectionGroup>
+
       <SectionGroup title="AI sessions">
         <SettingRow label="Copilot Command" description="Base command for Copilot sessions">
           <input type="text" className="settings-input" value={config.copilotCommand ?? ''}

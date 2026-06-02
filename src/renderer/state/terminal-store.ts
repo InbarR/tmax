@@ -3307,6 +3307,15 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   restoreSession: async () => {
     try {
+    // User opted out of restoring the previous session (Settings > Terminal >
+    // Startup). Skip loading it, but still mark hydration complete so saving
+    // continues normally - turning the setting back on restores the most
+    // recent session. (The dev --no-restore flag short-circuits on the main
+    // side; this is the user-facing equivalent.)
+    if ((get().config as AppConfig | undefined)?.restoreSessionOnLaunch === false) {
+      _sessionHydrated = true;
+      return false;
+    }
     const session = (await window.terminalAPI.loadSession()) as Record<string, unknown> | null;
     // Flip the hydration flag whether or not a saved session exists —
     // subsequent saveSession calls are safe either way.
