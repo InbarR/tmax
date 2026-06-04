@@ -448,7 +448,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       scrollback: termConfig?.scrollback ?? 5000,
       cursorStyle: termConfig?.cursorStyle ?? 'block',
       cursorBlink: termConfig?.cursorBlink ?? true,
-      cursorInactiveStyle: 'none',
+      // 'outline' (a hollow box), not 'none', so the cursor stays visible when
+      // the pane loses focus - otherwise it vanishes entirely the moment focus
+      // ping-pongs, which reads as "no cursor" in Copilot/Claude CLI (GH #128).
+      // Matches Windows Terminal's unfocused-cursor behavior.
+      cursorInactiveStyle: 'outline',
       allowTransparency: bgOpacity < 1,
       allowProposedApi: true,
     });
