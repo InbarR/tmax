@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 
 interface Msg { role: 'user' | 'assistant'; text: string; time: number }
@@ -13,33 +13,64 @@ function fmtTime(ts: number): string {
   if (!ts) return '';
   return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
+// Cheap change signature so polling only re-renders when something actually
+// changed (avoids resetting scroll every 2s).
+function sig(msgs: Msg[]): string {
+  const last = msgs[msgs.length - 1];
+  return `${msgs.length}:${last ? last.time + last.text.length : 0}`;
+}
+
+const POLL_MS = 2000;
 
 /**
- * Right-docked, read-only chat transcript for an AI session, with a timestamp
- * per message (issue #124 / TASK-146). Claude Code persists assistant replies
- * so it shows both sides; Copilot only persists the user side, so it shows
- * your prompts. Opened from the AI pane's title-bar button.
+ * Right-docked, read-only chat transcript for an AI session. Pushes the
+ * terminal layout (it's a flex sibling of .layout-area, not an overlay).
+ * Claude Code shows both sides; Copilot only persists user messages, so a
+ * banner says so. Live-refreshes while open (issue #124 / TASK-146).
  */
 const TranscriptPanel: React.FC = () => {
   const session = useTerminalStore((s) => s.transcriptSession);
   const [msgs, setMsgs] = useState<Msg[] | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
-  const close = () => useTerminalStore.setState({ transcriptSession: null });
+  const sigRef = useRef<string>('');
+  const close = useCallback(() => useTerminalStore.setState({ transcriptSession: null }), []);
 
+  const atBottom = () => {
+    const el = bodyRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.clientHeight - el.scrollTop < 60;
+  };
+  const scrollToBottom = () => {
+    requestAnimationFrame(() => {
+      if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+    });
+  };
+
+  // Initial load + live polling while the panel is open.
   useEffect(() => {
     if (!session) return;
-    setMsgs(null);
     let cancelled = false;
-    (window.terminalAPI as any).getSessionTimeline(session.provider, session.sessionId)
-      .then((rows: Msg[]) => {
-        if (cancelled) return;
-        setMsgs(Array.isArray(rows) ? rows : []);
-        requestAnimationFrame(() => {
-          if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-        });
-      })
-      .catch(() => { if (!cancelled) setMsgs([]); });
-    return () => { cancelled = true; };
+    sigRef.current = '';
+    setMsgs(null);
+
+    const fetchOnce = (initial: boolean) => {
+      (window.terminalAPI as any).getSessionTimeline(session.provider, session.sessionId)
+        .then((rows: Msg[]) => {
+          if (cancelled) return;
+          const next = Array.isArray(rows) ? rows : [];
+          const nextSig = sig(next);
+          if (!initial && nextSig === sigRef.current) return; // nothing new
+          const wasAtBottom = initial || atBottom();
+          sigRef.current = nextSig;
+          setMsgs(next);
+          if (wasAtBottom) scrollToBottom();
+        })
+        .catch(() => { if (!cancelled && initial) setMsgs([]); });
+    };
+
+    fetchOnce(true);
+    const timer = setInterval(() => fetchOnce(false), POLL_MS);
+    return () => { cancelled = true; clearInterval(timer); };
   }, [session?.sessionId, session?.provider]);
 
   useEffect(() => {
@@ -47,7 +78,7 @@ const TranscriptPanel: React.FC = () => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
     document.addEventListener('keydown', onKey, true);
     return () => document.removeEventListener('keydown', onKey, true);
-  }, [session]);
+  }, [session, close]);
 
   const groups = useMemo(() => {
     const out: { day: string; items: Msg[] }[] = [];
@@ -62,7 +93,7 @@ const TranscriptPanel: React.FC = () => {
 
   if (!session) return null;
 
-  const userOnly = session.provider === 'copilot';
+  const isCopilot = session.provider === 'copilot';
 
   return (
     <div className="transcript-panel">
@@ -70,13 +101,17 @@ const TranscriptPanel: React.FC = () => {
         <div className="transcript-titles">
           <span className="transcript-title">{session.title || 'Session'}</span>
           <span className="transcript-sub">
-            {session.provider === 'claude-code' ? 'Claude Code' : 'Copilot'}
+            {isCopilot ? 'Copilot' : 'Claude Code'}
             {msgs ? ` · ${msgs.length} message${msgs.length === 1 ? '' : 's'}` : ''}
-            {userOnly ? ' · your prompts' : ''}
           </span>
         </div>
         <button className="transcript-close" onClick={close} title="Close (Esc)" aria-label="Close">&#10005;</button>
       </div>
+      {isCopilot && (
+        <div className="transcript-disclaimer">
+          Copilot CLI only saves your messages, so assistant replies aren't shown here.
+        </div>
+      )}
       <div className="transcript-body" ref={bodyRef}>
         {msgs === null && <div className="transcript-empty">Loading transcript…</div>}
         {msgs !== null && msgs.length === 0 && (

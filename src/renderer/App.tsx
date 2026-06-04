@@ -320,6 +320,7 @@ const App: React.FC = () => {
             </DragOverlay>
               <DropZoneOverlay />
             </div>
+            <TranscriptPanel />
           </div>
           {!hideTabBar && tabBarPosition === 'right' && <TopBar vertical side="right" />}
         </div>
@@ -337,7 +338,6 @@ const App: React.FC = () => {
         <FloatingRenameInput />
         <SessionSummary />
         <MarkdownPreviewOverlay />
-        <TranscriptPanel />
         <Toast />
         <AppDialogHost />
       </div>
