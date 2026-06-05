@@ -21,6 +21,26 @@ const FLICKER_COOLDOWN_MS = 5_000;
 const lastNotified = new Map<string, number>();
 const lastStatus = new Map<string, CopilotSessionStatus>();
 
+// GH #129: these per-session Maps were only cleared on app quit, so they grew
+// without bound on long-running dev boxes that create many sessions. Cap them
+// (FIFO-evict the oldest) and expose a per-session forget for the removed path.
+const MAX_TRACKED_SESSIONS = 500;
+function evictTrackedSessions(): void {
+  while (lastNotified.size > MAX_TRACKED_SESSIONS) {
+    const k = lastNotified.keys().next().value as string;
+    lastNotified.delete(k);
+    lastStatus.delete(k);
+  }
+  while (lastStatus.size > MAX_TRACKED_SESSIONS) {
+    lastStatus.delete(lastStatus.keys().next().value as string);
+  }
+}
+/** Drop a session's tracked notification state when the session is removed. */
+export function forgetNotificationState(sessionId: string): void {
+  lastNotified.delete(sessionId);
+  lastStatus.delete(sessionId);
+}
+
 // TASK-164: cross-session body dedup. ClawPilot spawns two distinct
 // sessions per turn (a Claude Code SDK session + a parallel Copilot
 // session), and the per-session flicker cooldown above doesn't catch
@@ -45,6 +65,9 @@ function isDuplicateOfRecent(body: string): boolean {
 function rememberBody(body: string): void {
   if (!body) return;
   recentBodyKeys.push({ key: bodyDedupKey(body), time: Date.now() });
+  // GH #129: hard cap so a burst of notifications can't grow this unbounded
+  // between the time-based prunes in isDuplicateOfRecent().
+  if (recentBodyKeys.length > 100) recentBodyKeys = recentBodyKeys.slice(-50);
 }
 
 // Per-process opt-out gate. Wired from main.ts based on the `aiSessionNotifications`
@@ -120,6 +143,7 @@ function isAttentionStatus(status: CopilotSessionStatus | undefined): boolean {
 }
 
 export function notifyCopilotSession(session: CopilotSessionSummary): void {
+  evictTrackedSessions(); // GH #129: keep the per-session Maps bounded.
   if (!enabled) {
     // Still update the cached status so when notifications are re-enabled
     // we don't immediately fire for the existing steady state.

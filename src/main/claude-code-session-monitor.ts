@@ -82,7 +82,9 @@ export class ClaudeCodeSessionMonitor {
       }
 
       candidates.sort((a, b) => b.mtime - a.mtime);
-      this.cachedCandidates = candidates;
+      // GH #129: cap the candidate cache (most-recent first) so it can't
+      // balloon on machines with thousands of recent sessions.
+      this.cachedCandidates = candidates.slice(0, 1000);
     }
 
     const candidates = this.cachedCandidates;
@@ -254,6 +256,8 @@ export class ClaudeCodeSessionMonitor {
       try { mtime = fs.statSync(filePath).mtimeMs; } catch { /* use now */ }
       if (!this.cachedCandidates.some(c => c.filePath === filePath)) {
         this.cachedCandidates.unshift({ filePath, mtime });
+        // GH #129: keep the runtime-grown cache bounded.
+        if (this.cachedCandidates.length > 1000) this.cachedCandidates.length = 1000;
         this.lastTotalEligible = this.cachedCandidates.length;
       }
     }

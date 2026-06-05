@@ -184,7 +184,9 @@ export class CopilotSessionMonitor {
       }
 
       candidates.sort((a, b) => b.mtime - a.mtime);
-      this.cachedCandidates = candidates;
+      // GH #129: hard cap so the cache can't balloon on boxes with thousands
+      // of recent sessions (already 30-day filtered above). Most-recent first.
+      this.cachedCandidates = candidates.slice(0, 1000);
     }
 
     const candidates = this.cachedCandidates;
@@ -396,6 +398,8 @@ export class CopilotSessionMonitor {
       // Prepend (newest first) if not already present
       if (!this.cachedCandidates.some(c => c.sessionId === sessionId)) {
         this.cachedCandidates.unshift({ sessionId, sessionDir, mtime });
+        // GH #129: keep the runtime-grown cache bounded.
+        if (this.cachedCandidates.length > 1000) this.cachedCandidates.length = 1000;
         this.lastTotalEligible = this.cachedCandidates.length;
       }
     }

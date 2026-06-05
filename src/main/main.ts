@@ -10,7 +10,7 @@ import { KeybindingsFile } from './keybindings-file';
 import { IPC } from '../shared/ipc-channels';
 import { CopilotSessionMonitor } from './copilot-session-monitor';
 import { CopilotSessionWatcher } from './copilot-session-watcher';
-import { notifyCopilotSession, clearNotificationCooldowns, setAiSessionNotificationsEnabled, setNotificationClickHandler, setSessionNameOverrides, setNotificationExcludeStrings } from './copilot-notification';
+import { notifyCopilotSession, clearNotificationCooldowns, setAiSessionNotificationsEnabled, setNotificationClickHandler, setSessionNameOverrides, setNotificationExcludeStrings, forgetNotificationState } from './copilot-notification';
 import { ClaudeCodeSessionMonitor } from './claude-code-session-monitor';
 import { ClaudeCodeSessionWatcher } from './claude-code-session-watcher';
 import { WslSessionManager } from './wsl-session-manager';
@@ -1424,6 +1424,7 @@ function setupCopilotMonitor(): void {
       mainWindow?.webContents.send(IPC.COPILOT_SESSION_ADDED, session);
     },
     onSessionRemoved(sessionId) {
+      forgetNotificationState(sessionId); // GH #129: drop tracked state.
       mainWindow?.webContents.send(IPC.COPILOT_SESSION_REMOVED, sessionId);
     },
   });
@@ -1467,6 +1468,7 @@ function setupClaudeCodeMonitor(): void {
       mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_ADDED, session);
     },
     onSessionRemoved(sessionId) {
+      forgetNotificationState(sessionId); // GH #129: drop tracked state.
       mainWindow?.webContents.send(IPC.CLAUDE_CODE_SESSION_REMOVED, sessionId);
     },
   });
