@@ -2,7 +2,7 @@ name: Track Downloads
 
 on:
   schedule:
-    - cron: '*/15 * * * *'  # every 15 minutes
+    - cron: '0 */6 * * *'  # every 6 hours
   workflow_dispatch:  # allow manual trigger
 
 permissions:
@@ -57,6 +57,15 @@ jobs:
           }
 
           history.snapshots.push(snapshot);
+
+          // Keep at most one snapshot per UTC day (the latest of each day) so
+          // the file doesn't grow unbounded - the stats page groups by day
+          // anyway. Without this it reached ~10 MB and every stats-page
+          // visitor downloaded the whole thing (issue #123).
+          const byDay = new Map();
+          for (const snap of history.snapshots) byDay.set(snap.t.slice(0, 10), snap);
+          history.snapshots = [...byDay.values()].sort((a, b) => a.t.localeCompare(b.t));
+
           fs.writeFileSync(path, JSON.stringify(history, null, 2) + '\n');
           console.log(`Appended snapshot for ${snapshot.t}, ${history.snapshots.length} total.`);
           EOF
