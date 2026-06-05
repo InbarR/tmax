@@ -387,14 +387,37 @@ function renderTimeline() {
         const prev = points[i - 1].count;
         deltas.push({ t: points[i].t, count: Math.max(0, points[i].count - prev) });
       }
-      series.set(tag, deltas);
+      // A series with a single bucket has no "previous" to subtract from, so
+      // deltas comes out empty. Drop it — otherwise the sort comparator below
+      // dereferences points[length-1].count on [] and throws a TypeError that
+      // aborts the entire render (blank chart + stale footer note). This is
+      // why Week + New per interval looked broken: top releases like the
+      // newest version often live entirely in one weekly bucket.
+      if (deltas.length) series.set(tag, deltas);
+      else series.delete(tag);
     }
   }
 
   // When stacking by platform there are only 3-4 buckets so no top-N slicing
   // is needed. When stacking by release, cap at 5 for legend readability.
+  // Rank by *activity in the visible window* (sum of deltas, or last-first in
+  // cumulative mode — which is the same number). Sorting by `last.count`
+  // would always favor the oldest releases since they've had the longest to
+  // accumulate downloads, so newer releases (e.g. v1.9.x) could never crack
+  // the top 5 even when they're driving most of the current install volume.
+  // This also "just works" when the user drag-zooms into a sub-range.
+  const activity = (points) => {
+    if (!points.length) return 0;
+    if (timelineMode === 'delta') {
+      let s = 0;
+      for (const p of points) s += p.count;
+      return s;
+    }
+    // cumulative: activity within window is end - start
+    return Math.max(0, points[points.length - 1].count - points[0].count);
+  };
   const ranked = Array.from(series.entries())
-    .sort(([, a], [, b]) => (b[b.length - 1].count) - (a[a.length - 1].count))
+    .sort(([, a], [, b]) => activity(b) - activity(a))
     .slice(0, timelineStack === 'platform' ? 10 : 5);
 
   const pad = { top: 20, right: 16, bottom: 80, left: 40 };
@@ -557,7 +580,7 @@ function renderTimeline() {
     else spanLabel = ` Span: ${Math.round(minutes / (60 * 24) * 10) / 10} days.`;
   }
   const bucketCountLabel = timelineInterval === 'all' ? '' : ` → ${bucketed.length} bar(s) ${intervalLabel}`;
-  document.getElementById('timelineNote').textContent = `${timelineHistory.length} snapshot(s)${bucketCountLabel}, ${modeLabel}. Top 5 releases.${spanLabel}${hintIfSingle}`;
+  document.getElementById('timelineNote').textContent = `${timelineHistory.length} snapshot(s)${bucketCountLabel}, ${modeLabel}. Top 5 releases by activity in window.${spanLabel}${hintIfSingle}`;
 }
 
 function renderDiff() {
