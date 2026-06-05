@@ -1465,11 +1465,12 @@ const CopilotPanel: React.FC = () => {
             💬 Show prompts
           </button>
           <button className="context-menu-item" onClick={() => {
-            useTerminalStore.setState({ transcriptSession: {
-              sessionId: ctxMenu.session.id,
-              provider: ctxMenu.session.provider === 'claude-code' ? 'claude-code' : 'copilot',
-              title: summaryOverrides[ctxMenu.session.id] || ctxMenu.session.summary || getTitle(ctxMenu.session),
-            } });
+            // Transcript follows the focused pane - focus this session's live
+            // pane (if any) so the panel shows it, then open.
+            const st = useTerminalStore.getState();
+            const term = [...st.terminals.values()].find((t) => t.aiSessionId === ctxMenu.session.id);
+            if (term) st.setFocus?.(term.id);
+            useTerminalStore.setState({ transcriptOpen: true });
             setCtxMenu(null);
           }}>
             🕑 Transcript

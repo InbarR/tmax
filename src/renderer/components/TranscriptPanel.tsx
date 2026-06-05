@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
+import { findSessionById } from '../state/terminal-store';
 
 interface Msg { role: 'user' | 'assistant'; text: string; time: number }
 
@@ -13,8 +14,6 @@ function fmtTime(ts: number): string {
   if (!ts) return '';
   return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
-// Cheap change signature so polling only re-renders when something actually
-// changed (avoids resetting scroll every 2s).
 function sig(msgs: Msg[]): string {
   const last = msgs[msgs.length - 1];
   return `${msgs.length}:${last ? last.time + last.text.length : 0}`;
@@ -23,17 +22,30 @@ function sig(msgs: Msg[]): string {
 const POLL_MS = 2000;
 
 /**
- * Right-docked, read-only chat transcript for an AI session. Pushes the
- * terminal layout (it's a flex sibling of .layout-area, not an overlay).
- * Claude Code shows both sides; Copilot only persists user messages, so a
- * banner says so. Live-refreshes while open (issue #124 / TASK-146).
+ * Right-docked, read-only chat transcript for the *focused* AI pane. Follows
+ * focus: click a different pane and it switches to that session. Claude Code
+ * shows both sides; Copilot only persists user messages (banner notes it).
+ * Live-refreshes while open. Opened from the AI pane's title-bar button.
  */
 const TranscriptPanel: React.FC = () => {
-  const session = useTerminalStore((s) => s.transcriptSession);
+  const open = useTerminalStore((s) => s.transcriptOpen);
+  const focusedId = useTerminalStore((s) => s.focusedTerminalId);
+  // Re-derive when sessions load (provider/title) or focus changes.
+  const aiSessionId = useTerminalStore((s) => (focusedId ? s.terminals.get(focusedId)?.aiSessionId : undefined));
+  const copilotSessions = useTerminalStore((s) => s.copilotSessions);
+  const claudeCodeSessions = useTerminalStore((s) => s.claudeCodeSessions);
+
+  const sess = useMemo(
+    () => (aiSessionId ? findSessionById(copilotSessions, claudeCodeSessions, aiSessionId) : null),
+    [aiSessionId, copilotSessions, claudeCodeSessions],
+  );
+  const provider: 'copilot' | 'claude-code' = sess?.provider === 'claude-code' ? 'claude-code' : 'copilot';
+  const title = sess?.summary || (aiSessionId ? aiSessionId.slice(0, 8) : '');
+
   const [msgs, setMsgs] = useState<Msg[] | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const sigRef = useRef<string>('');
-  const close = useCallback(() => useTerminalStore.setState({ transcriptSession: null }), []);
+  const close = useCallback(() => useTerminalStore.setState({ transcriptOpen: false }), []);
 
   const atBottom = () => {
     const el = bodyRef.current;
@@ -46,20 +58,20 @@ const TranscriptPanel: React.FC = () => {
     });
   };
 
-  // Initial load + live polling while the panel is open.
+  // Load + live poll the focused session's transcript.
   useEffect(() => {
-    if (!session) return;
+    if (!open || !aiSessionId) { setMsgs(null); return; }
     let cancelled = false;
     sigRef.current = '';
     setMsgs(null);
 
     const fetchOnce = (initial: boolean) => {
-      (window.terminalAPI as any).getSessionTimeline(session.provider, session.sessionId)
+      (window.terminalAPI as any).getSessionTimeline(provider, aiSessionId)
         .then((rows: Msg[]) => {
           if (cancelled) return;
           const next = Array.isArray(rows) ? rows : [];
           const nextSig = sig(next);
-          if (!initial && nextSig === sigRef.current) return; // nothing new
+          if (!initial && nextSig === sigRef.current) return;
           const wasAtBottom = initial || atBottom();
           sigRef.current = nextSig;
           setMsgs(next);
@@ -71,14 +83,14 @@ const TranscriptPanel: React.FC = () => {
     fetchOnce(true);
     const timer = setInterval(() => fetchOnce(false), POLL_MS);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [session?.sessionId, session?.provider]);
+  }, [open, aiSessionId, provider]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
     document.addEventListener('keydown', onKey, true);
     return () => document.removeEventListener('keydown', onKey, true);
-  }, [session, close]);
+  }, [open, close]);
 
   const groups = useMemo(() => {
     const out: { day: string; items: Msg[] }[] = [];
@@ -91,30 +103,33 @@ const TranscriptPanel: React.FC = () => {
     return out;
   }, [msgs]);
 
-  if (!session) return null;
+  if (!open) return null;
 
-  const isCopilot = session.provider === 'copilot';
+  const isCopilot = provider === 'copilot';
 
   return (
     <div className="transcript-panel">
       <div className="transcript-header">
         <div className="transcript-titles">
-          <span className="transcript-title">{session.title || 'Session'}</span>
+          <span className="transcript-title">{title || 'Transcript'}</span>
           <span className="transcript-sub">
-            {isCopilot ? 'Copilot' : 'Claude Code'}
-            {msgs ? ` · ${msgs.length} message${msgs.length === 1 ? '' : 's'}` : ''}
+            {aiSessionId ? (isCopilot ? 'Copilot' : 'Claude Code') : 'No AI session in focused pane'}
+            {aiSessionId && msgs ? ` · ${msgs.length} message${msgs.length === 1 ? '' : 's'}` : ''}
           </span>
         </div>
         <button className="transcript-close" onClick={close} title="Close (Esc)" aria-label="Close">&#10005;</button>
       </div>
-      {isCopilot && (
+      {aiSessionId && isCopilot && (
         <div className="transcript-disclaimer">
           Copilot CLI only saves your messages, so assistant replies aren't shown here.
         </div>
       )}
       <div className="transcript-body" ref={bodyRef}>
-        {msgs === null && <div className="transcript-empty">Loading transcript…</div>}
-        {msgs !== null && msgs.length === 0 && (
+        {!aiSessionId && (
+          <div className="transcript-empty">Focus an AI session pane (Copilot or Claude Code) to see its transcript.</div>
+        )}
+        {aiSessionId && msgs === null && <div className="transcript-empty">Loading transcript…</div>}
+        {aiSessionId && msgs !== null && msgs.length === 0 && (
           <div className="transcript-empty">No messages found for this session.</div>
         )}
         {groups.map((g) => (

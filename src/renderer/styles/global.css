@@ -3100,7 +3100,16 @@ body.broadcast-on .terminal-panel {
   border-radius: 4px;
 }
 .transcript-close:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-.transcript-body { flex: 1; overflow-y: auto; padding: 12px 12px 20px; }
+.transcript-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 12px 20px;
+  /* Let users select + copy transcript text (the app sets user-select:none
+     on chrome elsewhere). */
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
 .transcript-empty { padding: 28px 12px; text-align: center; color: var(--text-secondary); font-size: 13px; }
 .transcript-day {
   position: sticky;
