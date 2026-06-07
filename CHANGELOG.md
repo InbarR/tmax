@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.10.0
+
+A brand-new AI session transcript, a "restore last session" option, and stability fixes for long-running sessions.
+
+### New Features
+
+- **AI session transcript panel** - a docked, read-only chat view of any Copilot or Claude Code session. It shows both sides of the conversation - your prompts and the agent's replies - with timestamps grouped by day, follows the focused pane, and live-updates as the agent works. Open it with `Ctrl+Alt+T` or the 💬 button on an AI pane.
+- **Search the transcript** - press `Ctrl+F` in the transcript to find text and jump between matches.
+- **Resizable transcript** - drag the panel's edge to resize it; your width is remembered between sessions.
+- **Open any session's transcript** - right-click a session in the AI Sessions panel and choose Transcript to read it, even when it isn't open in a pane.
+- **Restore previous session on launch** - a new setting to automatically reopen your last set of terminals when tmax starts.
+
+### Fixes
+
+- **No more slowdown over time** - fixed memory that grew during very long-running sessions and could eventually freeze the app.
+- **Cursor stays visible in AI tools** - the text cursor no longer disappears in Copilot CLI / Claude Code panes when the pane isn't focused.
+- **Top of the window no longer clipped** - fixed a case where the top edge of the UI could be cut off.
+- **Reliable text selection in the transcript** - selecting and copying text from messages now works consistently.
+- **Stats page chart** - fixed a blank chart when combining Week view with the per-interval option.
+
 ## v1.9.3
 
 A quick stability patch for terminal panes running AI tools.

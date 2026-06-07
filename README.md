@@ -51,6 +51,7 @@ Built with Electron, React, TypeScript, xterm.js, and node-pty.
 - Shows session status, summary, branch, repo, message/tool counts, and relative time
 - Click a session to resume it directly in a new terminal pane
 - Jump to any previous prompt in the terminal (`Ctrl+Shift+K`)
+- Read the full conversation in a docked, read-only **transcript panel** (`Ctrl+Alt+T`, or the 💬 button on an AI pane) - both sides of the chat (your prompts and the agent's replies) with timestamps, live-updating as the agent works. Search it with `Ctrl+F` and jump between matches, drag its edge to resize, or right-click any session in the panel to open that session's transcript
 - Cross-session prompt search (`Ctrl+Shift+Y`) - search every prompt across every AI session, with `foo AND bar` syntax to require multiple terms. Results stream in progressively, with a jump glyph (↗ for live panes, ↑ for inactive sessions) on each row. Inactive sessions resume in a new pane on click
 - Filter tabs: All / Copilot / Claude Code; sidebar search by name, branch, cwd, or summary (also supports the AND syntax)
 - AI session shimmer: a soft border pulse on any pane whose AI session is waiting for your input, suppressed when you focus the pane. Useful peripheral cue on a multi-monitor setup. Toggle in Settings → Terminal
@@ -119,6 +120,7 @@ Built with Electron, React, TypeScript, xterm.js, and node-pty.
 
 **Session Management**
 - Auto-save/restore on close, crash, or reboot (saves every 5 seconds)
+- Optional **Restore previous session on launch** setting - reopen your last set of terminals automatically when tmax starts
 - Named layouts: save and load terminal arrangements with titles and working directories
 - Startup commands per terminal — restored when loading a layout
 
