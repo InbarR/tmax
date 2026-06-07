@@ -11,6 +11,8 @@
     "build": "electron-forge make",
     "package": "electron-forge package",
     "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
     "upgrade": "node scripts/build-upgrade.js",
     "postinstall": "node scripts/fix-node-pty.js"
   },
