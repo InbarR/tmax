@@ -145,6 +145,20 @@ function syncViewportScrollArea(term: Terminal): void {
   } catch { /* viewport may not be ready */ }
 }
 
+/**
+ * True when the terminal is showing its normal (scrollback) buffer.
+ *
+ * Alt-screen TUIs (vim, less, htop, and Copilot CLI's full-screen UI with
+ * its own scrollbar) render into the alternate buffer, which has no
+ * scrollback and is fixed to the viewport size. Those apps own their own
+ * scrolling, so tmax's viewport scroll-sync workarounds below must stay out
+ * of their way — otherwise they fight the app's scrollbar (e.g. a stray
+ * scrollToBottom) instead of helping.
+ */
+function isNormalBuffer(term: Terminal): boolean {
+  return term.buffer.active.type === 'normal';
+}
+
 const WSL_PROMPT_DEBOUNCE_MS = 200;
 const WSL_PROMPT_FALLBACK_MS = 5000;
 
@@ -1258,6 +1272,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     const computeScrolledAway = () => {
       try {
         const buf = term.buffer.active;
+        // Alt-screen has no scrollback — you can't be "scrolled away" from a
+        // live prompt that doesn't exist, so hide the jump-to-bottom arrow.
+        if (buf.type !== 'normal') return false;
         if (buf.viewportY < buf.baseY) return true;
         const vp = containerRef.current?.querySelector('.xterm-viewport') as HTMLElement | null;
         if (vp && vp.scrollHeight - vp.clientHeight - vp.scrollTop > 2) return true;
@@ -1289,6 +1306,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       try {
         const vp = viewportScrollEl;
         if (!vp) return;
+        // Alt-screen apps own the viewport and have no scrollback; mapping
+        // DOM scrollTop back to a buffer line would fight the app's own UI.
+        if (!isNormalBuffer(term)) return;
         const cellHeight =
           (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { height?: number } } } } } })
             ._core?._renderService?.dimensions?.css?.cell?.height || 0;
@@ -1433,6 +1453,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     //    means max-scroll always lands at the live prompt.
     const wheelPreSyncHandler = (e: WheelEvent) => {
       if (e.deltaY === 0 || e.shiftKey) return;
+      // Alt-screen apps own their scroll; resyncing the (nonexistent)
+      // scrollback area just fights the app's own scrollbar.
+      if (!isNormalBuffer(term)) return;
       try {
         const v: any = (term as any)?._core?.viewport;
         if (!v) return;
@@ -1467,6 +1490,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       // but didn't — otherwise we'd thrash sync calls at scroll boundaries
       // and on shift/horizontal wheels.
       if (e.deltaY === 0 || e.shiftKey) return;
+      // In alt-screen there's no scrollback to recover into; a wheel that
+      // "does nothing" is the expected behavior, so don't resync.
+      if (!isNormalBuffer(term)) return;
       const viewport = containerRef.current?.querySelector('.xterm-viewport') as HTMLElement | null;
       if (!viewport) return;
       const before = viewport.scrollTop;
@@ -1484,6 +1510,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // would be) forces a sync. Useful when the auto-recovery hasn't yet
     // kicked in - the user can manually refresh the scroll area.
     const manualSyncHandler = (e: MouseEvent) => {
+      // No scrollback area to refresh while an alt-screen app is up.
+      if (!isNormalBuffer(term)) return;
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
       // Only fire if the dblclick was within ~16px of the right edge.
@@ -1500,6 +1528,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // so it doesn't interfere with mid-scrolling.
     const wheelClampHandler = (e: WheelEvent) => {
       if (e.deltaY <= 0 || e.shiftKey) return;
+      // Never snap an alt-screen app to "bottom" — it has no scrollback and
+      // scrollToBottom() would yank the full-screen TUI's own view.
+      if (!isNormalBuffer(term)) return;
       const viewport = containerRef.current?.querySelector('.xterm-viewport') as HTMLElement | null;
       if (!viewport) return;
       requestAnimationFrame(() => {
