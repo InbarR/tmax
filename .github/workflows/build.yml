@@ -151,6 +151,23 @@ jobs:
           cd out
           7z a -tzip tmax-win32-${{ matrix.arch }}-portable.zip tmax-win32-${{ matrix.arch }}
 
+      # Create portable ZIP for macOS. ditto (not zip) preserves the .app
+      # bundle's symlinks + code signature so it isn't reported as damaged.
+      # This is the asset `npx tmax-terminal` downloads on macOS.
+      - name: Create macOS portable ZIP
+        if: matrix.platform == 'darwin'
+        run: |
+          cd out
+          ditto -c -k --keepParent "tmax-darwin-${{ matrix.arch }}" "tmax-darwin-${{ matrix.arch }}-portable.zip"
+
+      # Create portable ZIP for Linux (the asset `npx tmax-terminal` downloads
+      # on Linux). -y keeps symlinks intact.
+      - name: Create Linux portable ZIP
+        if: matrix.platform == 'linux'
+        run: |
+          cd out
+          zip -r -y "tmax-linux-${{ matrix.arch }}-portable.zip" "tmax-linux-${{ matrix.arch }}"
+
       # Upload only the artifacts we ship: arch-specific Squirrel trio + Windows
       # portable zip + platform installers. Globs are scoped narrowly so a stray
       # un-renamed Setup.exe (or any future MakerZIP zip) can't sneak in.
@@ -163,6 +180,8 @@ jobs:
             out/make/squirrel.windows/${{ matrix.arch }}/tmax-*-${{ matrix.arch }}-full.nupkg
             out/make/squirrel.windows/${{ matrix.arch }}/RELEASES-${{ matrix.arch }}
             out/tmax-win32-${{ matrix.arch }}-portable.zip
+            out/tmax-darwin-${{ matrix.arch }}-portable.zip
+            out/tmax-linux-${{ matrix.arch }}-portable.zip
             out/make/**/*.dmg
             out/make/**/*.deb
             out/make/**/*.rpm

@@ -14,9 +14,12 @@ function getAssetName() {
   const platform = process.platform;
   const arch = process.arch === "arm64" ? "arm64" : "x64";
 
-  if (platform === "win32") return `tmax-win32-${arch}-${VERSION}.zip`;
-  if (platform === "darwin") return `tmax-darwin-${arch}-${VERSION}.zip`;
-  if (platform === "linux") return `tmax-linux-${arch}-${VERSION}.zip`;
+  // Names must match the per-platform portable zips the release publishes
+  // (see .github/workflows/build.yml). The release tag already carries the
+  // version, so the asset name itself is version-less.
+  if (platform === "win32") return `tmax-win32-${arch}-portable.zip`;
+  if (platform === "darwin") return `tmax-darwin-${arch}-portable.zip`;
+  if (platform === "linux") return `tmax-linux-${arch}-portable.zip`;
   throw new Error(`Unsupported platform: ${platform}-${arch}`);
 }
 
@@ -45,6 +48,11 @@ function extractZip(zipBuffer, dest) {
   try {
     if (process.platform === "win32") {
       execSync(`powershell -NoProfile -Command "Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${dest}'"`, { stdio: "pipe" });
+    } else if (process.platform === "darwin") {
+      // ditto (not unzip) so the .app bundle's symlinks and code signature
+      // survive extraction - a plain unzip leaves macOS reporting the app as
+      // damaged.
+      execSync(`ditto -x -k "${zipPath}" "${dest}"`, { stdio: "pipe" });
     } else {
       execSync(`unzip -o -q "${zipPath}" -d "${dest}"`, { stdio: "pipe" });
     }

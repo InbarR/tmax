@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.10.1
+
+A packaging fix for installing tmax through npm.
+
+### Fixes
+
+- **`npx tmax-terminal` / `npm install -g tmax-terminal` now work** - the npm installer was requesting release files that didn't exist and failed with a 404 on Windows, macOS, and Linux. It now downloads the correct package for each platform.
+- **macOS launch via npm** - tmax installed through npm now opens reliably on macOS; previously the process could start with no visible window.
+
 ## v1.10.0
 
 A brand-new AI session transcript, a "restore last session" option, and stability fixes for long-running sessions.

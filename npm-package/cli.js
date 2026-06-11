@@ -27,14 +27,15 @@ function findExecutable() {
   }
 
   if (platform === "darwin") {
-    // Look for tmax.app/Contents/MacOS/tmax
+    // Return the .app BUNDLE path (not the inner Mach-O). Launching the inner
+    // binary directly often fails to surface a window on macOS; we open the
+    // bundle via LaunchServices instead (see the launch code below).
     for (const entry of entries) {
-      const app = path.join(INSTALL_DIR, entry, "tmax.app", "Contents", "MacOS", "tmax");
+      const app = path.join(INSTALL_DIR, entry, "tmax.app");
       if (fs.existsSync(app)) return app;
-      // Also check flat structure
-      const flat = path.join(INSTALL_DIR, entry, "Contents", "MacOS", "tmax");
-      if (fs.existsSync(flat)) return flat;
     }
+    const flatApp = path.join(INSTALL_DIR, "tmax.app");
+    if (fs.existsSync(flatApp)) return flatApp;
   }
 
   if (platform === "linux") {
@@ -51,10 +52,22 @@ function findExecutable() {
 }
 
 const exe = findExecutable();
+const args = process.argv.slice(2);
 
-// Launch detached so the terminal is freed
-const child = spawn(exe, process.argv.slice(2), {
-  detached: true,
-  stdio: "ignore",
-});
+// Launch detached so the terminal is freed.
+let child;
+if (process.platform === "darwin") {
+  // `open -a <bundle> --args ...` hands off to LaunchServices, which reliably
+  // brings the window to the foreground. Spawning Contents/MacOS/tmax directly
+  // starts the process but often leaves no visible window.
+  child = spawn("open", ["-a", exe, "--args", ...args], {
+    detached: true,
+    stdio: "ignore",
+  });
+} else {
+  child = spawn(exe, args, {
+    detached: true,
+    stdio: "ignore",
+  });
+}
 child.unref();
