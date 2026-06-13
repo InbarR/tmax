@@ -3,15 +3,13 @@ import { useTerminalStore } from '../state/terminal-store';
 import { formatKeyForPlatform } from '../utils/platform';
 import { tokenizeAnd, matchesAllTokens } from '../../shared/and-filter';
 import { getTerminalEntry } from '../terminal-registry';
+import { MOUSE_RESET_SEQUENCE, TERMINAL_RECOVER_SEQUENCE } from '../utils/terminal-recover';
 import InputDialog from './InputDialog';
 import { confirmDialog } from './AppDialog';
 
-// Mouse-mode reset sequence: turns off every DEC mouse-tracking protocol
-// (?1000 / ?1002 / ?1003 / ?1006 / ?1015). Used by the "Reset Mouse Mode"
-// command palette action AND by TerminalPanel's auto-reset path (which fires
-// when a detected AI CLI child process disappears from a pane's process
-// tree without sending the matching reset itself). GH #117.
-export const MOUSE_RESET_SEQUENCE = '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l';
+// Re-export so existing importers keep working (the sequences now live in
+// utils/terminal-recover so they can be unit-tested without pulling in React).
+export { MOUSE_RESET_SEQUENCE, TERMINAL_RECOVER_SEQUENCE };
 
 interface Command {
   id: string;
@@ -164,13 +162,15 @@ const CommandPalette: React.FC = () => {
       { id: 'openDiagLog', label: 'Open Diagnostics Log', action: () => {
         window.terminalAPI.getDiagLogPath().then((p: string) => (window.terminalAPI as any).openPath(p));
       }},
-      { id: 'resetMouseMode', label: 'Reset Mouse Mode (recover scroll / selection)', action: () => {
+      { id: 'resetMouseMode', label: 'Reset Terminal (recover scroll / selection / display)', action: () => {
         // Manual escape hatch for the bug where a TUI (e.g. Copilot CLI,
-        // Claude Code, fzf inline mode) enables xterm mouse tracking and
-        // never resets it - leaving wheel-scroll, drag-select, and click
-        // selection broken on that pane until restart (GH #117). Writes
-        // the reset sequences directly to the focused pane's xterm so
-        // the user doesn't have to drop to a shell and printf manually.
+        // Claude Code, fzf inline mode) enables terminal features and dies
+        // without restoring them - leaving the pane with broken drag-select
+        // (stuck mouse tracking), dead wheel-scroll + a black slab over the
+        // prompt (stuck on the alt-screen buffer), until restart (GH #117,
+        // TASK-162/163). Writes the full recovery (mouse reset + alt-screen
+        // exit + SGR reset) directly to the focused pane's xterm so the user
+        // doesn't have to drop to a shell and printf it manually.
         const id = focusedId();
         if (!id) {
           store().addToast('No focused terminal');
@@ -182,11 +182,11 @@ const CommandPalette: React.FC = () => {
           return;
         }
         try {
-          entry.terminal.write(MOUSE_RESET_SEQUENCE);
-          window.terminalAPI.diagLog?.('renderer:mouse-mode-reset-manual', { terminalId: id });
-          store().addToast('Mouse mode reset - scroll and selection should work now');
+          entry.terminal.write(TERMINAL_RECOVER_SEQUENCE);
+          window.terminalAPI.diagLog?.('renderer:terminal-recover-manual', { terminalId: id });
+          store().addToast('Terminal reset - scroll, selection and display should work now');
         } catch (err) {
-          store().addToast('Failed to reset mouse mode');
+          store().addToast('Failed to reset terminal');
         }
       }},
       { id: 'reportIssue', label: 'Report Issue', action: () => {

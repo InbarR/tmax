@@ -6,7 +6,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { SerializeAddon } from '@xterm/addon-serialize';
 import { useTerminalStore, TAB_COLORS, computeTabTint, findSessionById, getSessionProvider } from '../state/terminal-store';
 import { registerTerminal, unregisterTerminal, getTerminalEntry } from '../terminal-registry';
-import { MOUSE_RESET_SEQUENCE } from './CommandPalette';
+import { MOUSE_RESET_SEQUENCE } from '../utils/terminal-recover';
 import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache';
 import { isMac, formatKeyForPlatform } from '../utils/platform';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
@@ -319,6 +319,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   }, [paneMenuPos]);
   const [, tickDiag] = useReducer((x: number) => x + 1, 0);
   const diagRef = useRef({ keystrokeCount: 0, lastKeystrokeTime: 0, outputEventCount: 0, lastOutputTime: 0, outputBytes: 0, focusEventCount: 0, lastFocusTime: 0 });
+  // Timestamp of the last REAL key press in this pane (keydown), as opposed to
+  // term.onData which also fires for DEC focus escapes (\x1b[I/\x1b[O). Used by
+  // the blur->refocus guard to tell "user is actively typing" (RDP, where
+  // document.hasFocus() is false) apart from "window just isn't OS-focused"
+  // (where refocusing would thrash - GH #126).
+  const lastRealKeyAtRef = useRef(0);
   const mainDiagRef = useRef<{ pid: number; writeCount: number; lastWriteTime: number; dataCount: number; lastDataTime: number; dataBytes: number } | null>(null);
   const logPathRef = useRef<string>('');
 
@@ -1165,6 +1171,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // Keyboard shortcuts handled inside terminal
     term.attachCustomKeyEventHandler((event) => {
       if (event.type !== 'keydown') return true;
+      // Record genuine user typing (keydown only) for the focus-thrash guard.
+      lastRealKeyAtRef.current = Date.now();
       // Ctrl+Shift+` (Cmd+Shift+` on Mac): toggle diagnostics overlay
       if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && event.key === '`') {
         setShowDiag((v) => !v);
@@ -2127,15 +2135,19 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             cls: (typeof active.className === 'string' ? active.className : '').slice(0, 80) || null,
           } : null,
         });
-        // Original guard skipped refocus whenever document.hasFocus() was
-        // false, to avoid fighting Voice Access / screen readers. On dev box
-        // sessions over RDP, hasFocus() returns false even while the user is
-        // actively typing through the relay - the recovery never fired and
-        // the cursor sat dead. We now allow one refocus attempt when the
-        // page is still visible. Assistive tech that genuinely owns focus
-        // will pull it back on its next tick; a single round-trip is a
-        // bearable tug, while the RDP freeze is not.
-        if (!hasFocus && document.visibilityState !== 'visible') return;
+        // GH #126/#70 focus-thrash fix. Do NOT fight for focus when the window
+        // isn't OS-focused (another app, a notification, or a second tmax
+        // instance has it). Refocusing the textarea can't make the window
+        // OS-active, so it blurs again -> refocus -> a loop that fires DEC
+        // focus escapes (\x1b[I/\x1b[O) and shreds real keystrokes, leaving
+        // the pane "frozen". Exception: over RDP, document.hasFocus() reads
+        // false even while the user is actively typing through the relay - so
+        // still recover if a genuine key press landed in this pane very
+        // recently. (term.onData can't be used for this: it also fires for the
+        // focus escapes themselves, which would defeat the guard.)
+        const RDP_TYPING_GRACE_MS = 3000;
+        const recentlyTyped = Date.now() - lastRealKeyAtRef.current < RDP_TYPING_GRACE_MS;
+        if (!hasFocus && !recentlyTyped) return;
         if (!somethingElseTookFocus) {
           try { terminalRef.current?.focus(); } catch { /* disposed */ }
         }
@@ -2266,15 +2278,54 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         const dy = e.clientY - dragStartPos.y;
         const wasDrag = Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD;
         // Native xterm selections (drag, double/triple-click) are captured
-        // via onSelectionChange below. The only path that needs explicit
-        // mouseup handling is a drag while a TUI has mouse reporting on -
-        // xterm never gets a selection there, so we read the cells under
-        // the drag rectangle directly from the buffer.
-        if (wasDrag && mouseTrackingOn && !term.hasSelection()) {
+        // via onSelectionChange below. The path that needs explicit mouseup
+        // handling is a drag while a TUI has mouse reporting on - xterm
+        // forwards the drag to the app instead of selecting, so it has no
+        // native selection. We gate on !hasSelection() (xterm made none)
+        // rather than our own mouseTrackingOn flag: after a detach/reattach
+        // the flag can be out of sync with xterm's real mouse mode, but
+        // "drag with no resulting selection" is the true signal either way.
+        if (wasDrag && !term.hasSelection()) {
           const startCell = pixelToCell(dragStartPos.x, dragStartPos.y);
           const endCell = pixelToCell(e.clientX, e.clientY);
           if (startCell && endCell) {
-            const snapshot = readBufferRange(startCell, endCell).replace(/\s+$/u, '');
+            // Order start-before-end so multi-row math is positive.
+            let s = startCell;
+            let en = endCell;
+            if (s.row > en.row || (s.row === en.row && s.col > en.col)) {
+              const tmp = s; s = en; en = tmp;
+            }
+            // TASK-164: in an AI CLI pane (copilot / claude), a plain
+            // left-drag should produce a real, visible selection - like
+            // Windows Terminal - instead of being swallowed by the app's
+            // mouse reporting. We gate on "is this a detected AI CLI pane"
+            // (store aiSessionId / aiProcessKind), NOT on buffer type:
+            // copilot runs on the ALTERNATE screen with mouse tracking on
+            // (verified via diag), so a normal-buffer check wrongly excluded
+            // it. Real full-screen apps (vim/htop/lazygit) have no AI session,
+            // so they keep their mouse. Plain shells on the normal buffer also
+            // qualify (they select natively anyway when mouse mode is off).
+            // Copilot's mouse tracking is sticky / not reliably clearable
+            // (copilot-cli#2332), so selecting locally is the robust fix.
+            const aiInst = useTerminalStore.getState().terminals.get(terminalId);
+            const isAiPane = !!(aiInst?.aiSessionId || aiInst?.aiProcessKind);
+            if (term.buffer.active.type === 'normal' || isAiPane) {
+              const length = (en.row - s.row) * term.cols + (en.col - s.col);
+              if (length > 0) {
+                // Defer past this event cycle: our listener runs in the
+                // capture phase, but xterm's own mouse-reporting mouseup
+                // handler runs afterward (bubble) and resets the selection.
+                // Applying it on the next tick lands the selection last.
+                const selCol = s.col, selRow = s.row, selLen = length;
+                setTimeout(() => {
+                  try { term.select(selCol, selRow, selLen); } catch { /* selection service shifted */ }
+                }, 0);
+              }
+            }
+            // Keep the raw buffer snapshot as a right-click copy fallback
+            // (covers whitespace-trimmed copy and the alt-screen case where
+            // we deliberately did not create a visible selection).
+            const snapshot = readBufferRange(s, en).replace(/\s+$/u, '');
             if (snapshot) {
               pendingTuiCopyText = snapshot;
               if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
@@ -2304,21 +2355,32 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       // next user-driven empty-selection event clears the snapshot normally.
       rightClickInFlight = false;
       if (term.hasSelection()) {
-        window.terminalAPI.clipboardWrite(smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current));
-        useTerminalStore.getState().addToast('Copied to clipboard');
+        const text = smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current);
         term.clearSelection();
         clearPendingTuiCopy();
-        lastCopyAt = Date.now();
+        // Only claim "Copied" when there's actually something to copy. A
+        // whitespace-only selection (e.g. dragging across blank cells) used to
+        // write an empty clipboard yet still toast "Copied to clipboard",
+        // which reads as a broken copy to the user.
+        if (text.trim()) {
+          window.terminalAPI.clipboardWrite(text);
+          useTerminalStore.getState().addToast('Copied to clipboard');
+          lastCopyAt = Date.now();
+        }
         return;
       }
       // Mouse reporting consumed a drag: copy the text we snapshotted from
       // the buffer, suppress paste. User clearly intended to copy.
       if (pendingTuiCopyText) {
-        const text = pendingTuiCopyText;
+        const text = smartUnwrapForCopy(pendingTuiCopyText, smartUnwrapRef.current);
         clearPendingTuiCopy();
-        window.terminalAPI.clipboardWrite(smartUnwrapForCopy(text, smartUnwrapRef.current));
-        useTerminalStore.getState().addToast('Copied to clipboard');
-        lastCopyAt = Date.now();
+        // Same guard: a whitespace-only buffer snapshot shouldn't toast
+        // "Copied" - that's the misleading "copied but nothing happened" case.
+        if (text.trim()) {
+          window.terminalAPI.clipboardWrite(text);
+          useTerminalStore.getState().addToast('Copied to clipboard');
+          lastCopyAt = Date.now();
+        }
         return;
       }
       // Suppress paste right after a copy: a second quick right-click is
@@ -2800,11 +2862,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       }
       missingScans += 1;
       if (missingScans < MISSING_THRESHOLD) return;
-      // AI child has been absent for two consecutive scans. Write the
-      // mouse-mode reset directly to this pane's xterm and clear the
-      // stamp so we stop polling. Mirrors the Command Palette's manual
-      // reset path but targets a specific terminal id, not the focused
-      // one.
+      // AI child has been absent for two consecutive scans. Write only the
+      // MOUSE reset here - NOT the full recovery. This detection can
+      // false-fire (getPtyChildProcesses returns empty on a Windows wmic
+      // hiccup, twice in a row), and the destructive parts of full recovery
+      // (alt-screen exit + SGR reset) would corrupt a still-LIVE TUI's
+      // display. Mouse reset is non-destructive, so it's safe to fire
+      // speculatively; the alt-screen exit lives only in the user-invoked
+      // "Reset Terminal" command (TASK-162/163).
       const entry = getTerminalEntry(terminalId);
       if (entry) {
         try {
