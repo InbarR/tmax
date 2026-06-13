@@ -580,6 +580,70 @@ html.transparency-active .input-dialog {
   transition: opacity 0.2s;
 }
 
+/* ===== Detached window chrome (TASK-159) ===== */
+/* The detached-window renderer (DetachedApp) is a minimal UI with no access
+   to the main store, so it gets its own lightweight title/menu bar instead
+   of the full TerminalPanel one. The bar doubles as the window drag handle
+   and surfaces a Reattach control (the only window-close path that drops the
+   pane back into the tiling layout). */
+.detached-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.detached-titlebar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding: 4px 8px 4px 12px;
+  line-height: 1.4;
+  /* Whole bar acts as the OS window drag region; the button opts out. */
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.detached-title-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detached-reattach-btn {
+  -webkit-app-region: no-drag;
+  flex-shrink: 0;
+  appearance: none;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.detached-reattach-btn:hover {
+  background: rgba(var(--rgb-accent), 0.18);
+  border-color: var(--focus-border);
+}
+
+.detached-terminal {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
 .terminal-status-dot {
   width: 7px;
   height: 7px;
@@ -1293,6 +1357,17 @@ html.transparency-active .input-dialog {
   position: relative;
   width: 100%;
   height: 100%;
+}
+
+/* TASK-158: stable host nodes. The slot is rendered by React inside each
+   leaf; the .pane-host (which holds the portaled TerminalPanel + its xterm)
+   is re-parented imperatively into the slot as the tree reshapes. Both fill
+   the leaf so xterm sizes to the full pane. */
+.pane-host-slot,
+.pane-host {
+  position: absolute;
+  inset: 0;
+  display: flex;
 }
 
 /* ===== Focus Mode / Normal Mode wrappers ===== */

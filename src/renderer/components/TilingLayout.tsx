@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useDroppable } from '@dnd-kit/core';
 import { useTerminalStore } from '../state/terminal-store';
 import type { LayoutNode, LayoutSplitNode } from '../state/types';
@@ -17,6 +18,21 @@ const RefreshableTerminalPanel: React.FC<{ terminalId: string }> = ({ terminalId
   return <TerminalPanel key={`${terminalId}-${generation}`} terminalId={terminalId} />;
 };
 
+// TASK-158: stable per-terminal host registry. Each leaf gets a persistent
+// detached <div.pane-host> that holds the portaled TerminalPanel. Leaf slots
+// re-parent this node as the tree reshapes; the TerminalPanel itself is mounted
+// once via createPortal from <PanePortals> (a stable React position) so its
+// xterm instance - and thus the live text selection + mouse-tracking state -
+// survives splits/un-splits instead of being torn down and recreated.
+//
+// Why this is needed: TilingNode is recursive, so opening the first split flips
+// the ROOT node from leaf to split and the existing pane's DOM ancestor chain
+// changes (moves under a new <div.split-container>). React reconciles by tree
+// position, so the pre-existing TerminalPanel was unmounted+remounted and xterm
+// was recreated - wiping the selection the moment a second pane appeared.
+type GetHost = (terminalId: string, ownerDoc?: Document) => HTMLDivElement;
+const PaneHostContext = createContext<GetHost | null>(null);
+
 interface TilingNodeProps {
   node: LayoutNode;
 }
@@ -27,14 +43,34 @@ function getNodeKey(node: LayoutNode): string {
   return node.kind === 'leaf' ? node.terminalId : node.id;
 }
 
+/** Leaf renderer. Owns the <div.tiling-leaf> and a host slot into which the
+ *  stable per-terminal host node is re-parented. The TerminalPanel is NOT a
+ *  child here - it is portaled into the host node by <PanePortals> - so this
+ *  slot can remount freely as the tree reshapes without disturbing xterm. */
+const TilingLeaf: React.FC<{ terminalId: string }> = ({ terminalId }) => {
+  const getHost = useContext(PaneHostContext);
+  const attachHost = useCallback(
+    (slot: HTMLDivElement | null) => {
+      if (!slot || !getHost) return;
+      const host = getHost(terminalId, slot.ownerDocument);
+      // appendChild moves the (possibly already-mounted-elsewhere) host node
+      // into this slot, relocating its xterm subtree without destroying it.
+      if (host.parentElement !== slot) slot.appendChild(host);
+    },
+    [terminalId, getHost],
+  );
+
+  return (
+    <div className="tiling-leaf">
+      <div className="pane-host-slot" ref={attachHost} />
+      <PaneDropZones terminalId={terminalId} />
+    </div>
+  );
+};
+
 const TilingNode: React.FC<TilingNodeProps> = ({ node }) => {
   if (node.kind === 'leaf') {
-    return (
-      <div className="tiling-leaf">
-        <RefreshableTerminalPanel terminalId={node.terminalId} />
-        <PaneDropZones terminalId={node.terminalId} />
-      </div>
-    );
+    return <TilingLeaf terminalId={node.terminalId} />;
   }
 
   const splitNode = node as LayoutSplitNode;
@@ -77,6 +113,20 @@ const TilingNode: React.FC<TilingNodeProps> = ({ node }) => {
         <TilingNode node={splitNode.second} />
       </div>
     </div>
+  );
+};
+
+/** Mounts each leaf's TerminalPanel exactly once, portaled into its stable
+ *  host node. Rendered at a fixed position in the layout tree so the portals -
+ *  and therefore the xterm instances - never unmount when the tiling tree is
+ *  restructured (TASK-158). */
+const PanePortals: React.FC<{ leafIds: string[]; getHost: GetHost }> = ({ leafIds, getHost }) => {
+  return (
+    <>
+      {leafIds.map((id) =>
+        createPortal(<RefreshableTerminalPanel terminalId={id} />, getHost(id), id),
+      )}
+    </>
   );
 };
 
@@ -155,6 +205,33 @@ const TilingLayout: React.FC = () => {
   const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
   const isRestoring = useTerminalStore((s) => s.isRestoring);
 
+  // TASK-158: persistent host nodes keyed by terminalId. Lazily created and
+  // reused across tree reshapes so the portaled TerminalPanel never remounts.
+  const hostsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const getHost = useCallback<GetHost>((terminalId, ownerDoc) => {
+    const map = hostsRef.current;
+    let host = map.get(terminalId);
+    if (!host) {
+      host = (ownerDoc ?? document).createElement('div');
+      host.className = 'pane-host';
+      host.dataset.paneHost = terminalId;
+      map.set(terminalId, host);
+    }
+    return host;
+  }, []);
+
+  const leafIds = useMemo(() => (tilingRoot ? collectLeafIds(tilingRoot) : []), [tilingRoot]);
+
+  // Drop host nodes for terminals that no longer have a tiled leaf (closed,
+  // or moved to a floating panel) so they can be garbage-collected.
+  useEffect(() => {
+    const map = hostsRef.current;
+    const live = new Set(leafIds);
+    for (const id of Array.from(map.keys())) {
+      if (!live.has(id)) map.delete(id);
+    }
+  }, [leafIds]);
+
   if (!tilingRoot) {
     // TASK-117: while session restore is in flight, render a neutral
     // loading indicator instead of the empty-state hero. The hero showing
@@ -174,16 +251,19 @@ const TilingLayout: React.FC = () => {
   // In focus mode the CSS class hides non-focused panes via visibility tricks.
   // In normal mode display:contents makes the wrapper transparent to layout.
   return (
-    <div className={viewMode === 'focus' ? 'tiling-focus-mode' : 'tiling-normal-mode'}>
-      <TilingNode node={tilingRoot} />
-      <RootDropZones />
-      {viewMode === 'focus' && (
-        <FocusModePaneIndicator
-          leafIds={collectLeafIds(tilingRoot)}
-          focusedId={focusedTerminalId}
-        />
-      )}
-    </div>
+    <PaneHostContext.Provider value={getHost}>
+      <div className={viewMode === 'focus' ? 'tiling-focus-mode' : 'tiling-normal-mode'}>
+        <TilingNode node={tilingRoot} />
+        <PanePortals leafIds={leafIds} getHost={getHost} />
+        <RootDropZones />
+        {viewMode === 'focus' && (
+          <FocusModePaneIndicator
+            leafIds={leafIds}
+            focusedId={focusedTerminalId}
+          />
+        )}
+      </div>
+    </PaneHostContext.Provider>
   );
 };
 

@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { isMac } from './utils/platform';
 import { prepareClipboardPaste, resolveClipboardPaste } from './utils/paste';
+import { applyChromeVarsFromTheme } from './utils/theme-chrome';
 import '@xterm/xterm/css/xterm.css';
 
 function hexToTerminalRgba(hex: string, alpha: number): string {
@@ -18,6 +19,17 @@ interface DetachedAppProps {
 
 const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  // The detached window has no access to the main window's store, so the
+  // pane title is derived from the live xterm title (process / cwd the shell
+  // reports), defaulting to a generic label until one arrives.
+  const [title, setTitle] = useState('Detached terminal');
+
+  const handleReattach = () => {
+    // Closing the detached window triggers the main window's
+    // onDetachedClosed -> reattachTerminal, dropping the pane back into the
+    // tiling layout. Same path the OS window-close button takes.
+    window.terminalAPI.closeDetached(terminalId);
+  };
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -33,6 +45,10 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
       const bgOpacity = materialActive ? ((config as any)?.backgroundOpacity ?? 0.8) : 1;
       const rawBg = themeConfig?.background ?? '#1e1e2e';
       const bgColor = bgOpacity < 1 ? hexToTerminalRgba(rawBg, bgOpacity) : rawBg;
+
+      // Paint the chrome CSS variables (title-bar bg, borders, text) from the
+      // active theme so the detached window's title bar matches the main app.
+      applyChromeVarsFromTheme(themeConfig, materialActive ? bgOpacity : undefined);
 
       // Add transparency class so CSS layers become translucent
       if (materialActive) {
@@ -151,6 +167,7 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
 
       const titleDisposable = term.onTitleChange((title) => {
         document.title = `tmax - ${title}`;
+        if (title) setTitle(title);
       });
 
       const resizeObserver = new ResizeObserver(() => {
@@ -356,14 +373,24 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
   }, [terminalId]);
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        width: '100%',
-        height: '100%',
-        background: '#1e1e2e',
-      }}
-    />
+    <div className="detached-root">
+      <div className="detached-titlebar">
+        <span className="detached-title-text" title={title}>{title}</span>
+        <button
+          type="button"
+          className="detached-reattach-btn"
+          title="Reattach this pane to the main window"
+          onClick={handleReattach}
+        >
+          ⤵ Reattach
+        </button>
+      </div>
+      <div
+        ref={containerRef}
+        className="detached-terminal"
+        style={{ background: '#1e1e2e' }}
+      />
+    </div>
   );
 };
 
