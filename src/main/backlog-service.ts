@@ -12,9 +12,11 @@
 import { ipcMain } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { spawn } from 'child_process';
 import { IPC } from '../shared/ipc-channels';
 import type { BacklogProjectRef, BacklogTask, BacklogTaskDetail } from '../shared/backlog-types';
+// Write operations live in backlog-writer.ts (pure, CLI-free, testable).
+import { editTask, createTask, archiveTask, initProject } from './backlog-writer';
+import type { EditPayload, CreatePayload } from './backlog-writer';
 
 // ── Frontmatter parsing (ported from backlog-hub) ────────────────────
 
@@ -200,150 +202,6 @@ function getTask(projectPath: string, sub: string, file: string): BacklogTaskDet
   const fm = parseTaskFrontmatter(content) || {};
   const body = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
   return { frontmatter: fm, body };
-}
-
-// ── CLI writes (ported runner) ───────────────────────────────────────
-
-function runBacklog(
-  cwd: string,
-  args: string[],
-): Promise<{ code: number; stdout: string; stderr: string }> {
-  // On Windows we run through the shell so the `backlog` .cmd shim resolves.
-  // With shell:true Node does NOT auto-quote args, so cmd.exe re-tokenizes
-  // anything with whitespace (e.g. `-s In Progress` -> two args). Quote each
-  // arg that contains whitespace.
-  const isWin = process.platform === 'win32';
-  const finalArgs = isWin
-    ? args.map((a) => (/\s/.test(a) ? `"${a.replace(/"/g, '""')}"` : a))
-    : args;
-  return new Promise((resolve) => {
-    const proc = spawn('backlog', finalArgs, {
-      cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: isWin,
-      windowsHide: true,
-    });
-    let stdout = '';
-    let stderr = '';
-    proc.stdout?.on('data', (d: Buffer) => {
-      stdout += d.toString();
-    });
-    proc.stderr?.on('data', (d: Buffer) => {
-      stderr += d.toString();
-    });
-    proc.on('close', (code) => resolve({ code: code ?? 1, stdout, stderr }));
-    proc.on('error', (err: any) => resolve({ code: 1, stdout, stderr: err.message }));
-  });
-}
-
-/** Strip the "TASK-"/"task-" prefix so we can pass a bare id to the CLI. */
-function bareId(taskId: string): string {
-  const m = taskId.match(/(\d+)/);
-  return m ? m[1] : taskId;
-}
-
-interface EditPayload {
-  projectPath: string;
-  taskId: string;
-  status?: string;
-  title?: string;
-  checkAc?: number[];
-  uncheckAc?: number[];
-}
-
-async function editTask(p: EditPayload): Promise<{ ok: boolean; error?: string }> {
-  const id = bareId(p.taskId);
-  const args = ['task', 'edit', id];
-  if (p.status) args.push('-s', p.status);
-  if (p.title) args.push('-t', p.title);
-  for (const idx of p.checkAc || []) args.push('--check-ac', String(idx));
-  for (const idx of p.uncheckAc || []) args.push('--uncheck-ac', String(idx));
-  if (args.length === 3) return { ok: true }; // nothing to do
-  const r = await runBacklog(p.projectPath, args);
-  return r.code === 0 ? { ok: true } : { ok: false, error: r.stderr || r.stdout };
-}
-
-interface CreatePayload {
-  projectPath: string;
-  title: string;
-  status?: string;
-  description?: string;
-  labels?: string[];
-}
-
-async function createTask(
-  p: CreatePayload,
-): Promise<{ ok: boolean; id?: string; error?: string }> {
-  const args = ['task', 'create', p.title];
-  if (p.status) args.push('-s', p.status);
-  if (p.description) args.push('-d', p.description);
-  if (p.labels && p.labels.length) args.push('-l', p.labels.join(','));
-  const r = await runBacklog(p.projectPath, args);
-  if (r.code !== 0) return { ok: false, error: r.stderr || r.stdout };
-  const m = r.stdout.match(/TASK-\d+/i);
-  return { ok: true, id: m ? m[0] : undefined };
-}
-
-async function archiveTask(
-  projectPath: string,
-  taskId: string,
-): Promise<{ ok: boolean; error?: string }> {
-  const r = await runBacklog(projectPath, ['task', 'archive', bareId(taskId)]);
-  return r.code === 0 ? { ok: true } : { ok: false, error: r.stderr || r.stdout };
-}
-
-function runCmd(
-  cmd: string,
-  args: string[],
-  cwd: string,
-): Promise<{ code: number; stdout: string; stderr: string }> {
-  const isWin = process.platform === 'win32';
-  const finalArgs = isWin
-    ? args.map((a) => (/\s/.test(a) ? `"${a.replace(/"/g, '""')}"` : a))
-    : args;
-  return new Promise((resolve) => {
-    const proc = spawn(cmd, finalArgs, {
-      cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: isWin,
-      windowsHide: true,
-    });
-    let stdout = '';
-    let stderr = '';
-    proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString(); });
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
-    proc.on('close', (code) => resolve({ code: code ?? 1, stdout, stderr }));
-    proc.on('error', (err: any) => resolve({ code: 1, stdout, stderr: err.message }));
-  });
-}
-
-/**
- * Initialize a new Backlog.md project in a folder that doesn't have one.
- * Backlog requires a git repo, so we `git init` first when needed (the folder
- * the user picked is theirs to scaffold). Non-interactive flags avoid prompts.
- */
-async function initProject(
-  projectPath: string,
-  name: string,
-): Promise<{ ok: boolean; error?: string }> {
-  try {
-    if (!fs.existsSync(path.join(projectPath, '.git'))) {
-      const g = await runCmd('git', ['init'], projectPath);
-      if (g.code !== 0) {
-        return { ok: false, error: `git init failed: ${g.stderr || g.stdout}` };
-      }
-    }
-    const r = await runBacklog(projectPath, [
-      'init',
-      name,
-      '--agent-instructions', 'none',
-      '--check-branches', 'false',
-      '--install-claude-agent', 'false',
-    ]);
-    return r.code === 0 ? { ok: true } : { ok: false, error: r.stderr || r.stdout };
-  } catch (err) {
-    return { ok: false, error: (err as Error).message };
-  }
 }
 
 // ── IPC wiring ───────────────────────────────────────────────────────
