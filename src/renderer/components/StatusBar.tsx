@@ -533,7 +533,7 @@ const StatusBar: React.FC = () => {
             onClick={() => useTerminalStore.getState().toggleBacklog()}
             title={formatKeyForPlatform('Backlog Board (Ctrl+Alt+B)')}
           >
-            &#9745;&#65039; Backlog
+            &#9989; Backlog
           </button>
         </div>
         <div className="status-section status-center">

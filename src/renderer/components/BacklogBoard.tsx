@@ -103,6 +103,17 @@ const BacklogBoard: React.FC = () => {
   const [selected, setSelected] = useState<BacklogTask | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; task: BacklogTask } | null>(null);
+  // Multi-select: set of "projectPath::id" keys. Opening a task's detail does
+  // NOT clear this, so the user can inspect while keeping a selection.
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const taskKey = (t: BacklogTask) => `${t.project.path}::${t.id}`;
+  const toggleChecked = (t: BacklogTask) =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      const k = taskKey(t);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
 
   const displayMode: 'overlay' | 'panel' =
     (config?.backlogDisplayMode as 'overlay' | 'panel' | undefined) ?? 'panel';
@@ -275,6 +286,29 @@ const BacklogBoard: React.FC = () => {
     void refresh();
   };
 
+  // Bulk actions on the multi-selected tasks.
+  const checkedTasks = () => tasks.filter((t) => checked.has(taskKey(t)));
+  const archiveChecked = async () => {
+    const sel = checkedTasks();
+    if (!sel.length) return;
+    const ok = await confirmDialog({
+      title: 'Archive selected?',
+      message: `Archive ${sel.length} selected task${sel.length === 1 ? '' : 's'}? They move to backlog/archive.`,
+      confirmText: 'Archive',
+      danger: true,
+    });
+    if (!ok) return;
+    for (const t of sel) await api().backlogArchiveTask(t.project.path, t.id);
+    setChecked(new Set());
+    void refresh();
+  };
+  const setStatusChecked = async (status: string) => {
+    const sel = checkedTasks();
+    for (const t of sel) if (t.status !== status) await api().backlogEditTask({ projectPath: t.project.path, taskId: t.id, status });
+    setChecked(new Set());
+    void refresh();
+  };
+
   // Create a task with an optimistic placeholder card so it appears instantly,
   // since the backlog CLI write + re-scan takes a second or two.
   const createTaskOptimistic = async (projectPath: string, status: string, title: string) => {
@@ -353,6 +387,16 @@ const BacklogBoard: React.FC = () => {
         </button>
       </div>
 
+      {checked.size > 0 && (
+        <div className="backlog-selection-bar">
+          <span className="backlog-selection-count">{checked.size} selected</span>
+          <span style={{ flex: 1 }} />
+          <button className="backlog-selection-btn" onClick={() => void setStatusChecked('Done')}>Mark Done</button>
+          <button className="backlog-selection-btn danger" onClick={() => void archiveChecked()}>Archive</button>
+          <button className="backlog-selection-btn" onClick={() => setChecked(new Set())}>Clear</button>
+        </div>
+      )}
+
       <div className="backlog-layout">
         <div
           className={`backlog-sidebar-wrap${sidebarCollapsed ? ' collapsed' : ''}`}
@@ -400,6 +444,8 @@ const BacklogBoard: React.FC = () => {
                 onDrop={() => onDropTo(status)}
                 onCreate={createTaskOptimistic}
                 onArchiveAll={() => void archiveAllInColumn(status)}
+                checked={checked}
+                onToggleCheck={toggleChecked}
                 onCardContext={(e, task) => {
                   e.preventDefault();
                   setMenu({ x: e.clientX, y: e.clientY, task });
@@ -429,10 +475,21 @@ const BacklogBoard: React.FC = () => {
           y={menu.y}
           task={menu.task}
           statuses={statuses}
+          // When the right-clicked card is part of the multi-selection, act on
+          // the whole selection (mirrors how tab context menus behave).
+          selectionCount={checked.has(taskKey(menu.task)) ? checked.size : 0}
           onClose={() => setMenu(null)}
           onOpen={(t) => { setSelected(t); setMenu(null); }}
-          onStatus={(t, s) => { void changeStatus(t, s); setMenu(null); }}
-          onArchive={(t) => { void archiveTask(t); setMenu(null); }}
+          onStatus={(t, s) => {
+            if (checked.has(taskKey(t)) && checked.size > 0) void setStatusChecked(s);
+            else void changeStatus(t, s);
+            setMenu(null);
+          }}
+          onArchive={(t) => {
+            if (checked.has(taskKey(t)) && checked.size > 0) void archiveChecked();
+            else void archiveTask(t);
+            setMenu(null);
+          }}
         />
       )}
     </>
@@ -543,11 +600,14 @@ const CardContextMenu: React.FC<{
   y: number;
   task: BacklogTask;
   statuses: string[];
+  selectionCount: number; // >0 when the right-clicked card is part of a multi-selection
   onClose: () => void;
   onOpen: (t: BacklogTask) => void;
   onStatus: (t: BacklogTask, status: string) => void;
   onArchive: (t: BacklogTask) => void;
-}> = ({ x, y, task, statuses, onClose, onOpen, onStatus, onArchive }) => {
+}> = ({ x, y, task, statuses, selectionCount, onClose, onOpen, onStatus, onArchive }) => {
+  const multi = selectionCount > 1;
+  const suffix = multi ? ` (${selectionCount})` : '';
   const ref = useRef<HTMLDivElement>(null);
   const [showMove, setShowMove] = useState(false);
   const [pos, setPos] = useState({ x, y });
@@ -593,7 +653,7 @@ const CardContextMenu: React.FC<{
       <button className="context-menu-item" onClick={() => onOpen(task)}>Open details</button>
       <div className="context-menu-separator" />
       <button className="context-menu-item" onClick={() => setShowMove((v) => !v)}>
-        Move to &#9656;
+        Move to{suffix} &#9656;
       </button>
       {showMove && (
         <div className="context-menu-sub">
@@ -613,7 +673,7 @@ const CardContextMenu: React.FC<{
       <button className="context-menu-item" onClick={() => copy(task.title)}>Copy title</button>
       <button className="context-menu-item" onClick={reveal}>Reveal task file</button>
       <div className="context-menu-separator" />
-      <button className="context-menu-item danger" onClick={() => onArchive(task)}>Archive</button>
+      <button className="context-menu-item danger" onClick={() => onArchive(task)}>Archive{suffix}</button>
     </div>,
     document.body,
   );
@@ -959,8 +1019,10 @@ const Column: React.FC<{
   onDrop: () => void;
   onCreate: (projectPath: string, status: string, title: string) => void;
   onArchiveAll: () => void;
+  checked: Set<string>;
+  onToggleCheck: (t: BacklogTask) => void;
   onCardContext: (e: React.MouseEvent, t: BacklogTask) => void;
-}> = ({ status, tasks, singleProject, colorFor, onCardOpen, onDragStart, onDrop, onCreate, onArchiveAll, onCardContext }) => {
+}> = ({ status, tasks, singleProject, colorFor, onCardOpen, onDragStart, onDrop, onCreate, onArchiveAll, checked, onToggleCheck, onCardContext }) => {
   const [over, setOver] = useState(false);
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState('');
@@ -1004,6 +1066,8 @@ const Column: React.FC<{
             key={`${t.project.path}::${t.id}::${t.file}`}
             task={t}
             color={colorFor(t.project)}
+            checked={checked.has(`${t.project.path}::${t.id}`)}
+            onToggleCheck={onToggleCheck}
             onOpen={onCardOpen}
             onDragStart={onDragStart}
             onContext={onCardContext}
@@ -1039,19 +1103,31 @@ const Column: React.FC<{
 const Card: React.FC<{
   task: BacklogTask;
   color: string;
+  checked: boolean;
+  onToggleCheck: (t: BacklogTask) => void;
   onOpen: (t: BacklogTask) => void;
   onDragStart: (id: string) => void;
   onContext: (e: React.MouseEvent, t: BacklogTask) => void;
-}> = ({ task, color, onOpen, onDragStart, onContext }) => {
+}> = ({ task, color, checked, onToggleCheck, onOpen, onDragStart, onContext }) => {
   const pending = (task as BacklogTask & { pending?: boolean }).pending;
   return (
   <div
-    className={`backlog-card${pending ? ' pending' : ''}`}
+    className={`backlog-card${pending ? ' pending' : ''}${checked ? ' checked' : ''}`}
     draggable={!pending}
     onDragStart={() => onDragStart(`${task.project.path}::${task.id}`)}
     onClick={() => !pending && onOpen(task)}
     onContextMenu={(e) => !pending && onContext(e, task)}
   >
+    {!pending && (
+      <input
+        type="checkbox"
+        className="backlog-card-check"
+        checked={checked}
+        onClick={(e) => e.stopPropagation()}
+        onChange={() => onToggleCheck(task)}
+        title="Select"
+      />
+    )}
     <div className="backlog-card-title">{task.title}</div>
     <div className="backlog-card-meta">
       <span className="backlog-card-proj">

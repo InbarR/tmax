@@ -869,3 +869,48 @@
   color: var(--accent-danger);
   border-color: var(--accent-danger);
 }
+
+/* ── Multi-select ── */
+.backlog-selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(var(--rgb-accent), 0.12);
+  border-bottom: 1px solid var(--accent);
+}
+.backlog-selection-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.backlog-selection-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.backlog-selection-btn:hover { border-color: var(--accent); }
+.backlog-selection-btn.danger:hover { border-color: var(--accent-danger); color: var(--accent-danger); }
+
+.backlog-card { position: relative; }
+.backlog-card-title { padding-right: 18px; }
+.backlog-card-check {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  margin: 0;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s;
+  accent-color: var(--accent);
+}
+.backlog-card:hover .backlog-card-check,
+.backlog-card.checked .backlog-card-check { opacity: 1; }
+.backlog-card.checked {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 4px 14px rgba(0, 0, 0, 0.3);
+}
