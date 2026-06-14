@@ -1846,6 +1846,109 @@ html.transparency-active .input-dialog {
 }
 .session-summary-quote:last-child { margin-bottom: 0; }
 
+/* ===== Prompt Composer ===== */
+/* Notepad-style scratchpad opened from the per-pane context menu. Mirrors
+   the .session-summary-card visual language so the two popovers feel
+   like part of the same family. */
+.prompt-composer-card {
+  width: 640px;
+  max-width: 92vw;
+  height: 60vh;
+  max-height: 80vh;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.prompt-composer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.prompt-composer-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.prompt-composer-close-x {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.prompt-composer-close-x:hover { color: var(--text-primary); }
+
+.prompt-composer-textarea {
+  flex: 1 1 auto;
+  width: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 14px 18px;
+  font-family: var(--font-mono, ui-monospace, Menlo, Monaco, Consolas, monospace);
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 4;
+}
+.prompt-composer-textarea::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.prompt-composer-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.prompt-composer-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.prompt-composer-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.prompt-composer-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.prompt-composer-btn-primary {
+  background: var(--accent, #4a9eff);
+  border-color: var(--accent, #4a9eff);
+  color: #fff;
+}
+.prompt-composer-btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover, #5fb0ff);
+  border-color: var(--accent-hover, #5fb0ff);
+  color: #fff;
+}
+
 /* ===== Pane Drop Zones (inside each pane) ===== */
 .pane-drop-zones-container {
   position: absolute;

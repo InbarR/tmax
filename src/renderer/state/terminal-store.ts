@@ -23,6 +23,7 @@ import type { DiffMode } from '../../shared/diff-types';
 import type { RepoWorktrees } from '../../shared/worktree-types';
 import { getAllTerminals, getTerminalEntry } from '../terminal-registry';
 import { confirmDialog } from '../components/AppDialog';
+import { dropComposerDraft, updateComposerDrafts } from '../utils/prompt-composer';
 
 // Session IDs must be alphanumeric/dash/dot/underscore only (prevent shell injection)
 const SAFE_SESSION_ID = /^[a-zA-Z0-9._-]+$/;
@@ -951,6 +952,13 @@ interface TerminalStore {
   promptsDialogRequest: { terminalId?: TerminalId; sessionId?: string } | null;
   // AI session summary popover - holds the session ID that should be shown.
   sessionSummaryRequest: string | null;
+  // Prompt composer dialog - notepad-style scratchpad opened from the per-pane
+  // context menu. promptComposerRequest holds the target terminal id (or null
+  // when closed); composerDrafts stores the in-flight text per terminal so a
+  // user can close and reopen the dialog without losing their draft for the
+  // current session.
+  promptComposerRequest: TerminalId | null;
+  composerDrafts: Record<string, string>;
   // Side-panel preview state. Despite the legacy name, also carries image
   // previews now (kind: 'image') - the same overlay component branches on
   // kind to render <img> vs sanitized markdown.
@@ -1196,6 +1204,10 @@ interface TerminalStore {
   clearPromptsDialogRequest: () => void;
   showSessionSummary: (sessionId: string) => void;
   clearSessionSummary: () => void;
+  // Prompt composer actions
+  openPromptComposer: (terminalId: TerminalId) => void;
+  closePromptComposer: () => void;
+  setPromptComposerDraft: (terminalId: TerminalId, draft: string) => void;
   // Self-healing: in grid mode, ensures every tiled terminal is present in
   // the tilingRoot. Called from a subscribe() side-effect so any code path
   // that accidentally leaves an orphan pane gets reconciled on the next tick.
@@ -1320,6 +1332,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   aiSessionHighlightRequest: 0,
   promptsDialogRequest: null,
   sessionSummaryRequest: null,
+  promptComposerRequest: null,
+  composerDrafts: {},
   copilotSessions: [],
   claudeCodeSessions: [],
   copilotSessionsTotal: 0,
@@ -1619,6 +1633,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const newTerminals = new Map(terminals);
     newTerminals.delete(id);
 
+    // Drop any prompt-composer draft for this pane so its memory doesn't
+    // outlive the terminal, and close the composer if it was targeting us.
+    const newDrafts = dropComposerDraft(get().composerDrafts, id);
+    const newComposerRequest =
+      get().promptComposerRequest === id ? null : get().promptComposerRequest;
+
     let newRoot = layout.tilingRoot;
     let newFloating = layout.floatingPanels;
 
@@ -1661,6 +1681,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       focusedTerminalId: newFocus,
       preGridRoot: newPreGridRoot,
       closedTerminals: newClosedTerminals,
+      composerDrafts: newDrafts,
+      promptComposerRequest: newComposerRequest,
     });
 
     // After React processes the layout change, force-focus the new terminal.
@@ -3625,6 +3647,17 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
   clearSessionSummary: () => {
     set({ sessionSummaryRequest: null });
+  },
+
+  // ── Prompt composer actions ────────────────────────────────────────
+  openPromptComposer: (terminalId: TerminalId) => {
+    set({ promptComposerRequest: terminalId });
+  },
+  closePromptComposer: () => {
+    set({ promptComposerRequest: null });
+  },
+  setPromptComposerDraft: (terminalId: TerminalId, draft: string) => {
+    set({ composerDrafts: updateComposerDrafts(get().composerDrafts, terminalId, draft) });
   },
 
   // ── Workspaces (TASK-40) ─────────────────────────────────────────
