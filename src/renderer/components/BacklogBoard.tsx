@@ -74,8 +74,11 @@ const api = () => (window as any).terminalAPI as {
   backlogValidateProject: (path: string) => Promise<{ ok: boolean }>;
   backlogInitProject: (path: string, name: string) => Promise<{ ok: boolean; error?: string }>;
   backlogPickFolder: (defaultPath?: string) => Promise<string | null>;
+  backlogSaveImage: (projectPath: string) => Promise<{ ok: boolean; relPath?: string; error?: string }>;
   fileReveal: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
   clipboardWrite: (text: string) => void;
+  clipboardHasImage: () => boolean;
+  imageReadAsDataUrl: (filePath: string) => Promise<string | null>;
 };
 
 function taskFilePath(t: BacklogTask): string {
@@ -257,6 +260,21 @@ const BacklogBoard: React.FC = () => {
     void refresh();
   };
 
+  // Bulk-archive every (visible) task in a column.
+  const archiveAllInColumn = async (status: string) => {
+    const inCol = byStatus(status);
+    if (!inCol.length) return;
+    const ok = await confirmDialog({
+      title: 'Archive all?',
+      message: `Archive all ${inCol.length} "${status}" task${inCol.length === 1 ? '' : 's'}? They move to backlog/archive.`,
+      confirmText: 'Archive all',
+      danger: true,
+    });
+    if (!ok) return;
+    for (const t of inCol) await api().backlogArchiveTask(t.project.path, t.id);
+    void refresh();
+  };
+
   // Create a task with an optimistic placeholder card so it appears instantly,
   // since the backlog CLI write + re-scan takes a second or two.
   const createTaskOptimistic = async (projectPath: string, status: string, title: string) => {
@@ -369,6 +387,7 @@ const BacklogBoard: React.FC = () => {
                 onDragStart={setDragId}
                 onDrop={() => onDropTo(status)}
                 onCreate={createTaskOptimistic}
+                onArchiveAll={() => void archiveAllInColumn(status)}
                 onCardContext={(e, task) => {
                   e.preventDefault();
                   setMenu({ x: e.clientX, y: e.clientY, task });
@@ -927,8 +946,9 @@ const Column: React.FC<{
   onDragStart: (id: string) => void;
   onDrop: () => void;
   onCreate: (projectPath: string, status: string, title: string) => void;
+  onArchiveAll: () => void;
   onCardContext: (e: React.MouseEvent, t: BacklogTask) => void;
-}> = ({ status, tasks, singleProject, colorFor, onCardOpen, onDragStart, onDrop, onCreate, onCardContext }) => {
+}> = ({ status, tasks, singleProject, colorFor, onCardOpen, onDragStart, onDrop, onCreate, onArchiveAll, onCardContext }) => {
   const [over, setOver] = useState(false);
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState('');
@@ -959,6 +979,11 @@ const Column: React.FC<{
           <span className="backlog-col-dot" />
           {status}
         </span>
+        {status.toLowerCase() === 'done' && tasks.length > 0 && (
+          <button className="backlog-col-archive-all" onClick={onArchiveAll} title="Archive all Done tasks">
+            Archive all
+          </button>
+        )}
         <span className="backlog-col-count">{tasks.length}</span>
       </div>
       <div className="backlog-col-body">
@@ -1065,6 +1090,9 @@ const TaskDetail: React.FC<{
   // text briefly vanishes while the file reloads.
   const [descValue, setDescValue] = useState('');
   const acRef = useRef<AcItem[]>([]);
+  const descTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const descViewRef = useRef<HTMLDivElement>(null);
+  const bodyViewRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1149,6 +1177,53 @@ const TaskDetail: React.FC<{
     onChanged();
   };
 
+  // Paste an image into the description: save it to the project's attachments
+  // and insert a markdown image ref at the caret. (TASK-198)
+  const onDescPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const hasImage = Array.from(e.clipboardData?.items || []).some((it) => it.type.startsWith('image/'));
+    if (!hasImage) return;
+    e.preventDefault();
+    const r = await api().backlogSaveImage(task.project.path);
+    if (!r.ok || !r.relPath) {
+      useTerminalStore.getState().addToast(`Backlog: ${r.error || 'image save failed'}`);
+      return;
+    }
+    const md = `![image](${r.relPath})`;
+    const el = descTextareaRef.current;
+    if (el) {
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const next = descDraft.slice(0, start) + md + descDraft.slice(end);
+      setDescDraft(next);
+      requestAnimationFrame(() => { try { el.selectionStart = el.selectionEnd = start + md.length; } catch { /* ignore */ } });
+    } else {
+      setDescDraft((d) => d + md);
+    }
+  };
+
+  // Resolve relative <img> srcs in the rendered markdown (description + body)
+  // to data URIs - the renderer can't load local files directly. Runs after
+  // the markdown renders.
+  useEffect(() => {
+    const base = `${task.project.path.replace(/\\/g, '/')}/backlog/${task.sub}`;
+    const resolve = (rel: string) => {
+      const parts = base.split('/').filter(Boolean);
+      for (const seg of rel.split('/')) {
+        if (seg === '..') parts.pop();
+        else if (seg !== '.' && seg !== '') parts.push(seg);
+      }
+      return parts.join('/');
+    };
+    for (const root of [descViewRef.current, bodyViewRef.current]) {
+      if (!root) continue;
+      root.querySelectorAll('img').forEach((img) => {
+        const src = img.getAttribute('src') || '';
+        if (/^(https?:|data:)/i.test(src) || !src) return;
+        void api().imageReadAsDataUrl(resolve(src)).then((url) => { if (url) img.setAttribute('src', url); });
+      });
+    }
+  }, [descValue, editingDesc, loading, task.project.path, task.sub]);
+
   // Clean the raw body for display: drop Backlog.md's HTML section/AC markers,
   // the Description (shown as its own editable field above), and (when we have
   // an interactive AC list) the whole Acceptance Criteria section.
@@ -1205,19 +1280,23 @@ const TaskDetail: React.FC<{
             <div className="backlog-detail-section-h">Description</div>
             {editingDesc ? (
               <textarea
+                ref={descTextareaRef}
                 className="backlog-detail-desc-edit"
                 value={descDraft}
                 onChange={(e) => setDescDraft(e.target.value)}
+                onPaste={(e) => void onDescPaste(e)}
                 onBlur={() => void saveDescription()}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') { setEditingDesc(false); }
                   // Ctrl/Cmd+Enter saves; plain Enter inserts a newline.
                   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void saveDescription(); }
                 }}
+                placeholder="Describe the task. Paste an image to attach it."
                 autoFocus
               />
             ) : descValue ? (
               <div
+                ref={descViewRef}
                 className="md-rendered-content backlog-detail-md backlog-detail-desc-view"
                 title="Click to edit"
                 onClick={() => { setDescDraft(descValue); setEditingDesc(true); }}
@@ -1256,6 +1335,7 @@ const TaskDetail: React.FC<{
             <div className="backlog-detail-loading">Loading...</div>
           ) : bodyText ? (
             <div
+              ref={bodyViewRef}
               className="md-rendered-content backlog-detail-md"
               dangerouslySetInnerHTML={{ __html: bodyHtml }}
             />
@@ -1263,6 +1343,14 @@ const TaskDetail: React.FC<{
         </div>
 
         <div className="backlog-detail-footer">
+          <button
+            className="backlog-detail-archive"
+            onClick={() => void api().fileReveal(taskFilePath(task))}
+            title="Show the task's .md file in your file manager"
+          >
+            Reveal file
+          </button>
+          <span style={{ flex: 1 }} />
           <button className="backlog-detail-archive" disabled={busy} onClick={() => onArchive(task)}>
             Archive
           </button>

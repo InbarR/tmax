@@ -89,6 +89,7 @@ export interface TerminalAPI {
   backlogValidateProject(projectPath: string): Promise<{ ok: boolean }>;
   backlogInitProject(projectPath: string, name: string): Promise<{ ok: boolean; error?: string }>;
   backlogPickFolder(defaultPath?: string): Promise<string | null>;
+  backlogSaveImage(projectPath: string): Promise<{ ok: boolean; relPath?: string; error?: string }>;
 }
 
 const terminalAPI: TerminalAPI = {
@@ -492,6 +493,9 @@ const terminalAPI: TerminalAPI = {
   },
   backlogPickFolder(defaultPath) {
     return ipcRenderer.invoke(IPC.BACKLOG_PICK_FOLDER, defaultPath);
+  },
+  backlogSaveImage(projectPath) {
+    return ipcRenderer.invoke(IPC.BACKLOG_SAVE_IMAGE, projectPath);
   },
 
 };

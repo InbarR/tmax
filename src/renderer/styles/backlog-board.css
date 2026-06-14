@@ -813,3 +813,30 @@
   outline: none;
   margin: 1px 0;
 }
+
+/* Attached images in the task description (TASK-198). */
+.backlog-detail-md img {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  display: block;
+  margin: 6px 0;
+}
+
+/* Archive-all button in the Done column header (TASK: archive all). */
+.backlog-col-archive-all {
+  margin-left: auto;
+  margin-right: 8px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+.backlog-col-archive-all:hover {
+  color: var(--accent-danger);
+  border-color: var(--accent-danger);
+}

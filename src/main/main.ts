@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeTheme, net, powerMonitor, screen, session, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeTheme, net, powerMonitor, screen, session, shell } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -763,6 +763,23 @@ function registerIpcHandlers(): void {
     });
     if (res.canceled || res.filePaths.length === 0) return null;
     return res.filePaths[0];
+  });
+
+  // Save the current clipboard image into the project's backlog/.attachments/
+  // folder and return a markdown-relative path (relative to a task file).
+  ipcMain.handle(IPC.BACKLOG_SAVE_IMAGE, async (_e, projectPath: string) => {
+    try {
+      const img = clipboard.readImage();
+      if (img.isEmpty()) return { ok: false, error: 'No image in clipboard' };
+      const dir = path.join(projectPath, 'backlog', '.attachments');
+      fs.mkdirSync(dir, { recursive: true });
+      const name = `img-${Date.now()}.png`;
+      fs.writeFileSync(path.join(dir, name), img.toPNG());
+      // Path relative to a task file (backlog/tasks/<task>.md).
+      return { ok: true, relPath: `../.attachments/${name}` };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
   });
 
   ipcMain.handle(
