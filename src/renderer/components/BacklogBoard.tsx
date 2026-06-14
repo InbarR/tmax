@@ -32,6 +32,15 @@ function projectColor(name: string): string {
   return SWATCH_COLORS[h % SWATCH_COLORS.length];
 }
 
+// Accent color per kanban column status (dynamic statuses get the generic accent).
+function statusColor(status: string): string {
+  const s = status.toLowerCase();
+  if (s === 'done') return 'var(--accent-success)';
+  if (s === 'in progress') return 'var(--accent-warning)';
+  if (s === 'to do') return 'var(--text-secondary)';
+  return 'var(--accent)';
+}
+
 function relativeTime(ms: number): string {
   if (!ms) return '';
   const diff = Date.now() - ms;
@@ -114,6 +123,26 @@ const BacklogBoard: React.FC = () => {
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [show, refresh]);
+
+  // On open, focus the project matching the active pane's cwd (if it's one of
+  // the configured projects), so opening the board from a repo lands on it.
+  useEffect(() => {
+    if (!show) return;
+    const st = useTerminalStore.getState();
+    const focused =
+      (st.focusedTerminalId && st.terminals.get(st.focusedTerminalId)) ||
+      [...st.terminals.values()][0];
+    const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const cwd = norm(focused?.cwd || '');
+    if (!cwd) return;
+    const match = projects.find((p) => {
+      const pp = norm(p.path);
+      return cwd === pp || cwd.startsWith(pp + '/');
+    });
+    if (match) setProjectFilter(match.path);
+    // Only run when the board opens (not on every projects change).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show]);
 
   // Esc closes the detail modal, then the board. When a card context menu is
   // open, defer to its own Esc handler so dismissing the menu doesn't also
@@ -894,8 +923,11 @@ const Column: React.FC<{
         onDrop();
       }}
     >
-      <div className="backlog-col-header">
-        <span>{status}</span>
+      <div className="backlog-col-header" style={{ ['--col-accent' as any]: statusColor(status) }}>
+        <span className="backlog-col-name">
+          <span className="backlog-col-dot" />
+          {status}
+        </span>
         <span className="backlog-col-count">{tasks.length}</span>
       </div>
       <div className="backlog-col-body">

@@ -743,11 +743,22 @@ function registerIpcHandlers(): void {
   registerBacklogHandlers();
 
   // Native folder picker for the Backlog "Add project" flow. Opens at the
-  // caller-supplied directory (the focused pane's cwd) when given.
+  // caller-supplied directory (the focused pane's cwd) when given. Normalize
+  // slashes and verify it exists, else the Windows dialog silently ignores a
+  // bad/forward-slash path and reopens at Documents.
   ipcMain.handle(IPC.BACKLOG_PICK_FOLDER, async (_e, defaultPath?: string) => {
-    const res = await dialog.showOpenDialog(mainWindow ?? undefined as any, {
+    let dp: string | undefined;
+    if (defaultPath) {
+      const norm = path.normalize(defaultPath);
+      try {
+        if (fs.statSync(norm).isDirectory()) dp = norm;
+      } catch {
+        dp = undefined;
+      }
+    }
+    const res = await dialog.showOpenDialog(mainWindow ?? (undefined as any), {
       title: 'Select a project folder',
-      defaultPath: defaultPath || undefined,
+      defaultPath: dp,
       properties: ['openDirectory'],
     });
     if (res.canceled || res.filePaths.length === 0) return null;

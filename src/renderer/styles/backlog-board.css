@@ -71,27 +71,34 @@
   flex: 1;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: 18px;
   color: var(--text-primary);
-  padding: 6px 10px;
+  padding: 7px 14px;
   font-size: 13px;
   outline: none;
+  transition: border-color 0.1s, box-shadow 0.1s;
 }
 .backlog-search:focus {
   border-color: var(--focus-border);
+  box-shadow: 0 0 0 3px rgba(var(--rgb-accent), 0.15);
 }
 .backlog-refresh {
   background: transparent;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: 50%;
   color: var(--text-secondary);
   width: 30px;
   height: 30px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
 }
 .backlog-refresh:hover {
   color: var(--text-primary);
   border-color: var(--accent);
+  background: rgba(var(--rgb-accent), 0.1);
 }
 
 .backlog-layout {
@@ -291,6 +298,9 @@
 .backlog-add-error {
   color: var(--accent-danger);
   font-size: 11px;
+  background: rgba(var(--rgb-accent-danger), 0.12);
+  border-radius: 6px;
+  padding: 5px 9px;
 }
 .backlog-add-buttons {
   display: flex;
@@ -339,12 +349,13 @@
 .backlog-column {
   flex: 1 1 0;
   min-width: 300px;
-  background: var(--bg-secondary);
-  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
   max-height: 100%;
-  border: 1px solid transparent;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
   transition: border-color 0.1s;
 }
 .backlog-column.drag-over {
@@ -354,18 +365,36 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  font-size: 13px;
+  padding: 11px 13px;
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-color);
+  /* Thin status-colored accent line across the top of each column. */
+  box-shadow: inset 0 2px 0 var(--col-accent, var(--accent));
+}
+.backlog-col-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  text-transform: uppercase;
+}
+.backlog-col-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--col-accent, var(--accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--col-accent, var(--accent)) 22%, transparent);
 }
 .backlog-col-count {
   font-size: 11px;
+  font-weight: 600;
   color: var(--text-secondary);
   background: var(--bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
-  padding: 1px 8px;
+  padding: 1px 9px;
 }
 .backlog-col-body {
   flex: 1;
@@ -406,20 +435,28 @@
 .backlog-card {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 9px 10px;
+  border-radius: 9px;
+  padding: 11px 12px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  transition: transform 0.1s ease, box-shadow 0.1s ease, border-color 0.1s ease;
 }
 .backlog-card:hover {
   border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+.backlog-card:active {
+  transform: translateY(0);
 }
 .backlog-card-title {
   font-size: 13px;
+  font-weight: 500;
   color: var(--text-primary);
-  line-height: 1.35;
+  line-height: 1.4;
 }
 .backlog-card-meta {
   display: flex;
@@ -436,6 +473,11 @@
 }
 .backlog-card-id {
   font-family: monospace;
+  font-size: 10px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  padding: 1px 5px;
+  opacity: 0.85;
 }
 .backlog-card-time {
   margin-left: auto;
