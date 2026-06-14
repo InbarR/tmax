@@ -72,7 +72,7 @@ function matchesCombo(event: KeyboardEvent, combo: KeyCombo): boolean {
   );
 }
 
-const DEFAULT_BINDINGS: Record<string, string> = {
+export const DEFAULT_BINDINGS: Record<string, string> = {
   'Ctrl+T': 'createTerminal',
   // Ctrl+W intentionally NOT mapped: it's the universal readline /
   // bash / zsh / Claude Code shortcut for "delete previous word".

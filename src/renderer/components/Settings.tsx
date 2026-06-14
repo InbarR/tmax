@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useTerminalStore } from '../state/terminal-store';
 import { isMac, formatKeyForPlatform } from '../utils/platform';
 import { THEME_PRESETS, themesEqual, type ThemePreset } from '../utils/theme-presets';
+import { DEFAULT_BINDINGS } from '../hooks/useKeybindings';
 
 type Tab = 'terminal' | 'keybindings' | 'shells' | 'theme' | 'appearance';
 
@@ -323,49 +324,68 @@ const TerminalSettings: React.FC = () => {
 const KeybindingsSettings: React.FC = () => {
   const config = useTerminalStore((s) => s.config)!;
   const update = useTerminalStore((s) => s.updateConfig);
-  const [recording, setRecording] = useState<number | null>(null);
+  const [recording, setRecording] = useState<string | null>(null); // action being recorded
   const [filter, setFilter] = useState('');
 
-  const filteredBindings = config.keybindings.map((b, i) => ({ ...b, originalIndex: i })).filter((b) => {
-    if (!filter) return true;
-    const q = filter.toLowerCase();
-    return formatAction(b.action).toLowerCase().includes(q) || b.key.toLowerCase().includes(q);
-  });
+  // Effective action -> key, merging the built-in defaults with the user's
+  // config overrides exactly like the keybinding hook does. This surfaces
+  // EVERY bindable action (not just the subset stored in config).
+  const effective = useMemo(() => {
+    const merged: Record<string, string> = { ...DEFAULT_BINDINGS }; // key -> action
+    const cfg = config.keybindings;
+    if (Array.isArray(cfg)) {
+      const cfgActions = new Set(cfg.map((b) => b.action));
+      for (const [key, action] of Object.entries(merged)) if (cfgActions.has(action)) delete merged[key];
+      for (const b of cfg) merged[b.key] = b.action;
+    }
+    const byAction: Record<string, string> = {};
+    for (const [key, action] of Object.entries(merged)) if (!byAction[action]) byAction[action] = key;
+    return byAction;
+  }, [config.keybindings]);
 
-  const handleRecord = useCallback((index: number) => {
-    setRecording(index);
-  }, []);
+  const allActions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of Object.values(DEFAULT_BINDINGS)) set.add(a);
+    for (const b of config.keybindings) set.add(b.action);
+    return [...set].sort((a, b) => formatAction(a).localeCompare(formatAction(b)));
+  }, [config.keybindings]);
+
+  const rows = allActions
+    .map((action) => ({ action, key: effective[action] || '' }))
+    .filter((r) => {
+      if (!filter) return true;
+      const q = filter.toLowerCase();
+      return formatAction(r.action).toLowerCase().includes(q) || r.action.toLowerCase().includes(q) || r.key.toLowerCase().includes(q);
+    });
+
+  const rebind = useCallback((action: string, key: string) => {
+    // Replace this action's binding (config overrides the default keys).
+    const next = config.keybindings.filter((b) => b.action !== action);
+    next.push({ action, key });
+    update({ keybindings: next });
+  }, [config.keybindings, update]);
 
   useEffect(() => {
     if (recording === null) return;
     const handler = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
-
+      let key = e.key;
+      if (['Control', 'Shift', 'Alt', 'Meta'].includes(key)) return; // wait for the non-modifier
+      if (key === 'Escape') { setRecording(null); return; } // cancel
       const parts: string[] = [];
-      // On Mac, record Cmd (metaKey) as Ctrl for cross-platform storage consistency
       if (isMac ? e.metaKey : e.ctrlKey) parts.push('Ctrl');
       if (e.shiftKey) parts.push('Shift');
       if (e.altKey) parts.push('Alt');
-
-      let key = e.key;
-      if (['Control', 'Shift', 'Alt', 'Meta'].includes(key)) return; // wait for actual key
-
-      // Normalize key names
       if (key === ' ') key = 'Space';
       if (key.length === 1) key = key.toUpperCase();
       parts.push(key);
-
-      const combo = parts.join('+');
-      const newBindings = [...config.keybindings];
-      newBindings[recording] = { ...newBindings[recording], key: combo };
-      update({ keybindings: newBindings });
+      rebind(recording, parts.join('+'));
       setRecording(null);
     };
-
     document.addEventListener('keydown', handler, true);
     return () => document.removeEventListener('keydown', handler, true);
-  }, [recording, config.keybindings, update]);
+  }, [recording, rebind]);
 
   return (
     <div className="settings-section">
@@ -376,15 +396,15 @@ const KeybindingsSettings: React.FC = () => {
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
       />
-      <div className="settings-hint">Click a shortcut to re-record it. Press any key combination.</div>
-      {filteredBindings.map((binding) => (
-        <div key={binding.originalIndex} className="keybinding-row">
-          <span className="keybinding-action">{formatAction(binding.action)}</span>
+      <div className="settings-hint">Click a shortcut to re-record it. Press a key combination (Esc to cancel).</div>
+      {rows.map((r) => (
+        <div key={r.action} className="keybinding-row">
+          <span className="keybinding-action">{formatAction(r.action)}</span>
           <button
-            className={`keybinding-key${recording === binding.originalIndex ? ' recording' : ''}`}
-            onClick={() => handleRecord(binding.originalIndex)}
+            className={`keybinding-key${recording === r.action ? ' recording' : ''}${r.key ? '' : ' unbound'}`}
+            onClick={() => setRecording(r.action)}
           >
-            {recording === binding.originalIndex ? 'Press keys...' : formatKeyForPlatform(binding.key)}
+            {recording === r.action ? 'Press keys...' : r.key ? formatKeyForPlatform(r.key) : 'Unbound'}
           </button>
         </div>
       ))}

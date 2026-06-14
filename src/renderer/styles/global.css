@@ -6565,3 +6565,9 @@ select.settings-input {
     opacity: 1;
   }
 }
+
+/* Unbound action in the keybindings settings list. */
+.keybinding-key.unbound {
+  opacity: 0.5;
+  font-style: italic;
+}
