@@ -3340,10 +3340,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
                 useTerminalStore.getState().showPromptsForTerminal(terminalId);
               }}>💬 Show prompts <span className="context-menu-shortcut">Ctrl+Shift+K</span></button>
             )}
-            <button className="context-menu-item" onClick={() => {
-              setPaneMenuPos(null);
-              useTerminalStore.getState().openPromptComposer(terminalId);
-            }}>📝 Prompt composer <span className="context-menu-shortcut">Ctrl+Alt+P</span></button>
+            {aiSessionId && (
+              <button className="context-menu-item" onClick={() => {
+                setPaneMenuPos(null);
+                useTerminalStore.getState().openPromptComposer(terminalId);
+              }}>📝 Prompt composer <span className="context-menu-shortcut">Ctrl+Alt+P</span></button>
+            )}
             {aiSessionId && (
               <button className="context-menu-item" onClick={() => {
                 setPaneMenuPos(null);

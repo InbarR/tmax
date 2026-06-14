@@ -352,7 +352,13 @@ function dispatchAction(action: string): void {
       if (focusedId) store.showPromptsForTerminal(focusedId);
       break;
     case 'promptComposer':
-      if (focusedId) store.openPromptComposer(focusedId);
+      // AI-session-only, mirroring the pane context menu. The composer is
+      // mainly useful for drafting chat prompts; on a plain shell pane
+      // the shortcut would surprise the user.
+      if (focusedId) {
+        const inst = store.terminals.get(focusedId);
+        if (inst?.aiSessionId) store.openPromptComposer(focusedId);
+      }
       break;
     case 'searchPrompts':
       store.togglePromptSearch();

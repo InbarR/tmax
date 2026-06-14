@@ -20,6 +20,13 @@ interface Command {
 
 const CommandPalette: React.FC = () => {
   const show = useTerminalStore((s) => s.showCommandPalette);
+  // Subscribe to the focused pane's aiSessionId so commands that only make
+  // sense for an AI session (Prompt Composer, etc.) can be filtered out
+  // when the user has a plain shell focused.
+  const focusedAiSessionId = useTerminalStore((s) => {
+    const id = s.focusedTerminalId;
+    return id ? s.terminals.get(id)?.aiSessionId ?? null : null;
+  });
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [dialog, setDialog] = useState<{ title: string; placeholder?: string; options?: string[]; onSubmit: (value: string) => void } | null>(null);
@@ -95,7 +102,14 @@ const CommandPalette: React.FC = () => {
         }
       }},
       { id: 'jumpToPrompt', label: 'Jump to Prompt', shortcut: 'Ctrl+Shift+K', action: () => { const id = focusedId(); if (id) store().showPromptsForTerminal(id); } },
-      { id: 'promptComposer', label: 'Open Prompt Composer', shortcut: 'Ctrl+Alt+P', action: () => { const id = focusedId(); if (id) store().openPromptComposer(id); } },
+      // Prompt composer is AI-session-only (mirrors the per-pane context
+      // menu). Hide the entry when the focused pane isn't an AI session.
+      ...(focusedAiSessionId ? [{
+        id: 'promptComposer',
+        label: 'Open Prompt Composer',
+        shortcut: 'Ctrl+Alt+P',
+        action: () => { const id = focusedId(); if (id) store().openPromptComposer(id); },
+      }] : []),
       { id: 'searchPrompts', label: 'Search Prompts Across All Panes', shortcut: 'Ctrl+Shift+Y', action: () => store().togglePromptSearch() },
       { id: 'toggleTranscript', label: 'Toggle Session Transcript', shortcut: 'Ctrl+Alt+T', action: () => store().toggleTranscript() },
       { id: 'shortcuts', label: 'Show Keyboard Shortcuts', shortcut: 'Ctrl+Shift+?', action: () => store().toggleShortcuts() },
@@ -238,7 +252,7 @@ const CommandPalette: React.FC = () => {
         action: () => store().createTerminal(shell.id),
       })),
     ];
-  }, []);
+  }, [focusedAiSessionId]);
 
   const filtered = useMemo(() => {
     const tokens = tokenizeAnd(query);
