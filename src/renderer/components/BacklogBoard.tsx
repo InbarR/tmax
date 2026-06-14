@@ -206,6 +206,8 @@ const BacklogBoard: React.FC = () => {
   };
   const setProjectColor = (p: Project, color: string | undefined) =>
     saveProjects(projects.map((x) => (x.path === p.path ? { ...x, color } : x)));
+  const setProjectName = (p: Project, name: string) =>
+    saveProjects(projects.map((x) => (x.path === p.path ? { ...x, name } : x)));
   const removeProject = async (p: Project) => {
     const ok = await confirmDialog({
       title: 'Remove project?',
@@ -335,6 +337,7 @@ const BacklogBoard: React.FC = () => {
             onRemove={removeProject}
             onMove={moveProject}
             onSetColor={setProjectColor}
+            onSetName={setProjectName}
             onAdd={(p) => saveProjects([...projects, p])}
           />
         </div>
@@ -596,11 +599,12 @@ const ProjectContextMenu: React.FC<{
   currentColor: string;
   onClose: () => void;
   onFilter: () => void;
+  onRename: () => void;
   onMove: (dir: -1 | 1) => void;
   onSetColor: (color: string | undefined) => void;
   onReveal: () => void;
   onRemove: () => void;
-}> = ({ x, y, project, idx, count, currentColor, onClose, onFilter, onMove, onSetColor, onReveal, onRemove }) => {
+}> = ({ x, y, project, idx, count, currentColor, onClose, onFilter, onRename, onMove, onSetColor, onReveal, onRemove }) => {
   const ref = useRef<HTMLDivElement>(null);
   const [showColors, setShowColors] = useState(false);
   const [pos, setPos] = useState({ x, y });
@@ -633,6 +637,7 @@ const ProjectContextMenu: React.FC<{
     <div ref={ref} className="context-menu" style={{ left: pos.x, top: pos.y }}>
       <button className="context-menu-item" onClick={onFilter}>Show only this project</button>
       <div className="context-menu-separator" />
+      <button className="context-menu-item" onClick={onRename}>Rename</button>
       <button className="context-menu-item" onClick={() => setShowColors((v) => !v)}>Set color &#9656;</button>
       {showColors && (
         <div className="context-menu-sub backlog-color-grid">
@@ -672,13 +677,16 @@ const ProjectSidebar: React.FC<{
   onRemove: (p: Project) => void;
   onMove: (idx: number, dir: -1 | 1) => void;
   onSetColor: (p: Project, color: string | undefined) => void;
+  onSetName: (p: Project, name: string) => void;
   onAdd: (p: Project) => void;
-}> = ({ projects, tasks, filter, colorFor, onFilter, onRemove, onMove, onSetColor, onAdd }) => {
+}> = ({ projects, tasks, filter, colorFor, onFilter, onRemove, onMove, onSetColor, onSetName, onAdd }) => {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [path, setPath] = useState('');
   const [error, setError] = useState('');
   const [menu, setMenu] = useState<{ x: number; y: number; project: Project; idx: number } | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null); // project.path being renamed
+  const [renameValue, setRenameValue] = useState('');
 
   const countFor = (p: Project) =>
     tasks.filter((t) => t.project.path === p.path && t.status !== 'Done').length;
@@ -787,11 +795,25 @@ const ProjectSidebar: React.FC<{
           className={`backlog-proj${filter === p.path ? ' active' : ''}`}
           onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, project: p, idx }); }}
         >
+          {renaming === p.path ? (
+            <input
+              className="backlog-proj-rename"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={() => { const v = renameValue.trim(); if (v) onSetName(p, v); setRenaming(null); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { const v = renameValue.trim(); if (v) onSetName(p, v); setRenaming(null); }
+                if (e.key === 'Escape') setRenaming(null);
+              }}
+              autoFocus
+            />
+          ) : (
           <button className="backlog-proj-main" onClick={() => onFilter(p.path)} title={p.path}>
             <span className="backlog-proj-dot" style={{ background: colorFor(p) }} />
             <span className="backlog-proj-name">{p.name}</span>
             <span className="backlog-proj-count">{countFor(p)}</span>
           </button>
+          )}
           <div className="backlog-proj-actions">
             <button onClick={() => onMove(idx, -1)} disabled={idx === 0} title="Move up">
               {'↑'}
@@ -883,6 +905,7 @@ const ProjectSidebar: React.FC<{
           currentColor={colorFor(menu.project)}
           onClose={() => setMenu(null)}
           onFilter={() => { onFilter(menu.project.path); setMenu(null); }}
+          onRename={() => { setRenameValue(menu.project.name); setRenaming(menu.project.path); setMenu(null); }}
           onMove={(dir) => { onMove(menu.idx, dir); setMenu(null); }}
           onSetColor={(c) => { onSetColor(menu.project, c); setMenu(null); }}
           onReveal={() => { void api().fileReveal(menu.project.path); setMenu(null); }}

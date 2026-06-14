@@ -800,3 +800,16 @@
   line-height: 1.5;
   outline: none;
 }
+
+/* Inline project rename input. */
+.backlog-proj-rename {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--focus-border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  padding: 6px 8px;
+  font-size: 13px;
+  outline: none;
+  margin: 1px 0;
+}
