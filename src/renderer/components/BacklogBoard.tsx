@@ -299,7 +299,12 @@ const BacklogBoard: React.FC = () => {
       setTasks((prev) => prev.filter((t) => t.file !== tempId)); // drop placeholder on failure
       return;
     }
-    await refresh(); // replaces the placeholder with the real task
+    // Re-scan, then open the new task's detail so the user can add a
+    // description / acceptance criteria right after creating it.
+    const list = await api().backlogListTasks(projects);
+    setTasks(Array.isArray(list) ? list : []);
+    const created = r.id ? list.find((t) => t.id === r.id && t.project.path === projectPath) : undefined;
+    if (created) setSelected(created);
   };
 
   const setMode = (m: 'overlay' | 'panel') => updateConfig({ backlogDisplayMode: m });
@@ -1179,10 +1184,18 @@ const TaskDetail: React.FC<{
 
   // Paste an image into the description: save it to the project's attachments
   // and insert a markdown image ref at the caret. (TASK-198)
-  const onDescPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const hasImage = Array.from(e.clipboardData?.items || []).some((it) => it.type.startsWith('image/'));
+  const onDescPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    // Use the Electron clipboard (reliably detects raw bitmaps/screenshots,
+    // which clipboardData.items often misses) and only intercept when there's
+    // genuinely an image - otherwise let normal text paste happen.
+    let hasImage = false;
+    try { hasImage = api().clipboardHasImage(); } catch { hasImage = false; }
     if (!hasImage) return;
     e.preventDefault();
+    void doPasteImage();
+  };
+
+  const doPasteImage = async () => {
     const r = await api().backlogSaveImage(task.project.path);
     if (!r.ok || !r.relPath) {
       useTerminalStore.getState().addToast(`Backlog: ${r.error || 'image save failed'}`);
