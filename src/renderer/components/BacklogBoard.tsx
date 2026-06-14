@@ -788,8 +788,17 @@ const ProjectSidebar: React.FC<{
               title="Browse for folder"
               onClick={async () => {
                 const st = useTerminalStore.getState();
-                const focused = st.focusedTerminalId ? st.terminals.get(st.focusedTerminalId) : undefined;
-                const picked = await api().backlogPickFolder(focused?.cwd || undefined);
+                // Live cwd is tracked into terminal.cwd via OSC 7 / prompt. Use
+                // the focused pane, else any pane, else fall back to a sibling
+                // of an existing project so Browse opens near the user's repos
+                // instead of Documents.
+                const focused =
+                  (st.focusedTerminalId && st.terminals.get(st.focusedTerminalId)) ||
+                  [...st.terminals.values()][0];
+                const projParent = projects.length
+                  ? projects[projects.length - 1].path.replace(/[\\/][^\\/]+[\\/]?$/, '')
+                  : '';
+                const picked = await api().backlogPickFolder(focused?.cwd || projParent || undefined);
                 if (picked) {
                   setPath(picked);
                   if (!name.trim()) setName(picked.split(/[\\/]/).filter(Boolean).pop() || '');
