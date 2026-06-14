@@ -153,6 +153,11 @@ function sortSessions(
     const aPin = pinned[a.id] ? 1 : 0;
     const bPin = pinned[b.id] ? 1 : 0;
     if (aPin !== bPin) return bPin - aPin;
+    // Running (non-idle) sessions float above idle ones so active work is
+    // always visible at the top of the list.
+    const aActive = isActiveStatus(a.status) ? 1 : 0;
+    const bActive = isActiveStatus(b.status) ? 1 : 0;
+    if (aActive !== bActive) return bActive - aActive;
     if (sortMode === 'time-desc') {
       // Smart-sort behavior carried over from the old 'activity' mode:
       // sessions open in tmax float above non-open ones at the same activity
@@ -473,6 +478,10 @@ const CopilotPanel: React.FC = () => {
       if (bk === PINNED_GROUP_KEY) return 1;
       if (ak === '(no repo)') return 1;
       if (bk === '(no repo)') return -1;
+      // Groups containing a running (non-idle) session float to the top.
+      const aActive = av.some((s) => isActiveStatus(s.status)) ? 1 : 0;
+      const bActive = bv.some((s) => isActiveStatus(s.status)) ? 1 : 0;
+      if (aActive !== bActive) return bActive - aActive;
       if (sortColumn === 'title') {
         // Sort by the visible group label (disambiguated leaf, e.g. "tmax")
         // rather than the full lowercased cwd key, otherwise the user sees
