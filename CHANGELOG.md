@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.11.0
+
+A native Backlog board, a Prompt Editor, and per-pane AI agent tools.
+
+### New Features
+
+- **Backlog board** - a built-in, multi-project task board, no external CLI required. Dock it as a side panel or expand it to the full window, collapse it to the edge, and organize tasks across all your projects with per-project colors. Create and edit tasks, drag them between columns, multi-select for bulk actions, archive or delete (to the Recycle Bin), attach images to task descriptions, and toggle a view of archived tasks.
+- **Prompt Editor** (`Ctrl+Alt+E`) - compose long, multi-line prompts in a proper editor, paste images, then send them to the focused terminal.
+- **Per-pane agent tools** - quick buttons on each AI pane to ping the agent for a status update or ask it to bring its Backlog tasks up to date.
+- **Live agent output in a task** - attach a running AI session to a task and watch its output stream inside the task detail.
+- **Rebind shortcuts from the command palette** - right-click any command to change its keyboard shortcut, with a warning if the combo is already taken.
+
+### Polish & Fixes
+
+- Transcript bubbles now show which agent replied (Claude Code / Copilot).
+- The global show/hide-window hotkey is now documented in the Keyboard Shortcuts dialog.
+- More reliable image-link clicks in the terminal, cleaner pane borders, and transcript search that scrolls to each match.
+
 ## v1.10.1
 
 A packaging fix for installing tmax through npm.

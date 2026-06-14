@@ -58,9 +58,19 @@ Built with Electron, React, TypeScript, xterm.js, and node-pty.
 - Native AI session notifications when Claude Code or Copilot CLI finishes a turn or asks for approval, with a Settings → Notifications exclude list to silence specific titles or bodies
 - Per-group `+` button on each repo group header spawns a fresh Copilot session in that group's folder - faster than typing the resume command yourself
 - Wake / ping button per session row - writes a no-op so a dormant session refreshes its status
+- **Prompt Editor** (`Ctrl+Alt+E`, or the 📝 button on a pane) - compose long, multi-line prompts in a dedicated editor, paste an image to insert its path, then send the whole thing to the focused terminal
+- Per-pane agent buttons - ping the focused agent for a quick status update, or ask it to bring its Backlog tasks up to date, right from the pane
 - SQLite-backed Copilot session loading - reads Copilot CLI's local store directly for ~150ms startup on busy machines
 - Bulk Cleanup sessions - archive everything below a prompt-count threshold (pinned and already-archived sessions are skipped)
 - WSL session discovery — sessions from WSL distros appear with a distro badge
+
+**Backlog Board**
+- A built-in, multi-project task board (`Ctrl+Alt+B`, or the ✅ Backlog button) - manage your tasks across every project without any external CLI installed
+- Dock it as a side panel (resizable, collapsible to either edge) or expand it to the full window
+- Add multiple projects with per-project colors; create and edit tasks, drag them between columns, and multi-select for bulk actions
+- Archive or delete tasks (delete goes to the Recycle Bin), with a toggle to show archived tasks
+- Rich task details - edit descriptions in Markdown and paste images straight into a task
+- Attach a running AI session to a task and watch its live output stream inside the task
 
 **File Explorer**
 - Sidebar file tree for the focused terminal's CWD (`Ctrl+Shift+X`)
