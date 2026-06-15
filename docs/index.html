@@ -492,10 +492,22 @@
       color: var(--fg);
     }
     .mac-note-title {
-      display: block;
-      margin-bottom: 10px;
+      cursor: pointer;
       font-size: 14px;
+      color: var(--fg);
+      list-style: none;
+      margin: 0;
     }
+    .mac-note-title::-webkit-details-marker { display: none; }
+    .mac-note-title::before {
+      content: '\25B8';
+      display: inline-block;
+      margin-right: 8px;
+      color: var(--yellow);
+      transition: transform 0.15s ease;
+    }
+    .mac-note[open] .mac-note-title { margin-bottom: 10px; }
+    .mac-note[open] .mac-note-title::before { transform: rotate(90deg); }
     .mac-note p {
       margin: 6px 0;
     }
@@ -842,14 +854,14 @@
     ./download <span id="os-name">your platform</span>
     <br><small id="os-detail"></small>
   </a>
-  <div class="mac-note" id="mac-note">
-    <strong class="mac-note-title">macOS says "tmax is damaged and can't be opened"?</strong>
+  <details class="mac-note" id="mac-note">
+    <summary class="mac-note-title">Installing on a Mac? macOS may say "tmax is damaged" - here's the fix</summary>
     <img class="mac-note-shot" src="screenshots/download-warn-macos.png" alt="macOS warning dialog reading &quot;tmax is damaged and can't be opened. You should move it to the Trash.&quot;" loading="lazy">
     <p>The app is fine. macOS requires apps to be signed with an Apple Developer certificate ($99/year), and I'm not planning to pay that evil company 😏 - so you bypass the quarantine flag yourself. Click <strong>Cancel</strong> (not Move to Trash!).</p>
     <p>Run this in Terminal, then open tmax again:</p>
     <code>xattr -cr /Applications/tmax.app</code>
     <p>If you installed it somewhere else, adjust the path, for example <code>~/Applications/tmax.app</code>.</p>
-  </div>
+  </details>
   <div class="download-other">
     <p>Other platforms:</p>
     <div class="download-grid" id="other-downloads"></div>
@@ -1189,7 +1201,12 @@ function renderDownloadCard(os, arch, isSelected) {
   // platform. A Windows/Linux visitor often grabs the Mac build to hand to
   // someone else, and needs the xattr workaround regardless of their own OS.
   const hasMacBuild = assets.some(a => /\.dmg$|darwin.*\.zip$/i.test(a.name));
-  document.getElementById('mac-note').style.display = hasMacBuild ? 'block' : 'none';
+  const macNote = document.getElementById('mac-note');
+  macNote.style.display = hasMacBuild ? 'block' : 'none';
+  // Expand it only when macOS is the active platform (the user needs the steps
+  // right away); otherwise leave it collapsed so a Windows/Linux visitor sees a
+  // calm one-liner instead of a big "tmax is damaged" warning.
+  if (hasMacBuild) macNote.open = (os === 'macOS');
 
   // Other platforms (rebuilt each render so switching platforms is clean).
   const grid = document.getElementById('other-downloads');
