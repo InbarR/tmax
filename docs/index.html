@@ -813,9 +813,9 @@
     <div class="tf-body" id="tf-body"><span class="tf-prompt">$</span> <span id="tf-typed"></span><span class="tf-cursor" id="tf-cursor"></span></div>
   </div>
   <div class="badges">
-    <a class="badge link" href="#download">Windows</a>
-    <a class="badge link" href="#download">macOS</a>
-    <a class="badge link" href="#download">Linux</a>
+    <a class="badge link" href="#download" data-os="Windows" data-arch="x64">Windows</a>
+    <a class="badge link" href="#download" data-os="macOS" data-arch="arm64">macOS</a>
+    <a class="badge link" href="#download" data-os="Linux" data-arch="x64">Linux</a>
     <a class="badge link" href="https://github.com/InbarR/tmax/stargazers" id="star-badge">&#10038; Stars</a>
     <a class="badge link" href="https://github.com/InbarR/tmax/releases/latest" id="version-badge">v1.5.1</a>
   </div>
@@ -1093,93 +1093,162 @@ const ALL_DOWNLOADS = [
   { os: 'Linux', arch: 'x64-rpm', label: 'Linux (.rpm)', icon: '📦', pattern: /x86_64\.rpm$|x64.*\.rpm$/ },
 ];
 
+// Latest-release data, fetched once and shared by renderDownloadCard() so the
+// platform badges can re-render the card without re-fetching.
+let releaseState = null; // { assets, version, releasesUrl, publishedAt }
+
+// Pick the highest semver tag from the committed download snapshot.
+function latestTagFromSnapshots(data) {
+  const snap = data.snapshots && data.snapshots[data.snapshots.length - 1];
+  if (!snap || !snap.releases) return null;
+  const sem = t => t.replace(/^v/, '').split(/[.-]/).map(n => parseInt(n, 10) || 0);
+  return Object.keys(snap.releases).sort((a, b) => {
+    const A = sem(a), B = sem(b);
+    for (let i = 0; i < 3; i++) { if ((A[i] || 0) !== (B[i] || 0)) return (B[i] || 0) - (A[i] || 0); }
+    return 0;
+  })[0] || null;
+}
+
+// Resolve the latest release's assets. Primary source is the GitHub releases
+// API (richest: sizes + dates). It is unauthenticated though, so it shares a
+// 60-req/hr-per-IP limit that users behind a corporate NAT routinely exhaust -
+// which left the whole download card empty (no version, no "other platforms").
+// Fall back to the committed download-history.json (same-origin, no rate limit)
+// to rebuild every download link from the latest tag + exact asset names.
+async function fetchAssets() {
+  try {
+    const res = await fetch(API);
+    const data = await res.json();
+    if (res.ok && data.tag_name && Array.isArray(data.assets)) {
+      return {
+        assets: data.assets,
+        version: data.tag_name,
+        releasesUrl: data.html_url || `https://github.com/${REPO}/releases/latest`,
+        publishedAt: data.published_at || null,
+      };
+    }
+    throw new Error(data.message || `HTTP ${res.status}`);
+  } catch (apiErr) {
+    const snapRes = await fetch('download-history.json', { cache: 'no-cache' });
+    if (!snapRes.ok) throw apiErr;
+    const snapData = await snapRes.json();
+    const tag = latestTagFromSnapshots(snapData);
+    if (!tag) throw apiErr;
+    const snap = snapData.snapshots[snapData.snapshots.length - 1];
+    const assets = Object.keys(snap.releases[tag])
+      .filter(name => !name.startsWith('RELEASES')) // skip Squirrel metadata
+      .map(name => ({
+        name,
+        browser_download_url: `https://github.com/${REPO}/releases/download/${tag}/${name}`,
+        size: 0,
+      }));
+    return {
+      assets,
+      version: tag,
+      releasesUrl: `https://github.com/${REPO}/releases/tag/${tag}`,
+      publishedAt: null,
+    };
+  }
+}
+
+// Render the download card for a given platform. `isSelected` distinguishes a
+// user choice (via a platform badge) from auto-detection, for the heading verb.
+function renderDownloadCard(os, arch, isSelected) {
+  if (!releaseState) return;
+  const { assets, version, releasesUrl, publishedAt } = releaseState;
+  const choice = ALL_DOWNLOADS.find(d => d.os === os && d.arch === arch)
+    || ALL_DOWNLOADS.find(d => d.os === os);
+  const primaryAsset = choice ? assets.find(a => choice.pattern.test(a.name)) : null;
+
+  const btn = document.getElementById('primary-download');
+  const osName = document.getElementById('os-name');
+  const osDetail = document.getElementById('os-detail');
+
+  document.getElementById('detected-os').innerHTML =
+    `${choice ? choice.icon : '&#128187;'} ${isSelected ? 'Selected' : 'Detected'}: ${choice ? choice.label : os}`;
+
+  if (primaryAsset && primaryAsset.browser_download_url) {
+    btn.href = primaryAsset.browser_download_url;
+    osName.textContent = choice.label;
+    const parts = [version];
+    if (primaryAsset.size) parts.push(`${(primaryAsset.size / 1024 / 1024).toFixed(0)} MB`);
+    if (publishedAt) parts.push(new Date(publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+    osDetail.textContent = parts.join(' · ');
+    btn.setAttribute('data-goatcounter-click', `dl-primary-${choice.os}-${choice.arch}`);
+    btn.setAttribute('data-goatcounter-title', `Primary download: ${choice.label}`);
+  } else {
+    btn.href = releasesUrl;
+    osName.textContent = os;
+    osDetail.textContent = 'View all downloads';
+    btn.setAttribute('data-goatcounter-click', 'dl-primary-fallback');
+    btn.setAttribute('data-goatcounter-title', 'Primary download: releases page (fallback)');
+  }
+
+  document.getElementById('mac-note').style.display = (os === 'macOS') ? 'block' : 'none';
+
+  // Other platforms (rebuilt each render so switching platforms is clean).
+  const grid = document.getElementById('other-downloads');
+  grid.innerHTML = '';
+  for (const dl of ALL_DOWNLOADS) {
+    if (dl.os === os && dl.arch === arch) continue;
+    const asset = assets.find(a => dl.pattern.test(a.name));
+    if (asset) {
+      const a = document.createElement('a');
+      a.href = asset.browser_download_url;
+      a.innerHTML = `<span class="os-icon">${dl.icon}</span>${dl.label}`;
+      a.setAttribute('data-goatcounter-click', `dl-other-${dl.os}-${dl.arch}`);
+      a.setAttribute('data-goatcounter-title', `Other platform download: ${dl.label}`);
+      grid.appendChild(a);
+    }
+  }
+  const src = document.createElement('a');
+  src.href = `https://github.com/${REPO}`;
+  src.innerHTML = '<span class="os-icon">&#128736;</span>Build from source';
+  src.setAttribute('data-goatcounter-click', 'dl-source');
+  src.setAttribute('data-goatcounter-title', 'Build from source');
+  grid.appendChild(src);
+
+  document.getElementById('version-badge').textContent = version;
+  const tbv = document.getElementById('topbar-version');
+  if (tbv) tbv.textContent = `· ${version} · build OK`;
+}
+
+// Make the hero platform badges switch the download card to that platform
+// instead of merely scrolling to it.
+function wirePlatformBadges() {
+  document.querySelectorAll('.badges a[data-os]').forEach(a => {
+    a.addEventListener('click', () => {
+      renderDownloadCard(a.getAttribute('data-os'), a.getAttribute('data-arch'), true);
+    });
+  });
+}
+
 async function loadRelease() {
   const detected = await refineMacArch(detectPlatform());
   document.getElementById('detected-os').innerHTML = `${detected.icon} Detected: ${detected.os} (${detected.arch})`;
 
   try {
-    const res = await fetch(API);
-    const data = await res.json();
-    // GitHub API returns {message: "..."} on rate limits / errors instead of a
-    // release object. Guard against missing fields so we never set
-    // href=undefined (which coerces to the string "undefined").
-    if (!res.ok || !data.tag_name || !Array.isArray(data.assets)) {
-      throw new Error(data.message || `HTTP ${res.status}`);
-    }
-    const version = data.tag_name;
-    const assets = data.assets;
-    const releasesUrl = data.html_url || `https://github.com/${REPO}/releases/latest`;
-
-    // Find primary download
-    const primary = ALL_DOWNLOADS.find(d => d.os === detected.os && d.arch === detected.arch);
-    const primaryAsset = primary ? assets.find(a => primary.pattern.test(a.name)) : null;
-
-    const btn = document.getElementById('primary-download');
-    const osName = document.getElementById('os-name');
-    const osDetail = document.getElementById('os-detail');
-
-    if (primaryAsset && primaryAsset.browser_download_url) {
-      btn.href = primaryAsset.browser_download_url;
-      osName.textContent = primary.label;
-      const releaseDate = new Date(data.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      osDetail.textContent = `${version} · ${(primaryAsset.size / 1024 / 1024).toFixed(0)} MB · ${releaseDate}`;
-      btn.setAttribute('data-goatcounter-click', `dl-primary-${primary.os}-${primary.arch}`);
-      btn.setAttribute('data-goatcounter-title', `Primary download: ${primary.label}`);
-    } else {
-      btn.href = releasesUrl;
-      osName.textContent = detected.os;
-      osDetail.textContent = 'View all downloads';
-      btn.setAttribute('data-goatcounter-click', 'dl-primary-fallback');
-      btn.setAttribute('data-goatcounter-title', 'Primary download: releases page (fallback)');
-    }
-
-    // Show mac note
-    if (detected.os === 'macOS') {
-      document.getElementById('mac-note').style.display = 'block';
-    }
-
-    // Other downloads
-    const grid = document.getElementById('other-downloads');
-    for (const dl of ALL_DOWNLOADS) {
-      if (dl.os === detected.os && dl.arch === detected.arch) continue;
-      const asset = assets.find(a => dl.pattern.test(a.name));
-      if (asset) {
-        const a = document.createElement('a');
-        a.href = asset.browser_download_url;
-        a.innerHTML = `<span class="os-icon">${dl.icon}</span>${dl.label}`;
-        a.setAttribute('data-goatcounter-click', `dl-other-${dl.os}-${dl.arch}`);
-        a.setAttribute('data-goatcounter-title', `Other platform download: ${dl.label}`);
-        grid.appendChild(a);
-      }
-    }
-
-    // Add source option
-    const src = document.createElement('a');
-    src.href = `https://github.com/${REPO}`;
-    src.innerHTML = '<span class="os-icon">&#128736;</span>Build from source';
-    src.setAttribute('data-goatcounter-click', 'dl-source');
-    src.setAttribute('data-goatcounter-title', 'Build from source');
-    grid.appendChild(src);
-
-    // Update version badge (hero) and topbar pill
-    document.getElementById('version-badge').textContent = version;
-    const tbv = document.getElementById('topbar-version');
-    if (tbv) tbv.textContent = `· ${version} · build OK`;
-
-    // Update star count
-    try {
-      const repoRes = await fetch(`https://api.github.com/repos/${REPO}`);
-      const repoData = await repoRes.json();
-      const stars = repoData.stargazers_count;
-      document.getElementById('star-badge').textContent = `\u2733 ${stars} stars`;
-    } catch {}
-
+    releaseState = await fetchAssets();
   } catch (e) {
     const btn = document.getElementById('primary-download');
     btn.href = `https://github.com/${REPO}/releases/latest`;
     document.getElementById('os-name').textContent = 'your platform';
     document.getElementById('os-detail').textContent = 'View releases on GitHub';
+    return;
   }
+
+  renderDownloadCard(detected.os, detected.arch, false);
+  wirePlatformBadges();
+
+  // Star count is best-effort and independent of the download card; tolerate a
+  // rate-limited response without wiping the existing badge text.
+  try {
+    const repoRes = await fetch(`https://api.github.com/repos/${REPO}`);
+    const repoData = await repoRes.json();
+    if (typeof repoData.stargazers_count === 'number') {
+      document.getElementById('star-badge').textContent = `✳ ${repoData.stargazers_count} stars`;
+    }
+  } catch {}
 }
 
 // Load the changelog independently of the releases API. CHANGELOG.md comes
