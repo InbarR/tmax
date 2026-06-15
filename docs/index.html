@@ -1184,7 +1184,12 @@ function renderDownloadCard(os, arch, isSelected) {
     btn.setAttribute('data-goatcounter-title', 'Primary download: releases page (fallback)');
   }
 
-  document.getElementById('mac-note').style.display = (os === 'macOS') ? 'block' : 'none';
+  // Show the macOS "damaged / can't be opened" bypass note whenever a macOS
+  // build is downloadable - not just when macOS is the detected/selected
+  // platform. A Windows/Linux visitor often grabs the Mac build to hand to
+  // someone else, and needs the xattr workaround regardless of their own OS.
+  const hasMacBuild = assets.some(a => /\.dmg$|darwin.*\.zip$/i.test(a.name));
+  document.getElementById('mac-note').style.display = hasMacBuild ? 'block' : 'none';
 
   // Other platforms (rebuilt each render so switching platforms is clean).
   const grid = document.getElementById('other-downloads');
