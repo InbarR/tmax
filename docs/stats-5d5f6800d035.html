@@ -363,10 +363,14 @@ function renderTimeline() {
   // shows one column per bucket (e.g. one bar per day).
   const bucketed = bucketSnapshots(zoomedHistory, timelineInterval);
 
-  // Sum INSTALL downloads per snapshot per stacking-key. Excludes:
-  //  - RELEASES / RELEASES-x64 / RELEASES-arm64 metadata files
-  //  - .nupkg files (Squirrel auto-update fetches, not new installs)
-  // The stacking key is either the release tag or the platform, per the user toggle.
+  // Sum RAW downloads per snapshot per stacking-key. This chart counts every
+  // asset download (matching the per-release detail cards / "N downloads"),
+  // INCLUDING macOS .zip and Windows .nupkg auto-update fetches - otherwise a
+  // brand-new release whose volume is mostly auto-updates (e.g. v1.11.0, where
+  // ~1,400 of ~1,600 downloads are the macOS update .zip) shows as a sliver.
+  // Only RELEASES* update-channel metadata files are excluded (not real app
+  // downloads). The headline "downloads vs updates" split and the per-version
+  // install chart still use the install-only definition via IS_UPDATE.
   const series = new Map(); // key (tag or platform) -> [{t, count}]
   for (const snap of bucketed) {
     const t = new Date(snap.t).getTime();
@@ -375,7 +379,6 @@ function renderTimeline() {
     for (const [tag, assets] of Object.entries(snap.releases)) {
       for (const [name, n] of Object.entries(assets)) {
         if (IS_META(name)) continue;
-        if (IS_UPDATE(name)) continue;
         const key = timelineStack === 'platform' ? platformOf(name) : tag;
         perKey.set(key, (perKey.get(key) || 0) + n);
       }
@@ -430,8 +433,7 @@ function renderTimeline() {
     const perKey = new Map();
     for (const [tag, assets] of Object.entries(snap.releases)) {
       for (const [name, n] of Object.entries(assets)) {
-        if (IS_META(name)) continue;
-        if (IS_UPDATE(name)) continue;
+        if (IS_META(name)) continue; // raw downloads (incl. updates); see series above
         const key = timelineStack === 'platform' ? platformOf(name) : tag;
         perKey.set(key, (perKey.get(key) || 0) + n);
       }
