@@ -475,9 +475,31 @@ function renderTimeline() {
     // cumulative: activity within window is end - baseline
     return Math.max(0, points[points.length - 1].count - baselineFor(key, points));
   };
-  const ranked = Array.from(series.entries())
-    .sort(([ka, a], [kb, b]) => activity(kb, b) - activity(ka, a))
-    .slice(0, timelineStack === 'platform' ? 10 : 5);
+  const sorted = Array.from(series.entries())
+    .sort(([ka, a], [kb, b]) => activity(kb, b) - activity(ka, a));
+  const cap = timelineStack === 'platform' ? 10 : 5;
+  let ranked;
+  if (timelineStack === 'platform') {
+    ranked = sorted.slice(0, cap);
+  } else {
+    // Always surface the newest release, even when its activity is low. A
+    // release that is only hours old - and whose macOS auto-update .zip
+    // downloads are excluded as updates - can have far fewer counted installs
+    // than releases that have been out for weeks, so pure activity ranking
+    // hides exactly the release people most want to track (e.g. v1.11.0 right
+    // after launch). Pin the highest-semver tag, then fill the rest by activity.
+    const sem = t => String(t).replace(/^v/, '').split(/[.-]/).map(n => parseInt(n, 10) || 0);
+    const newer = (a, b) => { const A = sem(a), B = sem(b); for (let i = 0; i < 3; i++) { if ((A[i] || 0) !== (B[i] || 0)) return (A[i] || 0) - (B[i] || 0); } return 0; };
+    let latestTag = null;
+    for (const [k] of series) { if (latestTag === null || newer(k, latestTag) > 0) latestTag = k; }
+    const latestEntry = latestTag ? sorted.find(([k]) => k === latestTag) : null;
+    ranked = latestEntry ? [latestEntry] : [];
+    for (const e of sorted) {
+      if (ranked.length >= cap) break;
+      if (latestEntry && e[0] === latestTag) continue;
+      ranked.push(e);
+    }
+  }
 
   const pad = { top: 20, right: 16, bottom: 80, left: 40 };
   const cw = W - pad.left - pad.right;
@@ -639,7 +661,10 @@ function renderTimeline() {
     else spanLabel = ` Span: ${Math.round(minutes / (60 * 24) * 10) / 10} days.`;
   }
   const bucketCountLabel = timelineInterval === 'all' ? '' : ` → ${bucketed.length} bar(s) ${intervalLabel}`;
-  document.getElementById('timelineNote').textContent = `${timelineHistory.length} snapshot(s)${bucketCountLabel}, ${modeLabel}. Top 5 releases by activity in window.${spanLabel}${hintIfSingle}`;
+  const rankLabel = timelineStack === 'platform'
+    ? 'Stacked by platform.'
+    : 'Latest release + top releases by activity in window.';
+  document.getElementById('timelineNote').textContent = `${timelineHistory.length} snapshot(s)${bucketCountLabel}, ${modeLabel}. ${rankLabel}${spanLabel}${hintIfSingle}`;
 }
 
 function renderDiff() {
