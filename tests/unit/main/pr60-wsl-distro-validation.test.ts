@@ -1,11 +1,11 @@
-import { test, expect } from '@playwright/test';
-import { isValidWslDistro } from '../../src/main/utils/security-guards';
+import { describe, test, expect } from 'vitest';
+import { isValidWslDistro } from '../../../src/main/utils/security-guards';
 
 // Regression tests for PR #60 — confine FILE_READ/FILE_LIST by validating
 // WSL distro names. Invalid distro names could be used to escape the
 // intended path translation.
 
-test.describe('isValidWslDistro (PR #60)', () => {
+describe('isValidWslDistro (PR #60)', () => {
   test('accepts standard distro names', () => {
     expect(isValidWslDistro('Ubuntu')).toBe(true);
     expect(isValidWslDistro('Ubuntu-22.04')).toBe(true);

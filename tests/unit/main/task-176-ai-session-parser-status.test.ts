@@ -3,17 +3,16 @@
 //
 // These are pure-function tests against the parsers; we write fake JSONL
 // files and assert that the parser-returned status reflects what the
-// session is actually doing. Playwright's test runner is just being used
-// for assertion sugar (matching the rest of the suite) - no Electron.
-import { test, expect } from '@playwright/test';
+// session is actually doing - no Electron.
+import { describe, test, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
   parseSessionEvents,
   clearParserCache,
-} from '../../src/main/copilot-events-parser';
-import { parseClaudeCodeSession } from '../../src/main/claude-code-events-parser';
+} from '../../../src/main/copilot-events-parser';
+import { parseClaudeCodeSession } from '../../../src/main/claude-code-events-parser';
 
 function writeJsonl(filePath: string, lines: Record<string, unknown>[]): void {
   fs.writeFileSync(filePath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
@@ -23,7 +22,7 @@ function tmpJsonl(name: string): string {
   return path.join(os.tmpdir(), `tmax-test-${name}-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`);
 }
 
-test.describe('Copilot CLI parser - pendingToolCalls + staleness (GH #118)', () => {
+describe('Copilot CLI parser - pendingToolCalls + staleness (GH #118)', () => {
   test('assistant.turn_end with pending tools resets pendingToolCalls and unsticks executingTool', () => {
     const file = tmpJsonl('copilot-pending');
     const now = new Date().toISOString();
@@ -105,7 +104,7 @@ test.describe('Copilot CLI parser - pendingToolCalls + staleness (GH #118)', () 
   });
 });
 
-test.describe('Claude Code parser - awaitingInput clear (GH #118)', () => {
+describe('Claude Code parser - awaitingInput clear (GH #118)', () => {
   test('progress event after end_turn clears awaitingInput', () => {
     const file = tmpJsonl('claude-progress');
     const now = new Date().toISOString();

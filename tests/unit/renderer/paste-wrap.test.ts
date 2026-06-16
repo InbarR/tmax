@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import { prepareClipboardPaste } from '../../src/renderer/utils/paste';
+import { describe, test, expect } from 'vitest';
+import { prepareClipboardPaste } from '../../../src/renderer/utils/paste';
 
 // Pure-function regression test for TASK-28. Earlier paste-related specs
 // (issue-72/73, detached-double-paste, double-paste mouse-reporting) only
@@ -8,7 +8,7 @@ import { prepareClipboardPaste } from '../../src/renderer/utils/paste';
 // reliably in offscreen e2e windows. By extracting the wrap into a pure
 // function we can lock the behaviour down without launching Electron.
 
-test.describe('prepareClipboardPaste (TASK-28)', () => {
+describe('prepareClipboardPaste (TASK-28)', () => {
   test('with bracketed paste enabled, payload is wrapped in CSI 200~ / 201~', () => {
     const out = prepareClipboardPaste('hello\nworld', true);
     expect(out).toBe('\x1b[200~hello\nworld\x1b[201~');

@@ -34,6 +34,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Run unit tests
+        run: npm run test:unit
+
       - name: Package tmax for e2e
         run: npm run package
 
