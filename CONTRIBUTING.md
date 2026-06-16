@@ -22,7 +22,7 @@ For larger ideas, open an issue first to discuss the shape of the change before 
 2. Set up the dev environment (see [Building from Source](README.md#building-from-source)) and run `npm start` to verify the app launches.
 3. Make your change. Keep PRs focused - one feature or fix per PR.
 4. **Cross-platform compatibility is required.** tmax ships on Windows, macOS, and Linux. Use `isMac ? event.metaKey : event.ctrlKey` for primary modifiers, `formatKeyForPlatform()` for shortcut text in the UI, and avoid hardcoded paths or shell assumptions. See [`CLAUDE.md`](CLAUDE.md) for the full guidelines.
-5. Run the fast unit suite with `npm test`; run the Electron e2e suite with `npm run test:e2e` for user-visible app behavior. Add unit tests under `tests/unit/` for pure logic and Playwright specs under `tests/e2e/` for UI/Electron flows.
+5. Run the fast unit suite with `npm test`; run `npm run test:integration` for filesystem/git/CLI behavior; run the Electron e2e suite with `npm run test:e2e` for user-visible app behavior. Add unit tests under `tests/unit/` for pure logic, integration tests under `tests/integration/` for external boundaries, and Playwright specs under `tests/e2e/` for UI/Electron flows.
 6. Open the PR with a description of what changed and why, plus any UI screenshots.
 
 ## Code style
