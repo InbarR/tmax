@@ -1640,6 +1640,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // input can opt back in. term.modes.mouseTrackingMode is the public
     // xterm 5.x API; an earlier _core.coreMouseService probe returned
     // undefined through the TS facade and made the heuristic unreliable.
+    let lastWheelDiagAt = 0;
     term.attachCustomWheelEventHandler((e: WheelEvent): boolean => {
       if (e.shiftKey) return true;
       // TASK-179: Ink-based TUIs (Claude Code, Copilot CLI) render their
@@ -1655,10 +1656,32 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       // so the user navigates xterm's buffer.
       const tracking = term.modes.mouseTrackingMode;
       const buf = term.buffer.active;
+      // Diagnostic (throttled to 1/s, no PII): records which branch the wheel
+      // takes plus pane state, so non-deterministic "mouse scroll doesn't work"
+      // reports can be pinned to forward-to-PTY vs scroll-own-buffer. Logs only
+      // modes/counts/flags - never buffer or selection content.
+      const logWheel = (path: string) => {
+        const now = Date.now();
+        if (now - lastWheelDiagAt < 1000) return;
+        lastWheelDiagAt = now;
+        const inst = useTerminalStore.getState().terminals.get(terminalId);
+        window.terminalAPI.diagLog('renderer:wheel', {
+          terminalId,
+          path,
+          tracking,
+          bufferType: buf.type,
+          baseY: buf.baseY,
+          viewportY: buf.viewportY,
+          rows: term.rows,
+          deltaDir: e.deltaY === 0 ? 0 : (e.deltaY > 0 ? 1 : -1),
+          aiPane: !!(inst?.aiSessionId || inst?.aiProcessKind),
+        });
+      };
       if (tracking !== 'none' && buf.baseY === 0) {
         // Let xterm's native handler forward the wheel as a mouse-
         // button report. xterm WON'T scroll its own viewport because
         // mouse tracking is on - it just encodes and writes to the PTY.
+        logWheel('forward-to-pty');
         return true;
       }
       // Normal path: scrollLines moves xterm's ydisp via the buffer
@@ -1676,7 +1699,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         ? 0
         : (linesRaw > 0 ? Math.max(1, Math.round(linesRaw)) : Math.min(-1, Math.round(linesRaw)));
       if (lines !== 0) {
+        logWheel('scrollLines');
         try { term.scrollLines(lines); } catch { /* term disposed */ }
+      } else {
+        logWheel('noop-zero-lines');
       }
       return false;
     });
@@ -2373,6 +2399,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         // rather than our own mouseTrackingOn flag: after a detach/reattach
         // the flag can be out of sync with xterm's real mouse mode, but
         // "drag with no resulting selection" is the true signal either way.
+        if (wasDrag) {
+          // Diagnostic (no PII): records the inputs that decide whether a drag
+          // produces a selection - nativeSelection (did xterm make one),
+          // aiPane, buffer type, mouse tracking. No coordinates or text, so we
+          // can pin down "selection doesn't work" without leaking content.
+          const dInst = useTerminalStore.getState().terminals.get(terminalId);
+          window.terminalAPI.diagLog('renderer:drag-select', {
+            terminalId,
+            nativeSelection: term.hasSelection(),
+            aiPane: !!(dInst?.aiSessionId || dInst?.aiProcessKind),
+            bufferType: term.buffer.active.type,
+            tracking: term.modes.mouseTrackingMode,
+          });
+        }
         if (wasDrag && !term.hasSelection()) {
           const startCell = pixelToCell(dragStartPos.x, dragStartPos.y);
           const endCell = pixelToCell(e.clientX, e.clientY);
