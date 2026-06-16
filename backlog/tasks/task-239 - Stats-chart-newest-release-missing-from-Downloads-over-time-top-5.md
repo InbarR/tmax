@@ -4,7 +4,7 @@ title: 'Stats chart: newest release missing from ''Downloads over time'' top-5'
 status: Done
 assignee: []
 created_date: '2026-06-15 06:43'
-updated_date: '2026-06-15 06:43'
+updated_date: '2026-06-16 13:08'
 labels: []
 dependencies: []
 ---
@@ -22,6 +22,14 @@ On the stats page, the latest release (v1.11.0) was absent from the 'Downloads o
 - [x] #3 Full (unzoomed) view unaffected for releases present at first snapshot
 <!-- AC:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Follow-ups (still latest release not visible after first fix):
+- Pin the latest (highest-semver) release into the timeline legend so it always shows, then fill remaining slots by activity (commit 92bbd71).
+- Per user decision, the Downloads-over-time chart now counts RAW downloads (only RELEASES* metadata excluded), so v1.11.0 reflects its true ~1,600 volume instead of ~33 installs after the macOS update-.zip exclusion (commit 1aee84f). Headline installs-vs-updates split and the per-version install chart still use the install-only definition.
+<!-- SECTION:NOTES:END -->
+
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
@@ -36,4 +44,6 @@ Verification:
 - Replayed live download-history.json over the screenshot's zoom window (06/05->06/15). Old ranking reproduced the bug exactly (top-5: v1.10.0, v1.10.1, v1.9.3, v1.9.1, v1.9.2 - matches the screenshot legend); new ranking promotes v1.11.0 from rank #21 to #4.
 
 Note: v1.11.0's headline 1,146 downloads is dominated by the macOS portable .zip (815) and .nupkg fetches, which the chart excludes by design as auto-updates (task-169). Its real in-window install count is 33; the fix only corrects ranking, not the exclusion.
+
+Follow-ups (same goal): also pinned the latest release into the legend (92bbd71) and switched the Downloads-over-time chart to count raw downloads incl. auto-updates (1aee84f), so v1.11.0 now appears with its true ~1,600 volume instead of a ~33 sliver. All on main.
 <!-- SECTION:FINAL_SUMMARY:END -->
