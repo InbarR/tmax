@@ -410,15 +410,15 @@ const StatusBar: React.FC = () => {
     { text: 'Right-click an AI session in the sidebar → 📖 View summary.', ai: true },
     { text: 'Hover the pane title or its tab for a quick session summary (opener, branch, activity).', ai: true },
     { text: 'Pin AI sessions to the top with the 📌 button or right-click menu.', ai: true },
-    { text: 'Ctrl+Shift+K opens the prompts history for the focused pane.' },
-    { text: 'Ctrl+Shift+Y searches every pane\'s prompts and jumps to the match.' },
-    { text: 'Ctrl+Shift+G jumps to a terminal by name.' },
-    { text: 'Ctrl+Shift+J shows pane hints — press a letter to jump to that pane.' },
-    { text: 'Ctrl+T opens a new terminal; Ctrl+Shift+W closes the focused one.' },
-    { text: 'Ctrl+Shift+A toggles broadcast — typing goes to every tiled pane.' },
-    { text: 'Ctrl+Shift+B hides the tab bar to save vertical space.' },
-    { text: 'Ctrl+Shift+F cycles view modes: split / focus / grid.' },
-    { text: 'Ctrl+Shift+L cycles grid column count.' },
+    { text: `${formatKeyForPlatform('Ctrl+Shift+K')} opens the prompts history for the focused pane.` },
+    { text: `${formatKeyForPlatform('Ctrl+Shift+Y')} searches every pane's prompts and jumps to the match.` },
+    { text: `${formatKeyForPlatform('Ctrl+Shift+G')} jumps to a terminal by name.` },
+    { text: `${formatKeyForPlatform('Ctrl+Shift+J')} shows pane hints — press a letter to jump to that pane.` },
+    { text: `${formatKeyForPlatform('Ctrl+T')} opens a new terminal; ${formatKeyForPlatform('Ctrl+Shift+W')} closes the focused one.` },
+    { text: `${formatKeyForPlatform('Ctrl+Shift+A')} toggles broadcast — typing goes to every tiled pane.` },
+    { text: `${formatKeyForPlatform('Ctrl+Shift+B')} hides the tab bar to save vertical space.` },
+    { text: `${formatKeyForPlatform('Ctrl+Shift+F')} cycles view modes: split / focus / grid.` },
+    { text: `${formatKeyForPlatform('Ctrl+Shift+L')} cycles grid column count.` },
     { text: 'Ctrl + mouse wheel zooms the focused terminal.' },
     { text: 'Double-click a pane title to rename it.' },
     { text: 'Hover a pane title → ⋯ menu has Float, Hide, Diff and more.' },
@@ -575,7 +575,7 @@ const StatusBar: React.FC = () => {
           <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleViewMode()}
-            title="Toggle view mode (Ctrl+Shift+F)"
+            title={`Toggle view mode (${formatKeyForPlatform('Ctrl+Shift+F')})`}
           >
             &#9638; {viewMode === 'focus' ? 'Focus' : viewMode === 'grid' ? (gridColumns ? `Grid ${gridColumns}col` : 'Grid') : 'Split'}
           </button>
@@ -583,7 +583,7 @@ const StatusBar: React.FC = () => {
             <button
               className="status-mode-btn status-broadcast-active"
               onClick={() => useTerminalStore.getState().toggleBroadcastMode()}
-              title="Broadcast is on - click to disable (Ctrl+Shift+A)"
+              title={`Broadcast is on - click to disable (${formatKeyForPlatform('Ctrl+Shift+A')})`}
             >
               &#128227; Broadcast ON
             </button>
@@ -661,7 +661,7 @@ const StatusBar: React.FC = () => {
           <button
             className="status-help-btn"
             onClick={() => useTerminalStore.getState().toggleCommandPalette()}
-            title="Show command palette (Ctrl+Shift+P)"
+            title={`Show command palette (${formatKeyForPlatform('Ctrl+Shift+P')})`}
           >
             &#9776;
           </button>
@@ -739,7 +739,7 @@ const StatusBar: React.FC = () => {
               title="Search every pane's AI prompt history and jump to the match"
             >
               🔍 Search prompts
-              <span className="context-menu-shortcut">Ctrl+Shift+Y</span>
+              <span className="context-menu-shortcut">{formatKeyForPlatform('Ctrl+Shift+Y')}</span>
             </button>
             <button
               className="context-menu-item"
@@ -750,7 +750,7 @@ const StatusBar: React.FC = () => {
               title="Type into every tiled pane at once"
             >
               📢 Broadcast typing{broadcastMode ? ' ✓' : ''}
-              <span className="context-menu-shortcut">Ctrl+Shift+A</span>
+              <span className="context-menu-shortcut">{formatKeyForPlatform('Ctrl+Shift+A')}</span>
             </button>
             <button
               className="context-menu-item"
@@ -761,7 +761,7 @@ const StatusBar: React.FC = () => {
               title="Auto-assign a color to every tab based on its cwd"
             >
               🎨 Tab colors{hasAnyColor ? ' ✓' : ''}
-              <span className="context-menu-shortcut">Ctrl+Shift+O</span>
+              <span className="context-menu-shortcut">{formatKeyForPlatform('Ctrl+Shift+O')}</span>
             </button>
             <div className="context-menu-separator" />
             <button

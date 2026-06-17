@@ -4,6 +4,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { useTerminalStore, findSessionById } from '../state/terminal-store';
 import { confirmDialog } from './AppDialog';
+import { formatKeyForPlatform } from '../utils/platform';
 import type { BacklogTask } from '../../shared/backlog-types';
 import '../styles/backlog-board.css';
 
@@ -1503,7 +1504,7 @@ const NewTaskDialog: React.FC<{
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
             onPaste={(e) => void onDescPaste(e)}
-            placeholder="Describe the task (optional). Paste an image to attach it. Ctrl+Enter to save."
+            placeholder={`Describe the task (optional). Paste an image to attach it. ${formatKeyForPlatform('Ctrl+Enter')} to save.`}
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void save(); } }}
           />
         </div>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTerminalStore } from '../state/terminal-store';
+import { formatKeyForPlatform } from './platform';
 
 // Regex matching file paths ending in .md.
 //
@@ -67,7 +68,7 @@ export function renderWithMdLinks(text: string, cwd?: string): React.ReactNode {
             });
           }
         }}
-        title="Ctrl+Click to preview"
+        title={`${formatKeyForPlatform('Ctrl+Click')} to preview`}
       >
         {rawPath}
       </span>

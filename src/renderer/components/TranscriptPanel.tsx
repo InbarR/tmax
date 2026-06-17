@@ -3,6 +3,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { useTerminalStore } from '../state/terminal-store';
 import { findSessionById } from '../state/terminal-store';
+import { formatKeyForPlatform } from '../utils/platform';
 
 interface Msg { role: 'user' | 'assistant'; text: string; time: number }
 
@@ -293,7 +294,7 @@ const TranscriptPanel: React.FC = () => {
           <button
             className={`transcript-search-toggle${searchOpen ? ' active' : ''}`}
             onClick={() => setSearchOpen((v) => !v)}
-            title="Search transcript (Ctrl+F)"
+            title={`Search transcript (${formatKeyForPlatform('Ctrl+F')})`}
             aria-label="Search transcript"
           >&#128269;</button>
         )}

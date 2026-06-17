@@ -279,7 +279,7 @@ const DiagnosticsOverlay: React.FC<DiagnosticsOverlayProps> = ({ terminalId, dia
           <button className="terminal-diag-copy-btn" onClick={() => window.terminalAPI.clipboardWrite(logPath)} title="Copy path">⧉</button>
         </div>
       )}
-      <div className="terminal-diag-hint">Ctrl+Shift+` to close · refreshes every 500ms</div>
+      <div className="terminal-diag-hint">{formatKeyForPlatform('Ctrl+Shift+`')} to close · refreshes every 500ms</div>
     </div>
   );
 };
@@ -3278,7 +3278,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               className={`terminal-status-dot ${processStatus}`}
               title={processStatus === 'active' ? 'Active' : processStatus === 'exited-error' ? 'Exited with error' : processStatus === 'idle' ? 'Idle' : 'Exited'}
             />
-            <span className="pane-close-x" title="Close pane (Ctrl+Shift+W)">✕</span>
+            <span className="pane-close-x" title={`Close pane (${formatKeyForPlatform('Ctrl+Shift+W')})`}>✕</span>
           </div>
           {paneMode === 'floating' && (
             <span
@@ -3453,25 +3453,25 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               setPaneMenuPos(null);
               setRenameValue(title || '');
               setIsRenamingPane(true);
-            }}>✏️ Rename pane <span className="context-menu-shortcut">Ctrl+Shift+R</span></button>
+            }}>✏️ Rename pane <span className="context-menu-shortcut">{formatKeyForPlatform('Ctrl+Shift+R')}</span></button>
             <button className="context-menu-item" onClick={() => {
               setPaneMenuPos(null);
               useTerminalStore.getState().refreshTerminal(terminalId);
-            }}>🔄 Refresh pane <span className="context-menu-shortcut">Ctrl+Alt+R</span></button>
+            }}>🔄 Refresh pane <span className="context-menu-shortcut">{formatKeyForPlatform('Ctrl+Alt+R')}</span></button>
             <button className="context-menu-item" onClick={() => {
               setPaneMenuPos(null);
               useTerminalStore.getState().replaceTerminal(terminalId);
-            }}>♻️ New terminal in place <span className="context-menu-shortcut">Ctrl+Alt+N</span></button>
+            }}>♻️ New terminal in place <span className="context-menu-shortcut">{formatKeyForPlatform('Ctrl+Alt+N')}</span></button>
             {aiSessionId && (
               <button className="context-menu-item" onClick={() => {
                 setPaneMenuPos(null);
                 useTerminalStore.getState().showPromptsForTerminal(terminalId);
-              }}>💬 Show prompts <span className="context-menu-shortcut">Ctrl+Shift+K</span></button>
+              }}>💬 Show prompts <span className="context-menu-shortcut">{formatKeyForPlatform('Ctrl+Shift+K')}</span></button>
             )}
             <button className="context-menu-item" onClick={() => {
               setPaneMenuPos(null);
               useTerminalStore.getState().openPromptComposer(terminalId);
-            }}>📝 Prompt Editor <span className="context-menu-shortcut">Ctrl+Alt+E</span></button>
+            }}>📝 Prompt Editor <span className="context-menu-shortcut">{formatKeyForPlatform('Ctrl+Alt+E')}</span></button>
             {aiSessionId && (
               <button className="context-menu-item" onClick={() => {
                 setPaneMenuPos(null);
@@ -3505,7 +3505,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               }
             }}>
               {paneMode === 'floating' ? '↩️ Restore to grid' : '🪟 Float pane'}
-              <span className="context-menu-shortcut">Ctrl+Shift+U</span>
+              <span className="context-menu-shortcut">{formatKeyForPlatform('Ctrl+Shift+U')}</span>
             </button>
             {/* Detach-to-window removed: detaching left panes with broken
                 scroll/selection (alt-buffer + mouse-tracking state did not
@@ -3572,7 +3572,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             <button className="context-menu-item" onClick={() => {
               setPaneMenuPos(null);
               useTerminalStore.getState().moveToDormant(terminalId);
-            }}>👁 Hide pane <span className="context-menu-shortcut">Ctrl+Shift+H</span></button>
+            }}>👁 Hide pane <span className="context-menu-shortcut">{formatKeyForPlatform('Ctrl+Shift+H')}</span></button>
             {isWorkspacesModeForMenu && (
               <>
                 <div className="context-menu-separator" />
@@ -3618,7 +3618,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             <button className="context-menu-item danger" onClick={() => {
               setPaneMenuPos(null);
               useTerminalStore.getState().closeTerminal(terminalId);
-            }}>🗑 Close pane <span className="context-menu-shortcut">Ctrl+Shift+W</span></button>
+            }}>🗑 Close pane <span className="context-menu-shortcut">{formatKeyForPlatform('Ctrl+Shift+W')}</span></button>
             </>
             )}
           </div>
@@ -3825,7 +3825,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           )}
           <button
             className="terminal-pane-latest-prompt-btn"
-            title="Show all prompts (Ctrl+Shift+K)"
+            title={`Show all prompts (${formatKeyForPlatform('Ctrl+Shift+K')})`}
             onClick={(e) => {
               e.stopPropagation();
               useTerminalStore.getState().showPromptsForTerminal(terminalId);
