@@ -323,7 +323,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   // of workspaces alongside the main overflow menu so the user can pick a
   // destination without losing the parent context. Coords are the right edge
   // of the parent submenu trigger so the panel hangs to the right of it.
-  const [moveToWsSubmenuPos, setMoveToWsSubmenuPos] = useState<{ x: number; y: number } | null>(null);
+  const [moveToWsSubmenuPos, setMoveToWsSubmenuPos] = useState<{ x: number; y: number; anchorRight?: boolean } | null>(null);
   // TASK-170: inline pane-color swatch grid inside the overflow menu.
   // Mirrors the TabContextMenu / WorkspaceTabBar swatch-grid pattern so
   // the three color-picker surfaces stay consistent. Auto-resets when the
@@ -3575,14 +3575,18 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
                   // Anchor submenu alongside the parent menu. Default is
                   // right of the trigger row; if that would overflow the
                   // viewport (parent menu is right-aligned), flip to the
-                  // left side instead. Without the flip the submenu lands
-                  // off-screen and looks like the click did nothing.
+                  // left side instead. When flipping, anchor the submenu's
+                  // RIGHT edge against the trigger's left edge so it stays
+                  // adjacent to 'Move to workspace' regardless of its width
+                  // (a fixed left offset guessed from an estimated width made
+                  // it land detached, far to the left of the menu).
                   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
                   const SUBMENU_W = 240;
-                  const x = r.right + 4 + SUBMENU_W > window.innerWidth
-                    ? Math.max(4, r.left - 4 - SUBMENU_W)
-                    : r.right + 4;
-                  setMoveToWsSubmenuPos({ x, y: r.top });
+                  if (r.right + 4 + SUBMENU_W > window.innerWidth) {
+                    setMoveToWsSubmenuPos({ x: r.left - 4, y: r.top, anchorRight: true });
+                  } else {
+                    setMoveToWsSubmenuPos({ x: r.right + 4, y: r.top });
+                  }
                 }}
                 title="Move this pane into a different workspace"
               >
@@ -3683,7 +3687,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               className="context-menu"
               style={{
                 position: 'fixed',
-                left: moveToWsSubmenuPos.x,
+                ...(moveToWsSubmenuPos.anchorRight
+                  ? { right: Math.max(4, window.innerWidth - moveToWsSubmenuPos.x) }
+                  : { left: moveToWsSubmenuPos.x }),
                 top: moveToWsSubmenuPos.y,
                 zIndex: 1001,
               }}
