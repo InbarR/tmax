@@ -2809,8 +2809,21 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   // Re-fit terminals and re-focus when returning from sleep/lock/idle
   // This wakes up stalled ConPTY processes via the resize signal
   useEffect(() => {
+    // Drop any lingering selection when the window is minimized or loses OS
+    // focus (TASK-247). A native/synthesized xterm selection persists in the
+    // model until the user clicks/types in the pane; on restore, the fit()
+    // and tab-tint refresh() below re-render it, so a selection the user was
+    // "done with" visually resurrects. Explicit copy (Ctrl+C / right-click)
+    // already cleared its own selection by this point, so anything still live
+    // here is uncopied-via-clearing-path and safe to drop.
+    const clearStaleSelection = () => {
+      try { terminalRef.current?.clearSelection(); } catch { /* disposed */ }
+    };
     const handleVisibilityChange = () => {
-      if (document.hidden) return;
+      if (document.hidden) {
+        clearStaleSelection();
+        return;
+      }
       try {
         if (fitAddonRef.current && terminalRef.current) {
           fitAddonRef.current.fit();
@@ -2824,7 +2837,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       } catch { /* terminal may be disposed */ }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', clearStaleSelection);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', clearStaleSelection);
+    };
   }, [isFocused, terminalId]);
 
   // Poll main-process PTY stats when diagnostics overlay is open
