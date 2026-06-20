@@ -1698,6 +1698,28 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       const lines = linesRaw === 0
         ? 0
         : (linesRaw > 0 ? Math.max(1, Math.round(linesRaw)) : Math.min(-1, Math.round(linesRaw)));
+
+      // TASK-240: alternate-scroll-mode parity. An app on the ALTERNATE
+      // screen that is NOT holding the mouse - a pager (less, git log, man),
+      // or an AI CLI / Ink TUI running without mouse tracking - has no xterm
+      // scrollback to move (alt screen pins baseY at 0), so scrollLines below
+      // would be a no-op and the wheel "does nothing". Real terminals (iTerm,
+      // Terminal.app, Windows Terminal) translate the wheel into arrow-key
+      // presses in this situation so the app scrolls; xterm.js implements no
+      // such mode. Translate it here, honoring DECCKM (application cursor
+      // keys) so the app receives the arrow encoding it asked for. The
+      // mouse-tracking case is already handled above (forwarded as a real
+      // mouse report), so this only fires when the app left the mouse alone.
+      if (tracking === 'none' && buf.type === 'alternate' && lines !== 0) {
+        const appCursorKeys = term.modes.applicationCursorKeysMode;
+        const arrow = lines > 0
+          ? (appCursorKeys ? '\x1bOB' : '\x1b[B')   // wheel down -> Down
+          : (appCursorKeys ? '\x1bOA' : '\x1b[A');  // wheel up   -> Up
+        const seq = arrow.repeat(Math.min(Math.abs(lines), 10));
+        try { window.terminalAPI.writePty(terminalId, seq); } catch { /* term disposed */ }
+        return false;
+      }
+
       if (lines !== 0) {
         logWheel('scrollLines');
         try { term.scrollLines(lines); } catch { /* term disposed */ }
@@ -2356,6 +2378,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
 
     const handleLeftMouseDown = (e: MouseEvent) => {
       if (e.button === 0) {
+        // TASK-240: a new left-drag (or click) must start a fresh selection,
+        // exactly like a regular terminal. In an AI CLI pane xterm forwards
+        // the drag to the app (mouse tracking on) and makes no native
+        // selection, so we synthesize one at mouseup below - but that path is
+        // gated on !term.hasSelection(). Once our synthesized selection exists,
+        // hasSelection() is true, so a SECOND drag was silently ignored and the
+        // old selection stuck. The only way to re-select was to clear the old
+        // selection by typing into the prompt (which redraws and drops it) -
+        // exactly the awkward workaround users hit. Clearing here lets the next
+        // drag create a fresh selection. Skip when Shift is held so xterm's
+        // shift-click range-extend still works in plain shells.
+        if (!e.shiftKey && term.hasSelection()) {
+          try { term.clearSelection(); } catch { /* term disposed */ }
+        }
         dragStartPos = { x: e.clientX, y: e.clientY };
       }
     };
