@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { useTerminalStore } from '../state/terminal-store';
@@ -87,6 +87,10 @@ const TranscriptPanel: React.FC = () => {
   const panelRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const sigRef = useRef<string>('');
+  // Tracks which session id has had its initial scroll-to-bottom done. We jump
+  // to the latest message the first time a session's messages land in the DOM,
+  // so opening the transcript on a long chat doesn't dump you at the very top.
+  const initialScrolledForRef = useRef<string | null>(null);
   const close = useCallback(() => useTerminalStore.setState({ transcriptOpen: false }), []);
 
   // ── Search state ──────────────────────────────────────────────────
@@ -116,6 +120,7 @@ const TranscriptPanel: React.FC = () => {
     if (!open || !aiSessionId) { setMsgs(null); return; }
     let cancelled = false;
     sigRef.current = '';
+    initialScrolledForRef.current = null;
     setMsgs(null);
 
     const fetchOnce = (initial: boolean) => {
@@ -137,12 +142,14 @@ const TranscriptPanel: React.FC = () => {
               return;
             }
           }
-          const wasAtBottom = initial || atBottom();
+          const wasAtBottom = atBottom();
           sigRef.current = nextSig;
           setMsgs(next);
-          // Don't fight an active search: if the user is parked on a match,
-          // leave the scroll position where the search put it.
-          if (wasAtBottom && !searchActiveRef.current) scrollToBottom();
+          // On live updates, keep glueing to the bottom if the user was already
+          // there. The *initial* scroll-to-bottom is handled by the layout
+          // effect below, because at this point the new bubbles haven't been
+          // laid out yet and scrollHeight is still ~0 (which lands at the top).
+          if (!initial && wasAtBottom && !searchActiveRef.current) scrollToBottom();
         })
         .catch(() => { if (!cancelled && initial) setMsgs([]); });
     };
@@ -151,6 +158,18 @@ const TranscriptPanel: React.FC = () => {
     const timer = setInterval(() => fetchOnce(false), POLL_MS);
     return () => { cancelled = true; clearInterval(timer); };
   }, [open, aiSessionId, provider]);
+
+  // First-render jump: when a session's messages first hit the DOM, scroll the
+  // body to the bottom so opening the transcript on a long conversation lands
+  // on the most recent message instead of the very first one.
+  useLayoutEffect(() => {
+    if (!open || !aiSessionId || !msgs || msgs.length === 0) return;
+    if (initialScrolledForRef.current === aiSessionId) return;
+    const body = bodyRef.current;
+    if (!body) return;
+    body.scrollTop = body.scrollHeight;
+    initialScrolledForRef.current = aiSessionId;
+  }, [open, aiSessionId, msgs]);
 
   // Escape: close the search bar first if it's open, otherwise close the panel.
   useEffect(() => {
