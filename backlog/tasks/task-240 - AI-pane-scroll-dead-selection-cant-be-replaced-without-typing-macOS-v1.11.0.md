@@ -3,11 +3,11 @@ id: TASK-240
 title: >-
   AI-pane scroll dead + selection can't be replaced without typing (macOS,
   v1.11.0)
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-06-15 07:10'
-updated_date: '2026-06-16 13:11'
+updated_date: '2026-06-20 15:32'
 labels: []
 dependencies: []
 ---
@@ -51,6 +51,8 @@ Fixes: clear an existing selection on left-mousedown (skip when Shift held); tra
 - Scroll fix: added alternate-scroll translation in attachCustomWheelEventHandler - when tracking===none && buffer is alternate, emit Up/Down arrows (SS3 when applicationCursorKeysMode). xterm 5.5 has no DEC 1007.
 - Typecheck: zero new errors (only a pre-existing error line-shifted).
 - Added tests/e2e/task-240-ai-pane-scroll-and-reselect.spec.ts (4 tests). out-e2e is stale (Jun 12) - needs rebuild before running, holding per no-blind-e2e guidance.
+
+Merged to main (merge commit 3c5448e) as code-complete. macOS runtime confirmation still outstanding - closed as shipped-to-main, not Mac-verified.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
