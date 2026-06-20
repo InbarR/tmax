@@ -1,6 +1,7 @@
 import { app, autoUpdater, Notification, BrowserWindow, shell } from 'electron';
 import Store from 'electron-store';
 import { createServer, IncomingMessage, ServerResponse, Server } from 'http';
+import { spawn } from 'node:child_process';
 import { IPC } from '../shared/ipc-channels';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -8,7 +9,6 @@ import os from 'node:os';
 import https from 'node:https';
 
 const GITHUB_REPO = 'InbarR/tmax';
-const UPDATE_SERVER = 'https://update.electronjs.org';
 // Allow overriding for local testing (dev builds only): set TMAX_UPDATE_TEST_URL=http://localhost:9999
 const testUrl = !app.isPackaged ? process.env.TMAX_UPDATE_TEST_URL : undefined;
 const GITHUB_RELEASES_URL = testUrl
@@ -50,6 +50,8 @@ export class VersionChecker {
   private feedServer: Server | null = null;
   // Track pending Linux download so we can call restartAndUpdate later
   private linuxPackagePath: string | null = null;
+  // Track the downloaded macOS .dmg so restartAndUpdate can swap the bundle.
+  private macDmgPath: string | null = null;
 
   constructor(mainWindow: BrowserWindow) {
     this.mainWindow = mainWindow;
@@ -57,9 +59,12 @@ export class VersionChecker {
       status: 'idle',
       current: app.getVersion(),
     };
-    // Native auto-update (Squirrel) on packaged Windows/macOS only
-    this.supportsAutoUpdate = app.isPackaged &&
-      (process.platform === 'win32' || process.platform === 'darwin');
+    // Squirrel native auto-update only works on packaged Windows. macOS
+    // Squirrel.Mac requires an Apple-signed + notarized bundle, which tmax is
+    // not (ad-hoc signed only), so it can never apply an update there - it just
+    // spins "Updating…" forever. macOS instead uses a DMG-swap updater (see
+    // checkMacUpdate / applyMacUpdate). Linux uses manual package download.
+    this.supportsAutoUpdate = app.isPackaged && process.platform === 'win32';
   }
 
   start(): void {
@@ -68,6 +73,8 @@ export class VersionChecker {
     }
     if (this.supportsAutoUpdate) {
       this.setupAutoUpdater();
+    } else if (process.platform === 'darwin' && app.isPackaged) {
+      this.setupMacUpdater();
     } else if (process.platform === 'linux' && app.isPackaged) {
       this.setupLinuxUpdater();
     } else {
@@ -87,11 +94,9 @@ export class VersionChecker {
 
   checkNow(): void {
     if (this.supportsAutoUpdate) {
-      if (process.platform === 'win32') {
-        this.checkWindowsUpdate();
-      } else {
-        this.checkMacUpdate();
-      }
+      this.checkWindowsUpdate();
+    } else if (process.platform === 'darwin' && app.isPackaged) {
+      this.checkMacUpdate();
     } else if (process.platform === 'linux' && app.isPackaged) {
       this.checkLinuxUpdate();
     } else {
@@ -102,6 +107,10 @@ export class VersionChecker {
   restartAndUpdate(): void {
     if (this.supportsAutoUpdate && this.updateInfo.status === 'downloaded') {
       autoUpdater.quitAndInstall();
+    } else if (process.platform === 'darwin' && this.macDmgPath && this.updateInfo.status === 'downloaded') {
+      // macOS: swap the .app bundle from the downloaded DMG via a detached
+      // helper that outlives this process (see applyMacUpdate).
+      this.applyMacUpdate();
     } else if (process.platform === 'linux' && this.linuxPackagePath) {
       // On Linux, open the folder containing the downloaded package
       shell.showItemInFolder(this.linuxPackagePath);
@@ -152,26 +161,17 @@ export class VersionChecker {
       this.updateInfo = { ...this.updateInfo, status: 'error', error: err.message };
       this.broadcastUpdate();
       this.closeFeedServer();
-      // On macOS, try the GitHub API fallback before giving up to manual download
-      if (process.platform === 'darwin') {
-        this.checkMacUpdateFallback();
-      } else {
-        this.checkGitHub();
-      }
+      // Squirrel is Windows-only now; fall back to the GitHub manual-download
+      // notification so the user still learns an update exists.
+      this.checkGitHub();
     });
 
-    if (process.platform === 'win32') {
-      this.timeoutId = setTimeout(() => {
-        this.checkWindowsUpdate();
-        this.intervalId = setInterval(() => this.checkWindowsUpdate(), CHECK_INTERVAL_MS);
-      }, INITIAL_DELAY_MS);
-    } else {
-      // macOS
-      this.timeoutId = setTimeout(() => {
-        this.checkMacUpdate();
-        this.intervalId = setInterval(() => this.checkMacUpdate(), CHECK_INTERVAL_MS);
-      }, INITIAL_DELAY_MS);
-    }
+    // setupAutoUpdater only runs on packaged Windows (Squirrel). macOS schedules
+    // its own DMG-swap checker in setupMacUpdater().
+    this.timeoutId = setTimeout(() => {
+      this.checkWindowsUpdate();
+      this.intervalId = setInterval(() => this.checkWindowsUpdate(), CHECK_INTERVAL_MS);
+    }, INITIAL_DELAY_MS);
   }
 
   // ── Windows: Squirrel update via proper RELEASES file ─────────────────
@@ -296,70 +296,176 @@ export class VersionChecker {
     }
   }
 
-  // ── macOS: update.electronjs.org with GitHub API fallback ─────────────
+  // ── macOS: DMG-swap self-update (no Apple signing required) ────────────
+  //
+  // Squirrel.Mac can't update an ad-hoc-signed app, so we do what the manual
+  // workaround does: download the latest arch-specific .dmg, then on
+  // "Restart & Update" launch a DETACHED helper that waits for tmax to quit,
+  // mounts the DMG, atomically swaps /Applications/tmax.app, clears the
+  // quarantine flag, and relaunches. Detaching is essential - the helper must
+  // outlive the tmax process it is replacing.
 
-  private async checkMacUpdate(): Promise<void> {
-    const feedURL = `${UPDATE_SERVER}/${GITHUB_REPO}/${process.platform}-${process.arch}/${app.getVersion()}`;
-    try {
-      autoUpdater.setFeedURL({ url: feedURL });
-      autoUpdater.checkForUpdates();
-    } catch (err) {
-      console.error('macOS auto-update via update.electronjs.org failed:', err);
-      // Fallback: use GitHub API to find the .zip and serve a JSON feed
-      await this.checkMacUpdateFallback();
-    }
+  private setupMacUpdater(): void {
+    this.timeoutId = setTimeout(() => {
+      this.checkMacUpdate();
+      this.intervalId = setInterval(() => this.checkMacUpdate(), CHECK_INTERVAL_MS);
+    }, INITIAL_DELAY_MS);
   }
 
-  private async checkMacUpdateFallback(): Promise<void> {
+  private async checkMacUpdate(): Promise<void> {
     try {
       const release = await this.fetchLatestRelease();
       if (!release) return;
 
       const tagName = release.tag_name;
-      if (this.compareVersions(tagName, app.getVersion()) <= 0) return;
+      const currentVersion = app.getVersion();
+      if (this.compareVersions(tagName, currentVersion) <= 0) return;
+      const latestClean = tagName.replace(/^v/, '');
 
-      // Find the macOS .zip asset for current architecture
-      const arch = process.arch;
-      const zipAsset = release.assets.find(
-        (a) => a.name.endsWith('.zip') && a.name.includes('darwin') && a.name.includes(arch)
-      ) || release.assets.find(
-        (a) => a.name.endsWith('.zip') && a.name.includes('darwin')
-      );
+      // Pick the architecture-specific DMG (fall back to any darwin .dmg).
+      const arch = process.arch; // 'arm64' | 'x64'
+      const dmgAsset = release.assets.find((a) => a.name.endsWith(`${arch}.dmg`))
+        || release.assets.find((a) => a.name.endsWith('.dmg'));
 
-      if (!zipAsset) {
-        this.checkGitHub();
+      if (!dmgAsset) {
+        // No DMG to swap - degrade to a manual "Download" notification.
+        this.updateInfo = {
+          status: 'available',
+          current: currentVersion,
+          latest: latestClean,
+          url: release.html_url,
+          releaseNotes: release.body || undefined,
+        };
+        this.broadcastUpdate();
+        this.showNotification('tmax Update Available', `Version ${latestClean} is available`, latestClean);
         return;
       }
 
-      // Squirrel.Mac expects a JSON response with { url, name?, notes?, pub_date? }
-      this.closeFeedServer();
-      this.feedServer = createServer((_req: IncomingMessage, res: ServerResponse) => {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          url: zipAsset.browser_download_url,
-          name: tagName,
-          notes: release.body || '',
-        }));
-      });
+      // Download the DMG to a temp dir (skip a non-empty existing copy).
+      this.setStatus('downloading');
+      this.updateInfo = { ...this.updateInfo, latest: latestClean };
+      this.broadcastUpdate();
 
-      await new Promise<void>((resolve) => this.feedServer!.listen(0, '127.0.0.1', resolve));
-      const addr = this.feedServer!.address();
-      const port = typeof addr === 'object' && addr ? addr.port : 0;
-      if (!port) {
-        this.closeFeedServer();
-        this.checkGitHub();
-        return;
+      const tmpDir = path.join(os.tmpdir(), 'tmax-update');
+      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+      const destPath = path.join(tmpDir, dmgAsset.name);
+      if (!fs.existsSync(destPath) || fs.statSync(destPath).size === 0) {
+        await this.downloadFile(dmgAsset.browser_download_url, destPath);
       }
 
-      const safetyTimer = setTimeout(() => this.closeFeedServer(), 60_000);
-      this.feedServer.on('close', () => clearTimeout(safetyTimer));
-
-      autoUpdater.setFeedURL({ url: `http://127.0.0.1:${port}`, serverType: 'json' as any });
-      autoUpdater.checkForUpdates();
+      this.macDmgPath = destPath;
+      this.updateInfo = {
+        status: 'downloaded',
+        current: currentVersion,
+        latest: latestClean,
+        url: release.html_url,
+        releaseNotes: release.body || undefined,
+      };
+      this.broadcastUpdate();
+      this.showNotification('tmax Update Ready', `Version ${latestClean} downloaded. Click "Restart & Update" to install.`, latestClean);
     } catch (err) {
-      console.error('macOS fallback update check failed:', err);
+      console.error('macOS update check failed:', err);
+      // Last resort: manual download link via the GitHub notification.
       this.checkGitHub();
     }
+  }
+
+  /**
+   * Replace the running .app with the bundle inside the downloaded DMG, via a
+   * detached helper that survives this process exiting. The swap moves the old
+   * bundle aside first and only deletes it once the new one is in place, so a
+   * failure can never leave tmax.app missing.
+   */
+  private applyMacUpdate(): void {
+    const dmg = this.macDmgPath;
+    if (!dmg || !fs.existsSync(dmg)) {
+      console.error('[update] macOS: no DMG to apply');
+      return;
+    }
+    // Resolve the .app bundle from the executable path:
+    //   /Applications/tmax.app/Contents/MacOS/tmax -> /Applications/tmax.app
+    const exe = app.getPath('exe');
+    const appBundle = path.dirname(path.dirname(path.dirname(exe)));
+    if (!appBundle.endsWith('.app')) {
+      console.error('[update] macOS: could not resolve .app bundle from', exe);
+      return;
+    }
+
+    const scriptPath = path.join(os.tmpdir(), 'tmax-update.sh');
+    const logPath = path.join(os.tmpdir(), 'tmax-update.log');
+    const mountPoint = path.join(os.tmpdir(), 'tmax-update-mnt');
+
+    // Paths are passed as positional args ($1..$4) - nothing is interpolated
+    // into the script body, so there is no shell-injection surface.
+    const script = [
+      '#!/bin/bash',
+      'set -u',
+      'APP="$1"; DMG="$2"; MOUNT="$3"; LOG="$4"',
+      'exec >"$LOG" 2>&1',
+      'echo "[tmax-update] start $(date) APP=$APP"',
+      '# Wait for tmax to fully exit (parent calls app.quit right after us).',
+      'for i in $(seq 1 30); do',
+      '  pgrep -f "$APP/Contents/MacOS/" >/dev/null 2>&1 || break',
+      '  sleep 1',
+      'done',
+      'pkill -f "$APP/Contents/MacOS/" 2>/dev/null || true',
+      'sleep 1',
+      '# Mount the DMG.',
+      'mkdir -p "$MOUNT"',
+      'hdiutil detach "$MOUNT" -quiet 2>/dev/null || true',
+      'if ! hdiutil attach "$DMG" -nobrowse -quiet -mountpoint "$MOUNT"; then',
+      '  echo "[tmax-update] mount failed"; open "$APP"; exit 1',
+      'fi',
+      '# Locate the new .app inside the DMG.',
+      'SRC="$MOUNT/tmax.app"',
+      'if [ ! -d "$SRC" ]; then SRC="$(find "$MOUNT" -maxdepth 1 -name "*.app" -print -quit)"; fi',
+      'if [ -z "$SRC" ] || [ ! -d "$SRC" ]; then',
+      '  echo "[tmax-update] no .app in dmg"; hdiutil detach "$MOUNT" -quiet 2>/dev/null || true; open "$APP"; exit 1',
+      'fi',
+      '# Stage a copy on the same volume so the final swap is a fast rename.',
+      'PARENT="$(dirname "$APP")"',
+      'STAGE="$PARENT/.tmax-update-new"',
+      'BACKUP="$PARENT/.tmax-update-old"',
+      'rm -rf "$STAGE" "$BACKUP"',
+      'if ! cp -R "$SRC" "$STAGE"; then',
+      '  echo "[tmax-update] copy failed"; rm -rf "$STAGE"; hdiutil detach "$MOUNT" -quiet 2>/dev/null || true; open "$APP"; exit 1',
+      'fi',
+      'hdiutil detach "$MOUNT" -quiet 2>/dev/null || true',
+      '# Swap by move - never leave $APP missing; restore on any failure.',
+      'if mv "$APP" "$BACKUP" 2>/dev/null; then',
+      '  if mv "$STAGE" "$APP" 2>/dev/null; then',
+      '    rm -rf "$BACKUP"',
+      '  else',
+      '    echo "[tmax-update] install failed, restoring"; mv "$BACKUP" "$APP" 2>/dev/null || true; rm -rf "$STAGE"; open "$APP"; exit 1',
+      '  fi',
+      'else',
+      '  echo "[tmax-update] cannot replace $APP (permissions?); keeping current"; rm -rf "$STAGE"; open "$APP"; exit 1',
+      'fi',
+      '# Clear quarantine + relaunch.',
+      'xattr -cr "$APP" 2>/dev/null || true',
+      'rm -f "$DMG"',
+      'echo "[tmax-update] done $(date)"',
+      'open "$APP"',
+      '',
+    ].join('\n');
+
+    try {
+      fs.writeFileSync(scriptPath, script, { mode: 0o755 });
+    } catch (err) {
+      console.error('[update] macOS: failed to write updater script', err);
+      return;
+    }
+
+    // Detached + unref so the helper is reparented to launchd and survives the
+    // app quitting. It logs to $LOG itself, so stdio is ignored.
+    const child = spawn('/bin/bash', [scriptPath, appBundle, dmg, mountPoint], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+
+    // Give the helper a moment to start, then quit so it can replace the bundle.
+    setTimeout(() => app.quit(), 600);
   }
 
   // ── Linux: download package and show in folder ────────────────────────
