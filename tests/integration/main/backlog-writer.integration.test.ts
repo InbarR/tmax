@@ -12,14 +12,13 @@ import { initProject, createTask, editTask, archiveTask } from '../../../src/mai
 const isWin = process.platform === 'win32';
 const commandShell = process.env.ComSpec || 'cmd.exe';
 
-function quoteCmdArg(arg: string): string {
-  return /[\s"]/u.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg;
-}
-
 function backlog(cwd: string, args: string[]): string {
   if (isWin) {
-    const command = ['backlog', ...args.map(quoteCmdArg)].join(' ');
-    return execFileSync(commandShell, ['/d', '/s', '/c', command], { cwd, encoding: 'utf-8' });
+    // `backlog` is a .cmd shim on Windows, so it must run via cmd.exe. Pass the
+    // command and its args as separate argv tokens (not a hand-joined, hand-
+    // quoted string) so Node quotes each correctly - a pre-joined string
+    // mangled repeated `--ac "value"` flags into stray positional arguments.
+    return execFileSync(commandShell, ['/d', '/s', '/c', 'backlog', ...args], { cwd, encoding: 'utf-8' });
   }
   return execFileSync('backlog', args, { cwd, encoding: 'utf-8' });
 }
