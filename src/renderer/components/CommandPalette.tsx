@@ -495,6 +495,9 @@ const CommandPalette: React.FC = () => {
           onChange={(e) => { setQuery(e.target.value); setSelectedIndex(0); }}
           onKeyDown={handleKeyDown}
         />
+        <div className="palette-count" aria-live="polite">
+          {filtered.length} {filtered.length === 1 ? 'result' : 'results'}
+        </div>
         <div className="palette-list" ref={listRef}>
           {filtered.map((cmd, index) => {
             const rebindable = actionForCommandId(cmd.id) !== null;

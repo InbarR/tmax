@@ -5172,6 +5172,14 @@ select.settings-input {
   color: var(--text-secondary);
 }
 
+.palette-count {
+  padding: 4px 16px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: right;
+  border-bottom: 1px solid var(--border-color);
+}
+
 .palette-list {
   overflow-y: auto;
   flex: 1;
