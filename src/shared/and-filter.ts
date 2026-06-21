@@ -1,36 +1,68 @@
 /**
- * Shared AND-token filtering used by every search/filter input in the app.
+ * Shared token filtering used by every search/filter input in the app.
  *
- * Users can split a query with the literal word `AND` (case-insensitive,
- * whole-word) to require multiple substrings to all match. Empty / whitespace
- * tokens are dropped, so trailing or duplicate `AND`s don't poison the match.
+ * Grammar (all keywords case-insensitive, whole-word):
+ *   - `AND` separates required substrings - all must match.
+ *       `foo AND bar`  -> haystack must contain "foo" AND "bar"
+ *   - `NOT` (or a leading `-` on a token) negates the following clause - the
+ *     substring must be ABSENT.
+ *       `foo NOT bar`  -> contains "foo" but NOT "bar"
+ *       `NOT bar`      -> excludes anything containing "bar"
+ *       `foo AND -bar` -> contains "foo" but NOT "bar"
+ *
+ * Spaces inside a clause are literal (`foo bar` is the single substring
+ * "foo bar"). Empty / dangling operators are dropped so a trailing `AND` /
+ * `NOT` doesn't poison the match.
  *
  * Examples:
- *   tokenizeAnd("foo bar")          -> ["foo bar"]
- *   tokenizeAnd("foo AND bar")      -> ["foo", "bar"]
- *   tokenizeAnd("Foo And  bar  AND") -> ["foo", "bar"]
+ *   tokenizeAnd("foo bar")        -> [{term:"foo bar", negate:false}]
+ *   tokenizeAnd("foo AND bar")    -> [{term:"foo"}, {term:"bar"}]
+ *   tokenizeAnd("foo NOT bar")    -> [{term:"foo"}, {term:"bar", negate:true}]
  */
-export function tokenizeAnd(query: string): string[] {
+export interface QueryToken {
+  /** substring to test (already lowercased) */
+  term: string;
+  /** when true the substring must be ABSENT for a match */
+  negate: boolean;
+}
+
+export function tokenizeAnd(query: string): QueryToken[] {
   const raw = (query || '').trim();
   if (!raw) return [];
-  return raw
-    .split(/\bAND\b/i)
-    .map((t) => t.trim().toLowerCase())
-    .filter((t) => t.length > 0);
+  // Split on AND / NOT word boundaries, keeping the delimiters so we know which
+  // clauses are negated. A NOT delimiter negates the clause that follows it.
+  const parts = raw.split(/\b(AND|NOT)\b/i);
+  const out: QueryToken[] = [];
+  let negateNext = false;
+  for (const part of parts) {
+    const kw = part.trim().toUpperCase();
+    if (kw === 'AND') { negateNext = false; continue; }
+    if (kw === 'NOT') { negateNext = true; continue; }
+    let t = part.trim();
+    if (!t) continue; // empty segment (e.g. between two operators) - keep flag
+    let negate = negateNext;
+    negateNext = false;
+    // A leading `-` also negates that single clause (`-bar`).
+    if (/^-\S/.test(t)) { negate = true; t = t.slice(1).trim(); }
+    if (!t) continue;
+    out.push({ term: t.toLowerCase(), negate });
+  }
+  return out;
 }
 
 /**
- * Returns true when every token from `tokens` is found as a substring of
- * `haystack`. Pre-lowercase the haystack at the call site if you care about
- * case-insensitivity (tokens are already lowered by tokenizeAnd).
+ * Returns true when every include token is a substring of `haystack` and every
+ * negated (NOT) token is absent. Pre-lowercase the haystack at the call site
+ * (tokens are already lowered by tokenizeAnd).
  *
- * Empty token list matches everything - lets callers drop the early-return
- * for empty queries.
+ * Empty token list matches everything - lets callers drop the early-return for
+ * empty queries.
  */
-export function matchesAllTokens(haystack: string, tokens: string[]): boolean {
+export function matchesAllTokens(haystack: string, tokens: QueryToken[]): boolean {
   if (tokens.length === 0) return true;
-  for (const t of tokens) {
-    if (!haystack.includes(t)) return false;
+  for (const { term, negate } of tokens) {
+    const present = haystack.includes(term);
+    if (negate ? present : !present) return false;
   }
   return true;
 }

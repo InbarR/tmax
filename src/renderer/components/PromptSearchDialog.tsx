@@ -321,13 +321,14 @@ const PromptSearchDialog: React.FC = () => {
     const lower = text.toLowerCase();
     type Span = { start: number; end: number };
     const spans: Span[] = [];
-    for (const t of tokens) {
+    for (const { term, negate } of tokens) {
+      if (negate) continue; // don't highlight excluded (NOT) terms
       let from = 0;
       while (from < text.length) {
-        const idx = lower.indexOf(t, from);
+        const idx = lower.indexOf(term, from);
         if (idx < 0) break;
-        spans.push({ start: idx, end: idx + t.length });
-        from = idx + t.length;
+        spans.push({ start: idx, end: idx + term.length });
+        from = idx + term.length;
       }
     }
     if (spans.length === 0) return text;
