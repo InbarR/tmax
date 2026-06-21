@@ -1,12 +1,12 @@
-import { test, expect } from '@playwright/test';
-import { parseKeybindingsContent, serializeKeybindings } from '../../src/main/keybindings-file';
+import { describe, test, expect } from 'vitest';
+import { parseKeybindingsContent, serializeKeybindings } from '../../../src/main/keybindings-file';
 
 // TASK-39: pure-function tests for the keybindings.json parser. The parser
 // must tolerate `//` line comments, trailing commas, and malformed entries
 // without aborting the whole file - one typo shouldn't lock the user out
 // of all their shortcuts.
 
-test.describe('keybindings.json parser (TASK-39)', () => {
+describe('keybindings.json parser (TASK-39)', () => {
   test('parses a clean array', () => {
     const out = parseKeybindingsContent(JSON.stringify([
       { key: 'Ctrl+T', action: 'createTerminal' },

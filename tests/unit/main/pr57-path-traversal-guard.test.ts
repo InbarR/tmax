@@ -1,12 +1,12 @@
-import { test, expect } from '@playwright/test';
-import { assertNoPathTraversal, isPathWithinRoot } from '../../src/main/utils/security-guards';
+import { describe, test, expect } from 'vitest';
+import { assertNoPathTraversal, isPathWithinRoot } from '../../../src/main/utils/security-guards';
 import * as path from 'path';
 
 // Regression tests for PR #57 — path traversal guard in git-diff-service.
 // The guard was added to readFileContent and getAnnotatedFile to prevent
 // directory traversal attacks (e.g. ../../etc/passwd).
 
-test.describe('isPathWithinRoot (PR #57)', () => {
+describe('isPathWithinRoot (PR #57)', () => {
   test('allows root itself', () => {
     const root = path.resolve('/home/user/project');
     expect(isPathWithinRoot(root, root)).toBe(true);
@@ -37,7 +37,7 @@ test.describe('isPathWithinRoot (PR #57)', () => {
   });
 });
 
-test.describe('assertNoPathTraversal (PR #57)', () => {
+describe('assertNoPathTraversal (PR #57)', () => {
   // Use a real directory as root so path.resolve works correctly on Windows
   const root = process.cwd();
 

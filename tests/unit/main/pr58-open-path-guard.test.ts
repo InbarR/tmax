@@ -1,10 +1,10 @@
-import { test, expect } from '@playwright/test';
-import { isDangerousExtension, DANGEROUS_OPEN_EXTENSIONS } from '../../src/main/utils/security-guards';
+import { describe, test, expect } from 'vitest';
+import { isDangerousExtension, DANGEROUS_OPEN_EXTENSIONS } from '../../../src/main/utils/security-guards';
 
 // Regression tests for PR #58 — restrict shell.openPath to block
 // dangerous executable extensions.
 
-test.describe('isDangerousExtension (PR #58)', () => {
+describe('isDangerousExtension (PR #58)', () => {
   const dangerous = [
     '.exe', '.bat', '.cmd', '.ps1', '.msi', '.com', '.scr', '.pif',
     '.lnk', '.hta', '.vbs', '.vbe', '.jse', '.wsf', '.wsh',
