@@ -1,19 +1,26 @@
-import { test, expect } from '@playwright/test';
+import { describe, test, expect } from 'vitest';
 import { execFileSync } from 'child_process';
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { initProject, createTask, editTask, archiveTask } from '../../src/main/backlog-writer';
+import { initProject, createTask, editTask, archiveTask } from '../../../src/main/backlog-writer';
 
 // TASK-186: the native (no-CLI) write layer must produce files the real
 // backlog.md CLI can still read. These tests write with our code and read
 // back with the actual `backlog` binary to prove format compatibility.
 
 const isWin = process.platform === 'win32';
+const commandShell = process.env.ComSpec || 'cmd.exe';
+
 function backlog(cwd: string, args: string[]): string {
-  // shell:true on win so the .cmd shim resolves; quote whitespace args.
-  const a = isWin ? args.map((x) => (/\s/.test(x) ? `"${x}"` : x)) : args;
-  return execFileSync('backlog', a, { cwd, encoding: 'utf-8', shell: isWin } as any);
+  if (isWin) {
+    // `backlog` is a .cmd shim on Windows, so it must run via cmd.exe. Pass the
+    // command and its args as separate argv tokens (not a hand-joined, hand-
+    // quoted string) so Node quotes each correctly - a pre-joined string
+    // mangled repeated `--ac "value"` flags into stray positional arguments.
+    return execFileSync(commandShell, ['/d', '/s', '/c', 'backlog', ...args], { cwd, encoding: 'utf-8' });
+  }
+  return execFileSync('backlog', args, { cwd, encoding: 'utf-8' });
 }
 function gitInit(cwd: string) {
   execFileSync('git', ['init', '-q'], { cwd });
@@ -22,7 +29,15 @@ function gitInit(cwd: string) {
 }
 
 let cliAvailable = true;
-try { execFileSync('backlog', ['--version'], { shell: isWin } as any); } catch { cliAvailable = false; }
+try {
+  if (isWin) {
+    execFileSync(commandShell, ['/d', '/s', '/c', 'backlog --version'], { stdio: 'ignore' });
+  } else {
+    execFileSync('backlog', ['--version'], { stdio: 'ignore' });
+  }
+} catch {
+  cliAvailable = false;
+}
 
 // This one MUST run with no backlog CLI present - it proves a fresh user with
 // nothing installed can init + create + edit + archive entirely via tmax.
@@ -60,7 +75,7 @@ test('full lifecycle works with no git and without calling the CLI (native only)
 // These exercise the native un-archive / find-anywhere / create-with-description
 // logic added this session. They never call the `backlog` CLI - all assertions
 // read the filesystem directly so they're hermetic and fast.
-test.describe('native un-archive + find-anywhere (no CLI)', () => {
+describe('native un-archive + find-anywhere (no CLI)', () => {
   const fs = require('fs');
   const tasksDir = (d: string) => join(d, 'backlog', 'tasks');
   const archiveDir = (d: string) => join(d, 'backlog', 'archive', 'tasks');
@@ -165,8 +180,7 @@ test.describe('native un-archive + find-anywhere (no CLI)', () => {
   });
 });
 
-test.describe('native backlog writes are CLI-compatible', () => {
-  test.skip(!cliAvailable, 'backlog CLI not on PATH');
+describe.skipIf(!cliAvailable)('native backlog writes are CLI-compatible', () => {
 
   test('native init + create + edit + archive, verified by the real CLI', () => {
     const dir = mkdtempSync(join(tmpdir(), 'tmax-native-'));

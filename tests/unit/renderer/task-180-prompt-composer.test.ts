@@ -1,17 +1,16 @@
 // TASK-180: prompt composer — pure-function tests for the draft map helpers
 // and the bracketed-paste payload Submit emits.
 //
-// Pure tests; Electron is not launched. Mirrors the style of
-// smart-unwrap-on-copy.spec.ts and paste-wrap.spec.ts.
+// Pure tests; Electron is not launched. Mirrors the adjacent clipboard helpers.
 
-import { test, expect } from '@playwright/test';
+import { describe, test, expect } from 'vitest';
 import {
   dropComposerDraft,
   updateComposerDrafts,
-} from '../../src/renderer/utils/prompt-composer';
-import { prepareClipboardPaste } from '../../src/renderer/utils/paste';
+} from '../../../src/renderer/utils/prompt-composer';
+import { prepareClipboardPaste } from '../../../src/renderer/utils/paste';
 
-test.describe('updateComposerDrafts', () => {
+describe('updateComposerDrafts', () => {
   test('non-empty draft stores text under terminalId', () => {
     const out = updateComposerDrafts({}, 't1', 'hello');
     expect(out).toEqual({ t1: 'hello' });
@@ -51,7 +50,7 @@ test.describe('updateComposerDrafts', () => {
   });
 });
 
-test.describe('dropComposerDraft', () => {
+describe('dropComposerDraft', () => {
   test('removes the entry for an existing terminalId', () => {
     const out = dropComposerDraft({ t1: 'hello', t2: 'world' }, 't1');
     expect(out).toEqual({ t2: 'world' });
@@ -77,7 +76,7 @@ test.describe('dropComposerDraft', () => {
   });
 });
 
-test.describe('Submit payload (bracketed paste + CRLF normalization)', () => {
+describe('Submit payload (bracketed paste + CRLF normalization)', () => {
   // The composer's Submit handler delegates to prepareClipboardPaste with
   // bracketedPaste=true. These tests pin that contract from the composer's
   // perspective so a future refactor that drops the helper doesn't silently

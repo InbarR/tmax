@@ -1,11 +1,10 @@
 // TASK-52: smart unwrap on copy — unit tests for the heuristic.
 //
-// Pure-function tests; do not launch Electron. Uses Playwright's test
-// runner only for assertion sugar (the rest of the suite uses it too).
-import { test, expect } from '@playwright/test';
-import { smartUnwrapForCopy } from '../../src/renderer/utils/smart-unwrap';
+// Pure-function tests; do not launch Electron.
+import { describe, test, expect } from 'vitest';
+import { smartUnwrapForCopy } from '../../../src/renderer/utils/smart-unwrap';
 
-test.describe('smartUnwrapForCopy', () => {
+describe('smartUnwrapForCopy', () => {
   test('disabled → returns input unchanged', () => {
     const input = 'a\n b\n c';
     expect(smartUnwrapForCopy(input, false)).toBe(input);
