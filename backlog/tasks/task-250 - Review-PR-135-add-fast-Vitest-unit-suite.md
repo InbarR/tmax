@@ -1,11 +1,11 @@
 ---
 id: TASK-250
 title: 'Review PR #135 - add fast Vitest unit suite'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-06-20 16:01'
-updated_date: '2026-06-21 07:28'
+updated_date: '2026-06-21 07:46'
 labels: []
 dependencies: []
 ---
@@ -20,7 +20,7 @@ External contributor PR (Meir Blachman). Adds Vitest as the unit runner; npm tes
 <!-- AC:BEGIN -->
 - [x] #1 Test-layout and npm test contract changes reviewed for regressions
 - [x] #2 CI green (or failures understood)
-- [ ] #3 Merge/decline decision made
+- [x] #3 Merge/decline decision made
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -35,3 +35,15 @@ Reviewed locally (checked out PR head).
 
 Fixed the Windows helper (commit 6b55f42) - cmd.exe now receives the command + args as separate argv tokens instead of a hand-quoted joined string. Verified locally on Windows: integration 11/11 green (incl. the real-CLI roundtrip), unit 115/115. Pushed to the fork PR branch (Meir017:add-vitest-unit-suite) via maintainer-modify; CI re-running. Ready to merge once CI re-runs (the pre-existing 36 Playwright failures from TASK-251 remain, but are unrelated and non-blocking).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Reviewed, fixed, and merged PR #135 (Vitest unit suite, Meir Blachman) - squashed to origin/main as 9fa303a.
+
+Review: clean 3-tier test split (unit/integration/e2e), 9 pure specs migrated Playwright->Vitest with old copies removed (no double-run), zero src/ product changes, merges clean. Unit 115 tests in ~1s; npm test now runs the fast unit suite (full suite is test:ci).
+
+Fix shipped on the PR branch (6b55f42, pushed via maintainer-modify): the integration test's Windows backlog() helper built a hand-quoted cmd.exe string that mangled repeated --ac flags; now passes argv as separate tokens. CI confirmed green on the Windows runner: unit + integration steps both success.
+
+Known non-blocker: the Playwright (Windows) e2e step stays red from 36 pre-existing unrelated failures (tracked as TASK-251).
+<!-- SECTION:FINAL_SUMMARY:END -->
