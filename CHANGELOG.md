@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.11.1
+
+Bug fixes and polish.
+
+### Bug Fixes
+
+- Text selection no longer reappears on its own after you minimize and restore the window.
+- The Transcript panel now opens on the most recent message instead of jumping to the very first one.
+- The "Move to workspace" submenu now stays next to the menu for panes near the right edge of the screen, instead of drifting off to the left.
+
+### Polish
+
+- Keyboard shortcut hints now show ⌘ and ⌥ on macOS.
+
 ## v1.11.0
 
 A native Backlog board, a Prompt Editor, and per-pane AI agent tools.
