@@ -58,10 +58,25 @@ function looksLikePrompt(s: string): boolean {
   return /^PS [^>]*>/.test(t) || /^[A-Za-z]:\\[^>]*>/.test(t) || /^[>❯➜»]/.test(t);
 }
 
+interface BufferLineLike { isWrapped: boolean; translateToString(trim: boolean): string; }
+interface BufferLike {
+  baseY: number;
+  cursorY: number;
+  length: number;
+  getLine(row: number): BufferLineLike | undefined;
+}
+
 export function getCurrentInputLine(id: string): string {
   const entry = registry.get(id);
   if (!entry) return '';
-  const buf = entry.terminal.buffer.active;
+  return extractInputLineFromBuffer(entry.terminal.buffer.active as unknown as BufferLike);
+}
+
+/**
+ * Pure buffer-parsing core of getCurrentInputLine, split out so it can be unit
+ * tested with a mock buffer (no live xterm needed).
+ */
+export function extractInputLineFromBuffer(buf: BufferLike): string {
   const cursorRow = buf.baseY + buf.cursorY;
 
   // Reconstruct the whole input block, not just the caret's row. Two cases:
@@ -82,6 +97,14 @@ export function getCurrentInputLine(id: string): string {
   for (let guard = 0; guard < 100 && start > 0; guard++) {
     const cur = buf.getLine(start);
     if (cur && cur.isWrapped) { start--; continue; } // continuation - keep climbing
+    // The current row is itself a prompt / input line - a shell prompt, or an
+    // inline AI-CLI box prompt like "> ...". It's the top of the input box, so
+    // stop here and never climb above it into the agent's output that sits
+    // directly above the box. Without this, opening the Prompt Editor on a busy
+    // AI CLI pane seeded the editor with the agent's streaming output instead of
+    // the user's input line (TASK-255).
+    const curClean = cleanRow(buf, start);
+    if (curClean !== null && looksLikePrompt(curClean)) break;
     const prev = cleanRow(buf, start - 1);
     if (prev === null || prev.trim() === '' || looksLikePrompt(prev)) break;
     start--;

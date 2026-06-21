@@ -3,9 +3,11 @@ id: TASK-255
 title: >-
   Prompt Editor seeds agent output instead of the user's input line (AI CLI
   panes)
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-06-21 17:46'
+updated_date: '2026-06-21 18:34'
 labels: []
 dependencies: []
 ---
@@ -18,7 +20,13 @@ Opening the Prompt Editor (Ctrl+Alt+E) on an AI CLI pane (Claude Code / Copilot)
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Opening the Prompt Editor on a busy AI CLI pane seeds empty (or just the input box text), never the agent's output
-- [ ] #2 Inline-prompt input boxes ('> typed text') seed only the typed text
-- [ ] #3 Shell prompt + soft-wrapped + multi-line input extraction is unchanged (regression tests)
+- [x] #1 Opening the Prompt Editor on a busy AI CLI pane seeds empty (or just the input box text), never the agent's output
+- [x] #2 Inline-prompt input boxes ('> typed text') seed only the typed text
+- [x] #3 Shell prompt + soft-wrapped + multi-line input extraction is unchanged (regression tests)
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed the Prompt Editor seeding the agent's output instead of the user's input line on AI CLI panes. getCurrentInputLine's walk-up climbed above the inline `>` input box into the agent's streaming output (Ink CLIs render the box directly below output with no blank separator). Fix: stop the walk-up when the current row is itself an inline prompt line (looksLikePrompt), so extraction never rises above the input box. Refactored the buffer parsing into a pure, exported extractInputLineFromBuffer(buf) and added tests/unit/renderer/task-255-input-line-extraction.test.ts (5 tests: AI mid-response, empty box, shell prompt, soft-wrap, blank-above regression) - all green. Typecheck clean.
+<!-- SECTION:FINAL_SUMMARY:END -->
