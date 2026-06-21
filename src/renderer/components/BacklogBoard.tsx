@@ -69,10 +69,14 @@ const IconExpand = ({ size = 14 }: { size?: number }) => (
     <line x1="3" y1="21" x2="10" y2="14" />
   </svg>
 );
-const IconSidebar = ({ size = 15 }: { size?: number }) => (
+// Visual inverse of IconExpand - arrows pointing inward. Used to restore the
+// board from full window back to the docked panel (the opposite of maximize).
+const IconShrink = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} {...svgBase}>
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <line x1="9" y1="3" x2="9" y2="21" />
+    <polyline points="4 14 10 14 10 20" />
+    <polyline points="20 10 14 10 14 4" />
+    <line x1="14" y1="10" x2="21" y2="3" />
+    <line x1="3" y1="21" x2="10" y2="14" />
   </svg>
 );
 const IconClose = ({ size = 15 }: { size?: number }) => (
@@ -550,10 +554,10 @@ const BacklogBoard: React.FC = () => {
         <button
           className="backlog-refresh"
           onClick={() => setMode(displayMode === 'panel' ? 'overlay' : 'panel')}
-          title={displayMode === 'panel' ? 'Expand to full window' : 'Dock as side panel'}
-          aria-label={displayMode === 'panel' ? 'Expand to full window' : 'Dock as side panel'}
+          title={displayMode === 'panel' ? 'Expand to full window' : 'Restore to panel'}
+          aria-label={displayMode === 'panel' ? 'Expand to full window' : 'Restore to panel'}
         >
-          {displayMode === 'panel' ? <IconExpand /> : <IconSidebar />}
+          {displayMode === 'panel' ? <IconExpand /> : <IconShrink />}
         </button>
         <button className="shortcuts-close" onClick={close} title="Close (Esc)" aria-label="Close">
           <IconClose />
