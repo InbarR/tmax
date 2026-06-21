@@ -3,11 +3,11 @@ id: TASK-240
 title: >-
   AI-pane scroll dead + selection can't be replaced without typing (macOS,
   v1.11.0)
-status: Done
+status: To Do
 assignee:
   - '@claude'
 created_date: '2026-06-15 07:10'
-updated_date: '2026-06-20 15:32'
+updated_date: '2026-06-21 09:36'
 labels: []
 dependencies: []
 ---
@@ -53,6 +53,8 @@ Fixes: clear an existing selection on left-mousedown (skip when Shift held); tra
 - Added tests/e2e/task-240-ai-pane-scroll-and-reselect.spec.ts (4 tests). out-e2e is stale (Jun 12) - needs rebuild before running, holding per no-blind-e2e guidance.
 
 Merged to main (merge commit 3c5448e) as code-complete. macOS runtime confirmation still outstanding - closed as shipped-to-main, not Mac-verified.
+
+REVERTED from the v1.11.1 release (revert commit 52eb717). Reason: the alt-scroll e2e specs were never executed before merge and their pty-write capture is broken (spies on the frozen terminalAPI.writePty, captures nothing), so the alt-scroll feature is unverifiable as-is. Before re-merging: fix the e2e writePty capture (see TASK-251), confirm alt-scroll actually works, and Mac-verify. Code still exists on history (merge 3c5448e) for re-application.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

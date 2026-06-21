@@ -3,11 +3,11 @@ id: TASK-243
 title: >-
   macOS: native in-app self-update via DMG swap (Squirrel.Mac can't work
   unsigned)
-status: Done
+status: To Do
 assignee:
   - '@claude'
 created_date: '2026-06-16 11:06'
-updated_date: '2026-06-20 15:32'
+updated_date: '2026-06-21 09:36'
 labels: []
 dependencies: []
 ---
@@ -36,6 +36,8 @@ A Mac user reported the in-app updater spins 'Updating...' forever and never upd
 - NOT pushed to main; on branch fix/mac-dmg-self-update. Needs real-Mac verification (AC #5) before release. Update log written to os.tmpdir()/tmax-update.log for on-device debugging.
 
 Merged to main (merge commit 404a8d8) as code-complete. AC #5 (real-Mac end-to-end) still unchecked - closed as shipped-to-main, Mac verification outstanding before release.
+
+REVERTED from the v1.11.1 release (revert commit c3a3276) - Mac DMG self-updater shipped unverified was too risky (it IS the updater). Old Squirrel.Mac path restored. Re-apply after real-Mac end-to-end verification. Code on history (merge 404a8d8).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

@@ -4,6 +4,7 @@ title: Investigate 36 stable Playwright failures on Windows CI
 status: To Do
 assignee: []
 created_date: '2026-06-20 16:18'
+updated_date: '2026-06-21 09:36'
 labels: []
 dependencies: []
 ---
@@ -19,3 +20,9 @@ Surfaced while reviewing PR #134: the Playwright (Windows) job fails 36 tests / 
 - [ ] #1 Root cause of the 36 failures identified (env vs real regression)
 - [ ] #2 CI either green or the genuinely-broken subset is isolated and tracked
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Root-cause lead: several of the 36 failures (task-61/120/123 rich-text/clipboard/tui-drag) use the pattern `(window).terminalAPI.writePty = spy` to capture pty writes. terminalAPI is a FROZEN contextBridge object in e2e, so the reassignment is a silent no-op and the tests assert against empty captures. Same root cause broke the task-240 alt-scroll specs. Fix: replace writePty-spy with a capture that works on the frozen API (e.g. a test hook exposed by preload, or tap a layer that isn't frozen). This likely clears a chunk of the 36; the openPath/native-viewer ones (task-70/106/107) may be a separate CI-env cause.
+<!-- SECTION:NOTES:END -->
