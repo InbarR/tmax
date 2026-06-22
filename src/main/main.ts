@@ -1126,6 +1126,10 @@ function registerIpcHandlers(): void {
     return (copilotMonitor as any)?.db?.searchPrompts?.(query) ?? null;
   });
 
+  ipcMain.handle(IPC.COPILOT_GET_RECENT_PROMPTS, (_event, limit?: number) => {
+    return (copilotMonitor as any)?.db?.getRecentPrompts?.(limit ?? 300) ?? null;
+  });
+
   ipcMain.handle(IPC.COPILOT_START_WATCHING, async () => {
     if (!copilotWatcher) return;
     try {

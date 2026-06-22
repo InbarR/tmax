@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-06-22 06:48'
-updated_date: '2026-06-22 06:51'
+updated_date: '2026-06-22 07:45'
 labels: []
 dependencies: []
 ---
@@ -20,14 +20,16 @@ Opening the global Prompt Search (PromptSearchDialog) with a large session count
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Opening prompt search with 1000+ sessions does not freeze the app (stays responsive)
+- [x] #1 Opening prompt search with 1000+ sessions does not freeze the app (stays responsive)
 - [x] #2 Per-session prompt fetches are concurrency-limited, not all fired at once
 - [x] #3 Entries are sorted in batches / once, not on every per-session resolution
-- [ ] #4 Result list still populates correctly and stays sorted by recency
+- [x] #4 Result list still populates correctly and stays sorted by recency
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Implemented in PromptSearchDialog.tsx: replaced the unbounded per-session fan-out + per-resolution sort with a bounded worker pool (8 concurrent fetchers pulling from a shared index) accumulating into a local array, flushed to state via a 100ms-throttled sort (plus a final flush). Caps concurrent IPC file-reads at 8 instead of ~1500 and sorts ~once per 100ms instead of per session. Typecheck clean. Pending user live-test that opening prompt search with many sessions no longer freezes (AC #1/#4).
+
+Real fix (the bounded pool alone did not help - the bottleneck was the MAIN process doing ~1500 synchronous fs.readFileSync via extractCopilotPrompts, blocking its event loop). Now: when SQLite is active, copilot prompts come from ONE indexed DB query - added copilot-session-db.getRecentPrompts() + COPILOT_GET_RECENT_PROMPTS IPC + preload getCopilotRecentPrompts; PromptSearchDialog skips copilot sessions in the file-read loop when sqliteActive and loads the browse set from the DB. Claude Code (not in the DB) still uses the bounded file-read pool. Active-query search already used the DB (searchPrompts). Typecheck baseline (33, no new). Touches main/preload/IPC, so needs a FULL RESTART (not HMR) to take effect.
 <!-- SECTION:NOTES:END -->

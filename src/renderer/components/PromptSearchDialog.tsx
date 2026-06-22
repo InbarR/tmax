@@ -88,11 +88,16 @@ const PromptSearchDialog: React.FC = () => {
     requestAnimationFrame(() => inputRef.current?.focus());
 
     const api = window.terminalAPI as any;
+    // TASK-259: when SQLite is active, copilot prompts come from ONE indexed DB
+    // query (below), NOT by reading every session's events.jsonl. Reading ~1500
+    // files synchronously in the main process froze the app. Claude Code isn't
+    // in that DB, so it always uses the per-session file path.
+    const sqliteOn = useTerminalStore.getState().copilotSqliteActive === true;
     const allSessions: Array<{ sess: CopilotSessionSummary; provider: 'copilot' | 'claude-code' }> = [
       ...claudeCodeSessions.map((s) => ({ sess: s, provider: 'claude-code' as const })),
-      ...copilotSessions.map((s) => ({ sess: s, provider: 'copilot' as const })),
+      ...(sqliteOn ? [] : copilotSessions.map((s) => ({ sess: s, provider: 'copilot' as const }))),
     ];
-    if (allSessions.length === 0) { setLoading(false); return; }
+    if (allSessions.length === 0 && !sqliteOn) { setLoading(false); return; }
 
     let cancelled = false;
 
@@ -155,13 +160,51 @@ const PromptSearchDialog: React.FC = () => {
       }
     };
     const CONCURRENCY = 8;
-    Promise.all(Array.from({ length: Math.min(CONCURRENCY, allSessions.length) }, () => worker()))
-      .finally(() => {
-        if (cancelled) return;
-        if (flushTimer) clearTimeout(flushTimer);
-        flush();
-        setLoading(false);
-      });
+    const poolDone = Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, allSessions.length) }, () => worker()),
+    );
+
+    // Copilot browse set straight from the DB (one indexed query) when SQLite
+    // is active - replaces ~1500 events.jsonl file reads (TASK-259).
+    const dbDone: Promise<unknown> = sqliteOn
+      ? (async () => {
+          try {
+            const rows = await api.getCopilotRecentPrompts(300);
+            if (cancelled || !Array.isArray(rows)) return;
+            const dbEntries: SearchEntry[] = rows
+              .map((r: { session_id: string; user_message: string; timestamp: string; summary?: string; cwd?: string }) => {
+                let terminalId: string | null = null;
+                let paneTitle = r.summary || r.session_id.slice(0, 8);
+                for (const [tid, t] of terminals) {
+                  if (t.aiSessionId === r.session_id) { terminalId = tid; paneTitle = t.title || paneTitle; break; }
+                }
+                const folder = shortPath(r.cwd || '');
+                const time = Date.parse(r.timestamp) || Date.now();
+                return {
+                  sessionId: r.session_id,
+                  provider: 'copilot' as const,
+                  promptIndex: 0,
+                  prompt: r.user_message,
+                  terminalId,
+                  paneTitle,
+                  sessionFolder: folder,
+                  sessionCwd: r.cwd || '',
+                  ageMs: Math.max(0, Date.now() - time),
+                  haystack: `${r.user_message}\n${paneTitle}\n${folder}`.toLowerCase(),
+                };
+              })
+              .filter((e: SearchEntry) => !isTrivial(e.prompt));
+            if (dbEntries.length) { acc.push(...dbEntries); scheduleFlush(); }
+          } catch { /* ignore - browse set just stays file/empty */ }
+        })()
+      : Promise.resolve();
+
+    Promise.all([poolDone, dbDone]).finally(() => {
+      if (cancelled) return;
+      if (flushTimer) clearTimeout(flushTimer);
+      flush();
+      setLoading(false);
+    });
 
     return () => { cancelled = true; if (flushTimer) clearTimeout(flushTimer); };
   }, [show]);

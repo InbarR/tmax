@@ -305,6 +305,34 @@ export class CopilotSessionDB {
       return null;
     }
   }
+
+  /**
+   * Recent user prompts across ALL sessions (no query) for the prompt-search
+   * "browse" view. One indexed DB query instead of reading every session's
+   * events.jsonl, which froze the app with many sessions (TASK-259).
+   */
+  getRecentPrompts(limit = 300): Array<{
+    session_id: string;
+    user_message: string;
+    timestamp: string;
+    summary: string;
+    cwd: string;
+  }> | null {
+    if (!this.db) return null;
+    try {
+      const stmt = this.db.prepare(`
+        SELECT t.session_id, t.user_message, t.timestamp, s.summary, s.cwd
+        FROM turns t
+        JOIN sessions s ON s.id = t.session_id
+        WHERE t.user_message IS NOT NULL AND length(t.user_message) > 3
+        ORDER BY t.timestamp DESC
+        LIMIT ?
+      `);
+      return stmt.all(limit) as any[];
+    } catch {
+      return null;
+    }
+  }
 }
 
 /**

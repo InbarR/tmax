@@ -35,6 +35,7 @@ export const IPC = {
   COPILOT_STOP_WATCHING: 'copilot:stopWatching',
   COPILOT_GET_PROMPTS: 'copilot:getPrompts',
   COPILOT_SEARCH_PROMPTS: 'copilot:searchPrompts',
+  COPILOT_GET_RECENT_PROMPTS: 'copilot:getRecentPrompts',
   AI_INVALIDATE_CACHES: 'ai:invalidateCaches',
   CLAUDE_CODE_LIST_SESSIONS: 'claude-code:listSessions',
   CLAUDE_CODE_GET_SESSION: 'claude-code:getSession',
