@@ -461,9 +461,23 @@ const CopilotPanel: React.FC = () => {
 
     // Filter by lifecycle tab (skip when searching — show all matching results)
     const deduped = Array.from(byId.values());
-    const lifecycleFiltered = query.trim()
+    let lifecycleFiltered = query.trim()
       ? deduped
       : deduped.filter((s) => getSessionLifecycle(s) === lifecycleTab);
+
+    // Client-side exclusion for NOT-only queries that FTS can't express
+    // (TASK-257). FTS was reset to the normal list in handleSearch, so here we
+    // drop sessions whose title/cwd matches the excluded terms. Scoped to
+    // title/summary + cwd (not full turn content).
+    const q = query.trim();
+    if (q) {
+      const toks = tokenizeAnd(q);
+      if (toks.length > 0 && toks.every((t) => t.negate)) {
+        lifecycleFiltered = lifecycleFiltered.filter((s) =>
+          matchesAllTokens(`${s.summary ?? ''} ${s.cwd ?? ''}`.toLowerCase(), toks),
+        );
+      }
+    }
 
     return sortSessions(lifecycleFiltered, openSessionIds, pinnedSessions, sortMode);
   }, [copilotSessions, claudeCodeSessions, query, filterTab, showRunningOnly, summaryOverrides, terminals, lifecycleTab, getSessionLifecycle, openSessionIds, pinnedSessions, sortMode]);
@@ -863,8 +877,16 @@ const CopilotPanel: React.FC = () => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => {
       const store = useTerminalStore.getState();
-      store.searchCopilotSessions(value);
-      store.searchClaudeCodeSessions(value);
+      // Exclusion-only queries (e.g. "NOT scheduled") can't be expressed in
+      // FTS5 - it needs a positive term to match against - so don't send them to
+      // the full-text search. Reset it to the normal list and let `filtered`
+      // apply the exclusion client-side over titles/cwd (TASK-257). Mixed
+      // queries like "step NOT scheduled" still go to FTS (binary NOT works).
+      const toks = tokenizeAnd(value);
+      const exclusionOnly = toks.length > 0 && toks.every((t) => t.negate);
+      const ftsValue = exclusionOnly ? '' : value;
+      store.searchCopilotSessions(ftsValue);
+      store.searchClaudeCodeSessions(ftsValue);
     }, 500);
   }, []);
 
@@ -1206,8 +1228,8 @@ const CopilotPanel: React.FC = () => {
         ref={inputRef}
         className="dir-panel-search"
         type="text"
-        placeholder={copilotSqliteActive ? "Search all sessions... (AND, OR supported)" : "Search sessions..."}
-        title={copilotSqliteActive ? "Full-text search across all sessions.\nExamples: auth bug, deploy AND fail, cathy OR ralph" : undefined}
+        placeholder={copilotSqliteActive ? "Search all sessions... (AND, OR, NOT supported)" : "Search sessions..."}
+        title={copilotSqliteActive ? "Full-text search across all sessions.\nExamples: auth bug, deploy AND fail, cathy OR ralph, step NOT scheduled.\nA NOT-only query (e.g. 'NOT scheduled') filters by title." : undefined}
         value={query}
         onChange={(e) => handleSearch(e.target.value)}
         onKeyDown={handleKeyDown}
