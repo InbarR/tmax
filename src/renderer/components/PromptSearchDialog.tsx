@@ -95,55 +95,75 @@ const PromptSearchDialog: React.FC = () => {
     if (allSessions.length === 0) { setLoading(false); return; }
 
     let cancelled = false;
-    let outstanding = allSessions.length;
-    const finishOne = () => {
-      outstanding--;
-      if (outstanding === 0 && !cancelled) setLoading(false);
+
+    // Build search entries for one session's prompts.
+    const buildEntries = (
+      sess: CopilotSessionSummary,
+      provider: 'copilot' | 'claude-code',
+      prompts: string[] | undefined,
+    ): SearchEntry[] => {
+      const list = Array.isArray(prompts) ? prompts : [];
+      let terminalId: string | null = null;
+      let paneTitle = sess.summary || sess.id.slice(0, 8);
+      for (const [tid, t] of terminals) {
+        if (t.aiSessionId === sess.id) { terminalId = tid; paneTitle = t.title || paneTitle; break; }
+      }
+      const baseTime = sess.lastActivityTime || sess.latestPromptTime || Date.now();
+      const sessionFolder = shortPath(sess.cwd || '');
+      return list
+        .map((p, i) => ({
+          sessionId: sess.id,
+          provider,
+          promptIndex: i,
+          prompt: p,
+          terminalId,
+          paneTitle,
+          sessionFolder,
+          sessionCwd: sess.cwd || '',
+          ageMs: Math.max(0, Date.now() - baseTime) + (list.length - i - 1) * 1000,
+          haystack: `${p}\n${paneTitle}\n${sessionFolder}`.toLowerCase(),
+        }))
+        .filter((e) => !isTrivial(e.prompt));
     };
 
-    for (const { sess, provider } of allSessions) {
-      const fetcher = provider === 'claude-code' ? api.getClaudeCodePrompts : api.getCopilotPrompts;
-      fetcher(sess.id)
-        .then((prompts: string[] | undefined) => {
-          if (cancelled) return;
-          const list = Array.isArray(prompts) ? prompts : [];
-          let terminalId: string | null = null;
-          let paneTitle = sess.summary || sess.id.slice(0, 8);
-          for (const [tid, t] of terminals) {
-            if (t.aiSessionId === sess.id) {
-              terminalId = tid;
-              paneTitle = t.title || paneTitle;
-              break;
-            }
-          }
-          const baseTime = sess.lastActivityTime || sess.latestPromptTime || Date.now();
-          const sessionFolder = shortPath(sess.cwd || '');
-          const sessionEntries: SearchEntry[] = list
-            .map((p, i) => ({
-              sessionId: sess.id,
-              provider,
-              promptIndex: i,
-              prompt: p,
-              terminalId,
-              paneTitle,
-              sessionFolder,
-              sessionCwd: sess.cwd || '',
-              ageMs: Math.max(0, Date.now() - baseTime) + (list.length - i - 1) * 1000,
-              haystack: `${p}\n${paneTitle}\n${sessionFolder}`.toLowerCase(),
-            }))
-            .filter((e) => !isTrivial(e.prompt));
-          if (sessionEntries.length === 0) return;
-          setEntries((prev) => {
-            const merged = prev.concat(sessionEntries);
-            merged.sort((a, b) => a.ageMs - b.ageMs);
-            return merged;
-          });
-        })
-        .catch(() => { /* ignore per-session failures */ })
-        .finally(finishOne);
-    }
+    // TASK-259: firing one prompt-file-read IPC per session for ALL (~1500)
+    // sessions at once floods the main process, and re-sorting the growing
+    // result array on every resolution is O(N^2) - together they froze the app.
+    // Load with a bounded worker pool and flush state on a throttle instead.
+    const acc: SearchEntry[] = [];
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    const flush = () => {
+      flushTimer = null;
+      if (cancelled) return;
+      setEntries(acc.slice().sort((a, b) => a.ageMs - b.ageMs));
+    };
+    const scheduleFlush = () => { if (!flushTimer && !cancelled) flushTimer = setTimeout(flush, 100); };
 
-    return () => { cancelled = true; };
+    let nextIdx = 0;
+    const worker = async (): Promise<void> => {
+      while (!cancelled) {
+        const i = nextIdx++;
+        if (i >= allSessions.length) return;
+        const { sess, provider } = allSessions[i];
+        const fetcher = provider === 'claude-code' ? api.getClaudeCodePrompts : api.getCopilotPrompts;
+        try {
+          const prompts = await fetcher(sess.id);
+          if (cancelled) return;
+          const entries = buildEntries(sess, provider, prompts);
+          if (entries.length) { acc.push(...entries); scheduleFlush(); }
+        } catch { /* ignore per-session failures */ }
+      }
+    };
+    const CONCURRENCY = 8;
+    Promise.all(Array.from({ length: Math.min(CONCURRENCY, allSessions.length) }, () => worker()))
+      .finally(() => {
+        if (cancelled) return;
+        if (flushTimer) clearTimeout(flushTimer);
+        flush();
+        setLoading(false);
+      });
+
+    return () => { cancelled = true; if (flushTimer) clearTimeout(flushTimer); };
   }, [show]);
 
   // Tokenize the query on whole-word case-insensitive 'AND' for client-side
