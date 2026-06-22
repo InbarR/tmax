@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-06-22 06:48'
-updated_date: '2026-06-22 07:45'
+updated_date: '2026-06-22 08:07'
 labels: []
 dependencies: []
 ---
@@ -32,4 +32,6 @@ Opening the global Prompt Search (PromptSearchDialog) with a large session count
 Implemented in PromptSearchDialog.tsx: replaced the unbounded per-session fan-out + per-resolution sort with a bounded worker pool (8 concurrent fetchers pulling from a shared index) accumulating into a local array, flushed to state via a 100ms-throttled sort (plus a final flush). Caps concurrent IPC file-reads at 8 instead of ~1500 and sorts ~once per 100ms instead of per session. Typecheck clean. Pending user live-test that opening prompt search with many sessions no longer freezes (AC #1/#4).
 
 Real fix (the bounded pool alone did not help - the bottleneck was the MAIN process doing ~1500 synchronous fs.readFileSync via extractCopilotPrompts, blocking its event loop). Now: when SQLite is active, copilot prompts come from ONE indexed DB query - added copilot-session-db.getRecentPrompts() + COPILOT_GET_RECENT_PROMPTS IPC + preload getCopilotRecentPrompts; PromptSearchDialog skips copilot sessions in the file-read loop when sqliteActive and loads the browse set from the DB. Claude Code (not in the DB) still uses the bounded file-read pool. Active-query search already used the DB (searchPrompts). Typecheck baseline (33, no new). Touches main/preload/IPC, so needs a FULL RESTART (not HMR) to take effect.
+
+Follow-on filter bug: the DB searchPrompts (copilot-session-db) detected operators with /\b(AND|OR)\b/ - no i-flag, no NOT - so a lowercase query like "pr and 137 and not step" was treated as ONE literal LIKE term and matched nothing, while the list fell back to the browse set (looked unfiltered). Fixed: case-insensitive operator detection + NOT -> NOT LIKE. Placeholder now advertises AND/OR/NOT. Main-process change -> needs a full restart.
 <!-- SECTION:NOTES:END -->

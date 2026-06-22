@@ -259,22 +259,29 @@ export class CopilotSessionDB {
     if (!this.db || !query.trim()) return null;
 
     try {
-      const hasOperators = /\b(AND|OR)\b/.test(query);
+      // Operators are case-insensitive (the UI accepts lowercase "and"/"not").
+      const hasOperators = /\b(AND|OR|NOT)\b/i.test(query);
       if (hasOperators) {
-        // Split on AND/OR, build SQL WHERE with LIKE per term
-        const parts = query.split(/\b(AND|OR)\b/).map(p => p.trim()).filter(p => p);
+        // Split on AND/OR/NOT, build SQL WHERE with LIKE / NOT LIKE per term.
+        // NOT negates the term that follows it (e.g. "pr AND NOT step").
+        const parts = query.split(/\b(AND|OR|NOT)\b/i).map(p => p.trim()).filter(p => p);
         const conditions: string[] = [];
         const params: string[] = [];
         let currentOp = 'AND';
+        let negateNext = false;
         for (const part of parts) {
-          if (part === 'AND' || part === 'OR') {
-            currentOp = part;
+          const kw = part.toUpperCase();
+          if (kw === 'AND' || kw === 'OR') {
+            currentOp = kw;
+          } else if (kw === 'NOT') {
+            negateNext = true;
           } else if (part) {
             if (conditions.length > 0) {
               conditions.push(currentOp);
             }
-            conditions.push('t.user_message LIKE ?');
+            conditions.push(negateNext ? 't.user_message NOT LIKE ?' : 't.user_message LIKE ?');
             params.push(`%${part}%`);
+            negateNext = false;
           }
         }
         if (conditions.length === 0) return null;

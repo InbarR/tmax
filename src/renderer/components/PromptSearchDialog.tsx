@@ -421,7 +421,7 @@ const PromptSearchDialog: React.FC = () => {
             ref={inputRef}
             className="switcher-input"
             type="text"
-            placeholder={sqliteActive ? "Search all AI prompts (AND / OR supported)..." : "Search prompts (use AND to combine terms)..."}
+            placeholder={sqliteActive ? "Search all AI prompts (AND / OR / NOT supported)..." : "Search prompts (use AND / NOT to combine terms)..."}
             value={query}
             onChange={(e) => { setQuery(e.target.value); setSelectedIndex(0); }}
             onKeyDown={handleKeyDown}
