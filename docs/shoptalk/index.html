@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="tmax-favicon.ico" type="image/x-icon">
+<title>tmax ShopTalk</title>
+<style>
+:root {
+  --bg: #000000;
+  --bg-elevated: #0a0e14;
+  --surface: #131a24;
+  --surface-soft: #1a2332;
+  --border: #1e2a3a;
+  --text: #c5d1de;
+  --text-muted: #5c7a99;
+  --text-dim: #2d4a5e;
+  --green: #3fb950;
+  --green-bright: #56d364;
+  --green-dim: rgba(63, 185, 80, 0.12);
+  --green-glow: rgba(63, 185, 80, 0.5);
+  --cyan: #79c0ff;
+  --yellow: #d29922;
+  --red: #f85149;
+  --purple: #bc8cff;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: "JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, "Courier New", monospace;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  z-index: 9999;
+}
+
+.slide-container {
+  flex: 1;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Side navigator */
+.side-nav {
+  width: 320px;
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
+  padding: 0;
+  overflow-y: auto;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.side-nav .nav-title {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  letter-spacing: 2px;
+}
+
+.side-nav .nav-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.side-nav .nav-item:hover {
+  color: var(--text);
+  background: var(--surface-soft);
+}
+
+.side-nav .nav-item.active {
+  color: var(--text);
+  border-left-color: var(--green);
+  background: var(--surface);
+}
+
+.side-nav .nav-item.passed {
+  color: var(--text-muted);
+}
+
+.side-nav .nav-item.passed::after {
+  content: "\2713";
+  margin-left: auto;
+  color: var(--green);
+  font-size: 0.75rem;
+}
+
+.side-nav .nav-item::before {
+  content: "> ";
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+
+.side-nav .nav-item.active::before {
+  color: var(--green);
+}
+
+.nav-progress {
+  margin-top: auto;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.nav-progress::before {
+  content: "\25B8 ";
+  color: var(--green);
+}
+
+/* Slide content area */
+.slide-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 30px 50px;
+  position: relative;
+}
+
+.slide {
+  display: none;
+  max-width: 100%;
+  width: 100%;
+  text-align: left;
+  animation: fadeIn 0.3s ease;
+}
+
+.slide.active { display: block; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.cursor {
+  display: inline-block;
+  width: 10px;
+  height: 1.2em;
+  background: var(--green);
+  margin-left: 4px;
+  vertical-align: text-bottom;
+  animation: blink 1s infinite;
+}
+
+/* Typography */
+.slide h1 {
+  font-size: 2.6rem;
+  font-weight: 700;
+  color: var(--green-bright);
+  line-height: 1.2;
+  margin-bottom: 12px;
+  text-shadow: 0 0 20px var(--green-glow);
+}
+
+.slide h2 {
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 20px;
+}
+
+.slide h3 {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+
+.slide p {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+/* Terminal window */
+.terminal-window {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 20px 0;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.terminal-titlebar {
+  background: var(--surface-soft);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.terminal-titlebar .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.terminal-titlebar .dot.red { background: var(--red); }
+.terminal-titlebar .dot.yellow { background: var(--yellow); }
+.terminal-titlebar .dot.green { background: var(--green); }
+
+.terminal-titlebar .title {
+  flex: 1;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.terminal-body {
+  padding: 20px;
+  font-size: 0.9rem;
+  line-height: 1.8;
+}
+
+.terminal-body .line { margin-bottom: 4px; }
+.terminal-body .line .key { color: var(--cyan); }
+.terminal-body .line .val { color: var(--green-bright); }
+.terminal-body .line .comment { color: var(--text-dim); }
+.terminal-body .line .str { color: var(--yellow); }
+
+/* Stats */
+.stat-row {
+  display: flex;
+  gap: 16px;
+  margin: 24px 0;
+  flex-wrap: wrap;
+}
+
+.stat-box {
+  flex: 1;
+  min-width: 120px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-box::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green-glow);
+}
+
+.stat-box .number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--green-bright);
+  display: block;
+  text-shadow: 0 0 10px var(--green-glow);
+}
+
+.stat-box .label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Image showcase */
+.img-showcase {
+  margin: 20px 0;
+  text-align: center;
+}
+
+.img-showcase img {
+  max-width: 100%;
+  max-height: 420px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 60px rgba(63, 185, 80, 0.05);
+  cursor: zoom-in;
+  transition: transform 0.2s;
+}
+
+.img-showcase img:hover { transform: scale(1.02); }
+
+/* Lightbox */
+.lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.92);
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  padding: 40px;
+}
+
+.lightbox.open { display: flex; }
+
+.lightbox img {
+  max-width: 95vw;
+  max-height: 90vh;
+  border-radius: 8px;
+  box-shadow: 0 0 80px rgba(63, 185, 80, 0.15);
+}
+
+.img-showcase .caption {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-top: 10px;
+  font-style: italic;
+}
+
+/* Visual cards */
+.visual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2px;
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.visual-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+.visual-card {
+  background: var(--surface);
+  padding: 14px;
+  transition: all 0.2s;
+  cursor: pointer;
+  position: relative;
+  border-top: 2px solid var(--green);
+}
+
+.visual-card:nth-child(2) { border-top-color: var(--cyan); }
+.visual-card:nth-child(3) { border-top-color: var(--yellow); }
+.visual-card:nth-child(4) { border-top-color: var(--purple); }
+.visual-card:nth-child(5) { border-top-color: var(--red); }
+.visual-card:nth-child(6) { border-top-color: var(--cyan); }
+
+.visual-card:hover {
+  background: var(--surface-soft);
+  box-shadow: inset 0 0 12px rgba(63, 185, 80, 0.08);
+  transform: scale(1.02);
+}
+
+.visual-card .icon {
+  font-size: 1.4rem;
+  margin-bottom: 4px;
+  display: inline-block;
+}
+
+.visual-card h4 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.visual-card .shortcut {
+  font-size: 0.75rem;
+  color: var(--text);
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.visual-card .shortcut kbd {
+  background: var(--bg);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  border-bottom: 2px solid var(--text-dim);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  font-family: inherit;
+  font-size: 0.75rem;
+  color: var(--text);
+}
+
+/* Quote box */
+.quote-box {
+  border-left: 3px solid var(--green);
+  padding: 16px 24px;
+  background: var(--green-dim);
+  border-radius: 0 10px 10px 0;
+  margin: 20px 0;
+}
+
+.quote-box p {
+  color: var(--text);
+  font-size: 1.15rem;
+  margin: 0;
+  font-style: italic;
+}
+
+.quote-box .attr {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 8px;
+  font-style: normal;
+}
+
+/* Demo tag */
+.demo-tag {
+  display: inline-block;
+  background: var(--green-dim);
+  color: var(--green);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Nav bar */
+.nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 40px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+}
+
+.nav-bar .progress {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.nav-bar .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav-bar .dot.active {
+  background: var(--green);
+  width: 20px;
+  border-radius: 3px;
+  box-shadow: 0 0 6px var(--green-glow);
+}
+
+.nav-bar .dot:hover { background: var(--green); }
+
+.nav-bar button {
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+}
+
+.nav-bar button:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.nav-bar .btn-next {
+  background: var(--green-dim);
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.nav-bar .btn-next:hover {
+  background: var(--green);
+  color: var(--bg);
+}
+
+.slide-number {
+  position: absolute;
+  top: 16px;
+  right: 40px;
+  font-size: 1rem;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: 6px;
+}
+
+.slide-number::before {
+  content: "\25B8 ";
+  color: var(--green);
+}
+
+/* Feature list for help slide */
+.help-list {
+  list-style: none;
+  columns: 2;
+  column-gap: 40px;
+  margin: 16px 0;
+}
+
+.help-list li {
+  padding: 6px 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.help-list li span.cmd {
+  color: var(--green);
+  font-weight: 600;
+}
+</style>
+</head>
+<body data-testim-main-word-scripts-loaded="true">
+
+<div class="slide-container">
+  <nav class="side-nav" id="sideNav">
+    <div class="nav-title">BUILTINS</div>
+    <a class="nav-item active" data-slide="0">/tmax</a>
+    <a class="nav-item" data-slide="1">/whoami</a>
+    <a class="nav-item" data-slide="2">/problem</a>
+    <a class="nav-item" data-slide="3">/layout</a>
+    <a class="nav-item" data-slide="4">/explore</a>
+    <a class="nav-item" data-slide="5">/sessions</a>
+    <a class="nav-item" data-slide="6">/transcript</a>
+    <a class="nav-item" data-slide="7">/backlog</a>
+    <a class="nav-item" data-slide="8">/settings</a>
+    <a class="nav-item" data-slide="9">/notifications</a>
+    <a class="nav-item" data-slide="10">/shortcuts</a>
+    <a class="nav-item" data-slide="11">/sign</a>
+    <a class="nav-item" data-slide="12">/help</a>
+    <div class="nav-progress" id="navProgress">1 / 18</div>
+  </nav>
+
+  <div class="slide-content">
+
+  <!-- Slide 0: Title -->
+  <div class="slide active" data-section="">
+    <h1><span style="color:var(--text-dim)">&gt; </span>tmax<span class="cursor"></span></h1>
+    <h2>Get the <span style="color:var(--green-bright)">max</span> out of your terminal.</h2>
+    <div class="img-showcase">
+      <img src="tmax-garage.png" alt="tmax garage">
+    </div>
+    <div class="stat-row">
+      <div class="stat-box"><span class="number">3.2K</span><span class="label">Installs</span></div>
+      <div class="stat-box"><span class="number">44</span><span class="label">Releases</span></div>
+      <div class="stat-box"><span class="number">1,396</span><span class="label">Commits</span></div>
+      <div class="stat-box"><span class="number">28</span><span class="label">Contributors</span></div>
+      <div class="stat-box"><span class="number">4 mo</span><span class="label">Since v1.0</span></div>
+    </div>
+  </div>
+
+  <!-- Slide 1: Who am I -->
+  <div class="slide" data-section="">
+    <h2>&gt; whoami</h2>
+    <div style="display:flex; gap:40px; align-items:center; margin-top:30px;">
+      <img src="inbar-photo.png" alt="Inbar Rotem" style="width: 240px; height: 240px; border-radius: 50%; object-fit: cover; border: 3px solid var(--green); box-shadow: 0 0 30px var(--green-glow);">
+      <div class="terminal-window" style="flex:1;">
+        <div class="terminal-titlebar">
+          <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+          <span class="title">whoami</span>
+        </div>
+        <div class="terminal-body" style="font-size:1.1rem; line-height:2.2;">
+          <div class="line"><span class="key">name:</span> <span class="val">Inbar Rotem</span></div>
+          <div class="line"><span class="key">role:</span> <span class="str">Group Manager @ Microsoft ILDC</span></div>
+          <div class="line"><span class="key">team:</span> <span class="str">Agentic Security</span></div>
+          <div class="line"><span class="key">passion:</span> <span class="val">Building tools that don't exist yet</span></div>
+          <div class="line"><span class="key">side_quests:</span> <span class="val">[tmax, Scout, Atlas, Quest, video dub]</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 2: The Problem -->
+  <div class="slide" data-section="THE PROBLEM">
+    <h2>&gt; cat /problem <span class="demo-tag">DEMO</span></h2>
+    <div class="terminal-window" style="margin-top:20px;">
+      <div class="terminal-titlebar">
+        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+        <span class="title">Windows Terminal</span>
+      </div>
+      <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:0; border-bottom:1px solid var(--border);">
+        <div style="padding:14px 18px; border-right:1px solid var(--border); border-bottom:3px solid #f25022; text-align:center;">
+          <span style="color:#f25022; font-weight:600;">GitHub Copilot</span>
+        </div>
+        <div style="padding:14px 18px; border-right:1px solid var(--border); border-bottom:3px solid #7fba00; text-align:center;">
+          <span style="color:#7fba00; font-weight:600;">GitHub Copilot</span>
+        </div>
+        <div style="padding:14px 18px; border-right:1px solid var(--border); border-bottom:3px solid #00a4ef; text-align:center;">
+          <span style="color:#00a4ef; font-weight:600;">GitHub Copilot</span>
+        </div>
+        <div style="padding:14px 18px; border-bottom:3px solid #ffb900; text-align:center;">
+          <span style="color:#ffb900; font-weight:600;">GitHub Copilot</span>
+        </div>
+      </div>
+      <div class="terminal-body" style="min-height:200px; display:flex; align-items:center; justify-content:center;">
+        <span class="comment" style="font-size:1.4rem;">Which one is which? 🤷</span>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:24px; margin-top:20px;">
+      <div class="quote-box" style="flex:1; margin:0;">
+        <p>Running 3-5 AI agents at once and losing track of all of them. Existing terminals have zero concept of what an "AI session" is.</p>
+      </div>
+      <img src="https://media.giphy.com/media/ji6zzUZwNIuLS/giphy.gif" alt="confused" style="width:140px; border-radius:10px;">
+    </div>
+  </div>
+
+  <!-- Slide 3: Layout -->
+  <div class="slide" data-section="FEATURES">
+    <h2>&gt; tmax --layout <span class="demo-tag">DEMO</span></h2>
+    <div class="img-showcase">
+      <img src="tmax-panes.png" alt="tmax grid layout with AI sessions">
+    </div>
+    <div class="visual-grid">
+      <div class="visual-card">
+        <div class="icon">⬜</div>
+        <h4>Tiling splits</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Arrow</kbd></span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🎈</div>
+        <h4>Floating panels</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>U</kbd></span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🔲</div>
+        <h4>Grid mode</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🎯</div>
+        <h4>Pane hints</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>J</kbd></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- File Explorer (early feature - Feb 2026) -->
+  <div class="slide" data-section="FEATURES">
+    <h2>&gt; tmax --explore <span class="demo-tag">DEMO</span></h2>
+    <div class="img-showcase">
+      <img src="tmax-explorer.png" alt="File explorer">
+    </div>
+    <div class="visual-grid">
+      <div class="visual-card">
+        <div class="icon">📂</div>
+        <h4>File tree sidebar</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>X</kbd></span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">📄</div>
+        <h4>Click .md = rendered preview</h4>
+        <span class="shortcut">Mermaid diagrams too</span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🖼️</div>
+        <h4>Click image = viewer</h4>
+        <span class="shortcut">.png .jpg .gif</span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">📊</div>
+        <h4>Built-in diff review</h4>
+        <span class="shortcut">inline annotations</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 5: AI Sessions -->
+  <div class="slide" data-section="KILLER FEATURE">
+    <h2>&gt; tmax --sessions <span class="demo-tag">DEMO</span></h2>
+    <div class="img-showcase">
+      <img src="tmax-sessions.png" alt="AI Sessions panel">
+    </div>
+    <div class="visual-grid">
+      <div class="visual-card">
+        <div class="icon">✨</div>
+        <h4>AI Sessions panel</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>C</kbd></span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🔃</div>
+        <h4>Resume any session</h4>
+        <span class="shortcut">click to resume</span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">⏹️</div>
+        <h4>Shimmer alerts</h4>
+        <span class="shortcut">agent needs input</span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🔔</div>
+        <h4>Native notifications</h4>
+        <span class="shortcut">agent finished</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 6: Transcript & Search -->
+  <div class="slide" data-section="KILLER FEATURE">
+    <h2>&gt; tmax --transcript <span class="demo-tag">DEMO</span></h2>
+    <div class="terminal-window">
+      <div class="terminal-titlebar">
+        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+        <span class="title">AI Session Transcript</span>
+      </div>
+      <div class="terminal-body">
+        <div class="line"><span class="comment">[14:23]</span> <span class="key">You:</span> Fix the auth middleware</div>
+        <div class="line"><span class="comment">[14:23]</span> <span class="val">Agent:</span> I'll update src/middleware/auth.ts...</div>
+        <div class="line"><span class="comment">[14:25]</span> <span class="val">Agent:</span> Done. 3 files changed, tests passing.</div>
+        <div class="line"><span class="comment">[14:25]</span> <span class="key">You:</span> Now add rate limiting</div>
+        <div class="line"><span class="comment">[14:26]</span> <span class="val">Agent:</span> Adding express-rate-limit...</div>
+      </div>
+    </div>
+    <div class="visual-grid">
+      <div class="visual-card">
+        <div class="icon">💬</div>
+        <h4>Full transcript</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>T</kbd></span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🔍</div>
+        <h4>Search all prompts</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Y</kbd></span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">📝</div>
+        <h4>Prompt editor</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>E</kbd></span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🧹</div>
+        <h4>Bulk cleanup</h4>
+        <span class="shortcut">archive old sessions</span>
+      </div>
+    </div>
+    <div class="quote-box">
+      <p>CLI coding agents don't show timestamps on messages. tmax adds them, so you know exactly when each prompt and response happened.</p>
+    </div>
+  </div>
+
+  <!-- Slide 7: Backlog Board -->
+  <div class="slide" data-section="FEATURES">
+    <h2>&gt; backlog board <span class="demo-tag">DEMO</span></h2>
+    <div class="img-showcase">
+      <img src="tmax-backlog.png" alt="Backlog board">
+    </div>
+    <div class="visual-grid">
+      <div class="visual-card">
+        <div class="icon">✅</div>
+        <h4>Multi-project kanban</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>B</kbd></span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🤖</div>
+        <h4>Attach AI sessions to tasks</h4>
+        <span class="shortcut">live output stream</span>
+      </div>
+    </div>
+    <div class="quote-box">
+      <p>I manage tmax development from inside tmax itself. The backlog board ships with a CLI so AI agents can file and close tasks autonomously.</p>
+    </div>
+  </div>
+
+  <!-- Slide 9: Settings + Themes -->
+  <div class="slide" data-section="FEATURES">
+    <h2>&gt; tmax --settings <span class="demo-tag">DEMO</span></h2>
+    <p style="color:var(--green); margin-bottom:12px;">Ctrl+,</p>
+    <div class="img-showcase">
+      <img src="tmax-settings.png" alt="tmax settings UI">
+    </div>
+    <div class="visual-grid" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="visual-card">
+        <div class="icon">🎨</div>
+        <h4>12 theme presets</h4>
+        <span class="shortcut">Catppuccin, Tokyo Night, Nord...</span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">💎</div>
+        <h4>Mica / Acrylic effects</h4>
+        <span class="shortcut">Windows native blur</span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">⚙️</div>
+        <h4>Settings UI</h4>
+        <span class="shortcut">no JSON editing needed</span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🌏</div>
+        <h4>Shell profiles</h4>
+        <span class="shortcut">PowerShell, WSL, Git Bash, CMD</span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🔧</div>
+        <h4>Keybinding editor</h4>
+        <span class="shortcut">full customization</span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">💾</div>
+        <h4>Workspace persistence</h4>
+        <span class="shortcut">restore layout on launch</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 10: Notifications -->
+  <div class="slide" data-section="FEATURES">
+    <h2>&gt; tmax --notifications <span class="demo-tag">DEMO</span></h2>
+    <div class="img-showcase">
+      <img src="tmax-notifications.png" alt="Notifications settings">
+    </div>
+    <div class="visual-grid">
+      <div class="visual-card">
+        <div class="icon">🔔</div>
+        <h4>Native OS notifications</h4>
+        <span class="shortcut">agent done / needs input</span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">✨</div>
+        <h4>Shimmer effect on pane</h4>
+        <span class="shortcut">visual "look at me"</span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🔇</div>
+        <h4>Excluded phrases filter</h4>
+        <span class="shortcut">suppress noisy notifications</span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">📰</div>
+        <h4>Notification center</h4>
+        <span class="shortcut">history of all alerts</span>
+      </div>
+    </div>
+    <div class="quote-box">
+      <p>The whole point is knowing when your agents need you. You shouldn't have to babysit a terminal window.</p>
+    </div>
+  </div>
+
+  <!-- Slide 11: Quick Access + Shortcuts -->
+  <div class="slide" data-section="FEATURES">
+    <h2>&gt; tmax --shortcuts <span class="demo-tag">DEMO</span></h2>
+    <div class="visual-grid" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="visual-card">
+        <div class="icon">⌨️</div>
+        <h4>Global hotkey</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Space</kbd></span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">⚡</div>
+        <h4>Command palette</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd></span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🔁</div>
+        <h4>Undo close (10-deep)</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>T</kbd></span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">📋</div>
+        <h4>Tab groups</h4>
+        <span class="shortcut">drag, color, collapse</span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🔌</div>
+        <h4>Pane zoom</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd></span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🔗</div>
+        <h4>Quick jump to pane</h4>
+        <span class="shortcut"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>J</kbd></span>
+      </div>
+      <div class="visual-card">
+        <div class="icon">🛠️</div>
+        <h4>Custom keybindings</h4>
+        <span class="shortcut">rebind anything</span>
+      </div>
+    </div>
+    <div class="terminal-window">
+      <div class="terminal-titlebar">
+        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+        <span class="title">shortcuts cheatsheet</span>
+      </div>
+      <div class="terminal-body">
+        <div class="line"><span class="key">Ctrl+Alt+Arrow</span>  <span class="val">split pane (direction)</span></div>
+        <div class="line"><span class="key">Ctrl+Shift+W</span>  <span class="val">close pane</span></div>
+        <div class="line"><span class="key">Ctrl+Shift+N</span>  <span class="val">new tab</span></div>
+        <div class="line"><span class="key">Ctrl+Tab</span>      <span class="val">cycle tabs</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 12: Code Signing -->
+  <div class="slide" data-section="DEVOPS">
+    <h2>&gt; tmax --sign</h2>
+    <div class="visual-grid">
+      <div class="visual-card" style="text-align:center; padding:20px;">
+        <div style="font-size:0.7rem; color:var(--green); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Windows</div>
+        <div style="font-size:2rem; margin-bottom:8px;">✅</div>
+        <h4>Azure Trusted Signing</h4>
+        <span class="shortcut">SmartScreen trusted</span>
+      </div>
+      <div class="visual-card" style="text-align:center; padding:20px;">
+        <div style="font-size:0.7rem; color:var(--red); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">macOS</div>
+        <img src="tmax-mac-damaged.png" alt="macOS damaged" style="height:120px; border-radius:8px; margin-bottom:8px;">
+        <h4>Not signed yet</h4>
+        <span class="shortcut">xattr -cr /Applications/tmax.app</span>
+      </div>
+    </div>
+    <div class="terminal-window" style="margin-top:16px;">
+      <div class="terminal-titlebar">
+        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+        <span class="title">signing</span>
+      </div>
+      <div class="terminal-body">
+        <div class="line"><span class="key">provider:</span> <span class="val">Azure Trusted Signing</span></div>
+        <div class="line"><span class="key">cost:</span> <span class="str">$9.99/mo</span> <span class="comment"># no hardware token needed</span></div>
+        <div class="line"><span class="key">setup:</span> <span class="val">Scout researched docs + wrote the CI YAML</span></div>
+        <div class="line"><span class="key">result:</span> <span class="val">No more "Unknown Publisher" on Windows</span></div>
+        <div class="line"><span class="key">macos:</span> <span class="str">Apple Developer $99/yr — not gonna happen</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide: --help (last) -->
+  <div class="slide" data-section="">
+    <h2>&gt; tmax --help</h2>
+    <div class="stat-row">
+      <div class="stat-box"><span class="number">🪟</span><span class="label">Windows (signed)</span></div>
+      <div class="stat-box"><span class="number">🍎</span><span class="label">macOS (ARM + Intel)</span></div>
+      <div class="stat-box"><span class="number">🐧</span><span class="label">Linux (deb/rpm)</span></div>
+    </div>
+    <div class="terminal-window">
+      <div class="terminal-titlebar">
+        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+        <span class="title">~</span>
+      </div>
+      <div class="terminal-body">
+        <div class="line"><span style="color:var(--text-dim)">&gt; </span>open <a href="https://aka.ms/tmax" target="_blank" style="color:var(--green);text-decoration:underline;">https://aka.ms/tmax</a></div>
+        <div class="line"></div>
+        <div class="line"><span class="key">code_signed:</span> <span class="val">Azure Trusted Signing</span></div>
+        <div class="line"><span class="key">license:</span> <span class="val">MIT</span></div>
+        <div class="line"><span class="key">repo:</span> <a href="https://github.com/InbarR/tmax" target="_blank" style="color:var(--cyan);">github.com/InbarR/tmax</a></div>
+        <div class="line"><span class="key">teams:</span> <a href="https://teams.microsoft.com/l/channel/19%3Ays9xSqs8JY5vsJRRF9_gx07VAQ5R1IkBzYQmv0Yino81%40thread.tacv2/%E2%8F%A9tmax?groupId=bbe603ed-00ef-4366-b2b3-65934077971d&tenantId=72f988bf-86f1-41af-91ab-2d7cd011db47&ngc=true&allowXTenantAccess=true" target="_blank" style="color:var(--cyan);">PAI &gt; tmax channel</a></div>
+        <div class="line"></div>
+        <div class="line"><span class="comment"># Questions?</span><span class="cursor"></span></div>
+      </div>
+    </div>
+    <div class="img-showcase" style="margin-top:20px">
+      <img src="tmax-icon.png" alt="tmax" style="max-height:80px; border:none; box-shadow:none;">
+    </div>
+  </div>
+
+  </div><!-- close slide-content -->
+</div><!-- close slide-container -->
+
+<div class="lightbox" id="lightbox">
+  <img id="lightboxImg" src="" alt="preview">
+</div>
+
+<div class="nav-bar">
+  <button class="btn-prev" id="prevBtn">&lt; prev</button>
+  <div class="progress" id="progress"><div class="dot active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+  <button class="btn-next" id="nextBtn">next &gt;</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const progress = document.getElementById('progress');
+  let current = 0;
+
+  // Build progress dots
+  slides.forEach((_, i) => {
+    const dot = document.createElement('div');
+    dot.className = 'dot';
+    dot.addEventListener('click', () => goTo(i));
+    progress.appendChild(dot);
+  });
+
+  function goTo(index) {
+    if (index < 0 || index >= slides.length) return;
+    slides[current].classList.remove('active');
+    current = index;
+    slides[current].classList.add('active');
+    updateUI();
+  }
+
+  function updateUI() {
+    const dots = progress.querySelectorAll('.dot');
+    dots.forEach((d, i) => d.classList.toggle('active', i === current));
+
+    // Update side nav
+    document.querySelectorAll('.side-nav .nav-item').forEach((item, i) => {
+      item.classList.remove('active', 'passed');
+      if (i === current) item.classList.add('active');
+      else if (i < current) item.classList.add('passed');
+    });
+
+    // Update nav progress
+    const navProg = document.getElementById('navProgress');
+    if (navProg) navProg.textContent = (current + 1) + ' / ' + slides.length;
+  }
+
+  document.getElementById('prevBtn').addEventListener('click', () => goTo(current - 1));
+  document.getElementById('nextBtn').addEventListener('click', () => goTo(current + 1));
+
+  // Side nav click
+  document.querySelectorAll('.side-nav .nav-item').forEach(item => {
+    item.addEventListener('click', () => goTo(parseInt(item.dataset.slide)));
+  });
+
+  // Keyboard nav
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goTo(current + 1); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); goTo(current - 1); }
+    if (e.key === 'Home') { e.preventDefault(); goTo(0); }
+    if (e.key === 'End') { e.preventDefault(); goTo(slides.length - 1); }
+  });
+
+  // Lightbox
+  const lightbox = document.getElementById('lightbox');
+  const lightboxImg = document.getElementById('lightboxImg');
+
+  document.querySelectorAll('.img-showcase img').forEach(img => {
+    img.addEventListener('click', (e) => {
+      e.stopPropagation();
+      lightboxImg.src = img.src;
+      lightbox.classList.add('open');
+    });
+  });
+
+  lightbox.addEventListener('click', () => lightbox.classList.remove('open'));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') lightbox.classList.remove('open');
+  });
+
+  // Init
+  goTo(0);
+</script>
+
+</body></html>
