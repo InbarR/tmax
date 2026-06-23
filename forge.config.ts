@@ -98,6 +98,22 @@ const config: ForgeConfig = {
         }
       }
 
+      // fsevents is chokidar's macOS native backend (optionalDependency). When
+      // present, chokidar uses a SINGLE efficient FSEvents watcher for the whole
+      // session-state tree. When absent, chokidar with `usePolling:false` falls
+      // back to per-directory fs.watch — which opens one fd per watched dir. On
+      // accounts with thousands of ~/.copilot session dirs that instantly
+      // exhausts file descriptors ("EMFILE: too many open files, watch"),
+      // saturating the main event loop so renderer startup IPC stalls and the
+      // app hangs forever on "Restoring session...". Bundling fsevents restores
+      // the FSEvents path. macOS-only: the module simply won't exist on Win/Linux
+      // build machines, so the existsSync guard skips it there.
+      const fseventsSrc = path.join(__dirname, 'node_modules', 'fsevents');
+      const fseventsDest = path.join(appDir, 'node_modules', 'fsevents');
+      if (fs.existsSync(fseventsSrc) && !fs.existsSync(fseventsDest)) {
+        await fs.copy(fseventsSrc, fseventsDest);
+      }
+
       // Copy the assets folder (icons, clawpilot.png, etc.) into the
       // packaged app. Main-process code resolves these via app.getAppPath()
       // + assets/<name> for notification icons and similar runtime assets.

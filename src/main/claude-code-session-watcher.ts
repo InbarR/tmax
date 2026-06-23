@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as chokidar from 'chokidar';
 import type { FSWatcher } from 'chokidar';
+import { canUseNativeRecursiveWatch } from './utils/fsevents';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/i;
@@ -119,11 +120,18 @@ export class ClaudeCodeSessionWatcher {
   }
 
   private async startNativeWithHotPoll(): Promise<void> {
-    console.log(`[claude-code-watcher] start() basePath=${this.basePath} mode=native+hotpoll`);
+    // See copilot-session-watcher.ts / utils/fsevents.ts: a non-polling
+    // recursive watch on macOS without fsevents opens one fd per dir and
+    // exhausts the descriptor limit (EMFILE). Fall back to bounded polling.
+    const nativeSafe = canUseNativeRecursiveWatch();
+    console.log(`[claude-code-watcher] start() basePath=${this.basePath} mode=native+hotpoll usePolling=${!nativeSafe}`);
+    if (!nativeSafe) {
+      console.warn('[claude-code-watcher] fsevents unavailable — using bounded polling to avoid fd exhaustion (EMFILE)');
+    }
 
     try {
       this.watcher = chokidar.watch(this.basePath, {
-        usePolling: false,
+        usePolling: !nativeSafe,
         // Depth 2: ~/.claude/projects/<projectDir>/<sessionUUID>.jsonl
         depth: 2,
         ignoreInitial: true,

@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as chokidar from 'chokidar';
 import type { FSWatcher } from 'chokidar';
+import { canUseNativeRecursiveWatch } from './utils/fsevents';
 
 export interface CopilotWatcherCallbacks {
   onEventsChanged: (sessionId: string) => void;
@@ -122,11 +123,22 @@ export class CopilotSessionWatcher {
    * directory-level watch plus a tiny per-file mtime poll over the hot set.
    */
   private async startNativeWithHotPoll(): Promise<void> {
-    console.log(`[copilot-watcher] start() basePath=${this.basePath} mode=native+hotpoll`);
+    // On macOS, a non-polling recursive watch is only safe when fsevents loads
+    // (single FSEvents watcher). Without it, chokidar opens one fs.watch fd per
+    // session dir and exhausts the descriptor limit (EMFILE) on accounts with
+    // thousands of sessions, wedging startup. Fall back to bounded stat-polling
+    // (no persistent fds) in that case. See utils/fsevents.ts for the full
+    // rationale. After the packaging fix bundles fsevents this fallback should
+    // never trigger on macOS.
+    const nativeSafe = canUseNativeRecursiveWatch();
+    console.log(`[copilot-watcher] start() basePath=${this.basePath} mode=native+hotpoll usePolling=${!nativeSafe}`);
+    if (!nativeSafe) {
+      console.warn('[copilot-watcher] fsevents unavailable — using bounded polling to avoid fd exhaustion (EMFILE)');
+    }
 
     try {
       this.watcher = chokidar.watch(this.basePath, {
-        usePolling: false,
+        usePolling: !nativeSafe,
         // Depth 2 covers ~/.copilot/<sessionId>/(events.jsonl|workspace.yaml).
         // chokidar's depth counts recursion levels; depth: 2 is generous and
         // keeps us from accidentally missing files if Copilot CLI ever puts a
