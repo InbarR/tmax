@@ -1766,24 +1766,62 @@ app.whenReady().then(() => {
   });
 });
 
+// Idempotent teardown of everything that holds an OS resource or a native
+// handle. Crucially this closes the chokidar/fsevents watchers: fsevents'
+// N-API threadsafe function must be released while the libuv loop is still
+// alive. If it's released during Node env teardown (node::Stop) it aborts
+// (SIGABRT) in fse_instance_destroy -> napi_release_threadsafe_function ->
+// uv_mutex_lock. Calling watcher.close()/stop() here (via Native.stop)
+// releases it early and safely.
+let didShutdown = false;
+async function shutdownResources(): Promise<void> {
+  if (didShutdown) return;
+  didShutdown = true;
+  try { ptyManager?.killAll(); } catch { /* ignore */ }
+  try { await sessionFileWatcher?.close(); } catch { /* ignore */ }
+  sessionFileWatcher = null;
+  try { await copilotWatcher?.stop(); } catch { /* ignore */ }
+  try { copilotMonitor?.dispose(); } catch { /* ignore */ }
+  try { await claudeCodeWatcher?.stop(); } catch { /* ignore */ }
+  try { claudeCodeMonitor?.dispose(); } catch { /* ignore */ }
+  try { await wslSessionManager?.stop(); } catch { /* ignore */ }
+  try { versionChecker?.stop(); } catch { /* ignore */ }
+  clearNotificationCooldowns();
+}
+
+// Quit is gated so async resource teardown always finishes before the process
+// exits. Without this, Cmd-Q / SIGTERM tears down the Node env with the
+// fsevents watcher still active and the app crashes (SIGABRT) on exit. Once
+// the watchers are closed (TSFN released) we re-issue the quit and let the
+// normal teardown run — this preserves will-quit and the renderer's
+// beforeunload session-save.
+let quitGated = false;
+app.on('before-quit', (event) => {
+  if (quitGated) return; // second pass — let the real quit proceed
+  event.preventDefault();
+  quitGated = true;
+  // Don't let a stalled watcher.close() hang the quit forever.
+  const timeout = new Promise<void>((resolve) => setTimeout(resolve, 2000));
+  Promise.race([shutdownResources(), timeout]).finally(() => {
+    app.quit();
+  });
+});
+
 app.on('will-quit', () => {
   try { globalShortcut.unregisterAll(); } catch { /* ignore */ }
 });
 
-app.on('window-all-closed', async () => {
-  // Note: we deliberately do NOT delete the clipboard temp dir here. Image
-  // paths inserted into the terminal stay clickable across restarts only
-  // if the files survive the close. Stale files are reaped by the 6h
-  // per-file sweep in sweepStaleClipboardDirs() on next startup.
-  ptyManager?.killAll();
-  try { await sessionFileWatcher?.close(); } catch { /* ignore */ }
-  sessionFileWatcher = null;
-  await copilotWatcher?.stop();
-  copilotMonitor?.dispose();
-  await claudeCodeWatcher?.stop();
-  claudeCodeMonitor?.dispose();
-  await wslSessionManager?.stop();
-  versionChecker?.stop();
-  clearNotificationCooldowns();
+app.on('window-all-closed', () => {
+  // Route through before-quit so watcher teardown happens before the env is
+  // torn down (see shutdownResources). app.quit() re-enters before-quit.
   app.quit();
 });
+
+// External termination (kill, parent terminal closing, CI) would otherwise
+// tear down the Node env with the fsevents watcher still active and crash on
+// exit. Route signals through the same gated quit so cleanup always runs.
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
+  process.on(sig, () => {
+    app.quit();
+  });
+}
