@@ -207,6 +207,103 @@ test('TASK-120: a quick second right-click after a copy does NOT paste back into
   }
 });
 
+test('TASK-261: drag-select with mouse reporting on, Ctrl+C copies the dragged text', async () => {
+  // The Ctrl+C copy path only checked term.hasSelection(), so in a mouse-
+  // reporting pane (Claude Code / TUI) - where drag makes no native selection -
+  // Ctrl+C found nothing, fell through to ^C, and never copied. The fix makes
+  // Ctrl+C consult the same dragged-text snapshot that right-click uses.
+  const { window, close } = await launchTmax();
+  try {
+    await window.waitForSelector('.terminal-panel', { timeout: 15_000 });
+    await window.waitForTimeout(800);
+
+    await writeToTerminal(window, '\x1b[?1000h\x1b[?1006h\r\nCTRLC_TARGET_261\r\n');
+    await window.waitForTimeout(300);
+
+    await window.click('.terminal-panel .xterm-screen');
+    await window.waitForTimeout(200);
+
+    await setClipboard(window, '__STALE_CLIPBOARD_261__');
+    await window.waitForTimeout(100);
+
+    const coords = await window.evaluate(() => {
+      const id = (window as any).__terminalStore.getState().focusedTerminalId;
+      const entry = (window as any).__getTerminalEntry(id);
+      const term = entry?.terminal;
+      const dim = (term as any)._core?._renderService?.dimensions;
+      const cw = dim?.css?.cell?.width ?? dim?.actualCellWidth ?? 9;
+      const ch = dim?.css?.cell?.height ?? dim?.actualCellHeight ?? 18;
+      const screen = document.querySelector('.terminal-panel .xterm-screen') as HTMLElement;
+      const rect = screen.getBoundingClientRect();
+      // CTRLC_TARGET_261 is 16 chars long, on row 1 (after \r\n).
+      const startX = rect.left + 1;
+      const endX = rect.left + cw * 16 + cw * 0.6;
+      const y = rect.top + ch * 1.5;
+      return { startX, endX, y };
+    });
+
+    await window.mouse.move(coords.startX, coords.y);
+    await window.mouse.down();
+    await window.mouse.move(coords.endX, coords.y, { steps: 10 });
+    await window.mouse.up();
+    await window.waitForTimeout(200);
+
+    const hadSelection = await window.evaluate(() => {
+      const id = (window as any).__terminalStore.getState().focusedTerminalId;
+      const entry = (window as any).__getTerminalEntry(id);
+      return entry?.terminal.hasSelection() ?? false;
+    });
+    expect(hadSelection, 'mouse reporting should consume the drag').toBe(false);
+
+    // Ctrl+C - should copy the snapshotted drag text, not send ^C.
+    await window.keyboard.press('Control+c');
+    await window.waitForTimeout(300);
+
+    const clip = await getClipboard(window);
+    expect(
+      clip,
+      `Ctrl+C should copy CTRLC_TARGET_261 from the buffer snapshot; got: ${JSON.stringify(clip)}`,
+    ).toContain('CTRLC_TARGET_261');
+    expect(clip).not.toBe('__STALE_CLIPBOARD_261__');
+  } finally {
+    await close();
+  }
+});
+
+test('TASK-261: Ctrl+C with no selection and no snapshot still sends ^C/SIGINT (no regression)', async () => {
+  const { window, close } = await launchTmax();
+  try {
+    await window.waitForSelector('.terminal-panel', { timeout: 15_000 });
+    await window.waitForTimeout(800);
+
+    await window.evaluate(() => {
+      (window as any).__ptyWrites = [];
+      const orig = (window as any).terminalAPI.writePty.bind((window as any).terminalAPI);
+      (window as any).terminalAPI.writePty = (id: string, data: string) => {
+        (window as any).__ptyWrites.push({ id, data });
+        return orig(id, data);
+      };
+    });
+
+    await window.click('.terminal-panel .xterm-screen');
+    await window.waitForTimeout(200);
+    await window.evaluate(() => { (window as any).__ptyWrites = []; });
+
+    // No selection, no drag snapshot: Ctrl+C must pass through as ^C (\x03).
+    await window.keyboard.press('Control+c');
+    await window.waitForTimeout(300);
+
+    const writes = await window.evaluate(() => (window as any).__ptyWrites.slice() as Array<{ data: string }>);
+    const sent = writes.map(w => w.data).join('');
+    expect(
+      sent.includes('\x03'),
+      `Ctrl+C with nothing to copy must send ^C/SIGINT to the pty; pty got: ${JSON.stringify(sent)}`,
+    ).toBe(true);
+  } finally {
+    await close();
+  }
+});
+
 test('TASK-120: right-click without a preceding drag still pastes (no regression)', async () => {
   const { window, close } = await launchTmax();
   try {

@@ -12,6 +12,7 @@ import { isMac, formatKeyForPlatform } from '../utils/platform';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { prepareClipboardPaste, resolveClipboardPaste } from '../utils/paste';
 import { smartUnwrapForCopy } from '../utils/smart-unwrap';
+import { detectCwdFromChunk } from '../utils/cwd-detect';
 import { MD_PATH_PATTERN } from '../utils/md-link-parser';
 import { buildSessionHoverText } from '../utils/session-tooltip';
 import type { AppConfig } from '../state/types';
@@ -381,6 +382,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   // TASK-52: read latest config in the copy handlers without rebuilding
   // the terminal. Updated by a small effect below.
   const smartUnwrapRef = useRef<boolean>(true);
+  // TASK-261: snapshot of the text the user dragged over in a mouse-reporting
+  // pane (Claude Code / TUI apps), where xterm makes no native selection.
+  // Lifted to a component-scoped ref so BOTH the keyboard handler (Ctrl+C /
+  // Ctrl+Shift+C) and the mouse handlers (right-click copy) can read it -
+  // otherwise Ctrl+C in those panes finds no selection and falls through to
+  // ^C/SIGINT instead of copying.
+  const pendingTuiCopyRef = useRef<string | null>(null);
   // TASK-224: image-path link ranges, keyed by absolute buffer row, captured
   // as the image-path link provider computes them on hover. A capture-phase
   // mouseup handler uses these to activate the preview on a plain single click
@@ -1263,16 +1271,36 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         }
         return false;
       }
-      // Ctrl+C with selection: copy instead of SIGINT (Cmd+C on Mac)
-      if ((isMac ? event.metaKey : event.ctrlKey) && !event.shiftKey && (event.key === 'c' || event.key === 'C') && term.hasSelection()) {
-        // xterm 5.5 uses a real DOM selection — browser's default Ctrl+C
-        // would fire after this handler and overwrite our unwrapped clipboard
-        // write with the raw newline-preserved selection. Block it.
-        event.preventDefault();
-        window.terminalAPI.clipboardWrite(smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current));
-        useTerminalStore.getState().addToast('Copied to clipboard');
-        term.clearSelection();
-        return false;
+      // Ctrl+C (Cmd+C on Mac): copy instead of SIGINT when there's something to
+      // copy. Two sources: a native xterm selection, or - in a mouse-reporting
+      // pane (Claude Code / TUI) where drag makes no native selection - the
+      // dragged-text snapshot (TASK-261). With neither, fall through to ^C.
+      if ((isMac ? event.metaKey : event.ctrlKey) && !event.shiftKey && (event.key === 'c' || event.key === 'C')) {
+        if (term.hasSelection()) {
+          // xterm 5.5 uses a real DOM selection — browser's default Ctrl+C
+          // would fire after this handler and overwrite our unwrapped clipboard
+          // write with the raw newline-preserved selection. Block it.
+          event.preventDefault();
+          window.terminalAPI.clipboardWrite(smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current));
+          useTerminalStore.getState().addToast('Copied to clipboard');
+          term.clearSelection();
+          return false;
+        }
+        const snapshot = pendingTuiCopyRef.current;
+        if (snapshot) {
+          const text = smartUnwrapForCopy(snapshot, smartUnwrapRef.current);
+          pendingTuiCopyRef.current = null;
+          // Guard against a whitespace-only snapshot toasting a misleading
+          // "Copied" - and only swallow Ctrl+C when we actually copied, so an
+          // empty snapshot still passes through as ^C/SIGINT.
+          if (text.trim()) {
+            event.preventDefault();
+            window.terminalAPI.clipboardWrite(text);
+            useTerminalStore.getState().addToast('Copied to clipboard');
+            return false;
+          }
+        }
+        // Nothing to copy: let Ctrl+C fall through to ^C/SIGINT.
       }
       // Plain Enter with an active selection: copy and clear selection instead
       // of submitting (Windows Terminal "Quick Edit" / cmd.exe convention, #71).
@@ -1287,13 +1315,19 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         term.clearSelection();
         return false;
       }
-      // Ctrl+Shift+C (Cmd+Shift+C on Mac): always copy selection
+      // Ctrl+Shift+C (Cmd+Shift+C on Mac): always copy selection. Falls back to
+      // the mouse-reporting drag snapshot (TASK-261) when there's no native
+      // xterm selection, same as plain Ctrl+C above.
       if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && (event.key === 'c' || event.key === 'C')) {
-        const sel = term.getSelection();
+        const sel = term.hasSelection() ? term.getSelection() : pendingTuiCopyRef.current;
         if (sel) {
-          event.preventDefault(); // see comment in plain Ctrl+C above
-          window.terminalAPI.clipboardWrite(smartUnwrapForCopy(sel, smartUnwrapRef.current));
-          useTerminalStore.getState().addToast('Copied to clipboard');
+          const text = smartUnwrapForCopy(sel, smartUnwrapRef.current);
+          pendingTuiCopyRef.current = null;
+          if (text.trim()) {
+            event.preventDefault(); // see comment in plain Ctrl+C above
+            window.terminalAPI.clipboardWrite(text);
+            useTerminalStore.getState().addToast('Copied to clipboard');
+          }
         }
         return false;
       }
@@ -2035,49 +2069,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             tryScheduleAiProcessScan();
           }
           // ── CWD detection ──────────────────────────────────────────
-          // 1. OSC 7 (standard): \x1b]7;file:///C:/path\x07
-          // 2. OSC 9;9 (ConPTY/Windows Terminal): \x1b]9;9;C:\path\x07
-          // 3. Prompt regex fallback: "PS C:\path>" or "C:\path>"
-          let detectedDir: string | null = null;
-
-          // Check if this is a WSL terminal (preserve Linux-style paths)
+          // Resolve the working directory from this chunk of output. The
+          // detection picks the LAST directory in the chunk (OSC 7 / OSC 9;9 /
+          // prompt-regex fallback) so batched output containing several prompt
+          // lines doesn't latch the pane onto a stale folder. See cwd-detect.ts.
           const termInst = useTerminalStore.getState().terminals.get(terminalId);
           const isWsl = termInst?.wsl === true;
-
-          // Try OSC 7 (file URI)
-          const osc7Match = data.match(/\x1b\]7;file:\/\/[^/]*\/([^\x07\x1b]+)(?:\x07|\x1b\\)/);
-          if (osc7Match) {
-            const decoded = decodeURIComponent(osc7Match[1]);
-            if (isWsl) {
-              // WSL: keep Linux-style forward slashes; prefix with / for absolute path
-              detectedDir = '/' + decoded;
-            } else if (/^[A-Za-z]:/.test(decoded)) {
-              // Windows path (C:/Users/...) — convert to backslashes
-              detectedDir = decoded.replace(/\//g, '\\');
-            } else {
-              // macOS/Linux path — keep forward slashes, ensure leading /
-              detectedDir = decoded.startsWith('/') ? decoded : '/' + decoded;
-            }
-          }
-
-          // Try OSC 9;9 (Windows Terminal / ConPTY)
-          if (!detectedDir) {
-            const osc9Match = data.match(/\x1b\]9;9;([^\x07\x1b]+)(?:\x07|\x1b\\)/);
-            if (osc9Match) {
-              detectedDir = osc9Match[1];
-            }
-          }
-
-          // Fallback: parse prompt text for standard PS/cmd prompts
-          if (!detectedDir) {
-            const clean = data
-              .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')   // OSC sequences
-              .replace(/\x1b\[[?]?[0-9;]*[A-Za-z]/g, '')            // CSI sequences (including ?25h/l)
-              .replace(/\x1b[^[\]].?/g, '');                         // Other short escapes
-            const psMatch = clean.match(/PS ([A-Z]:\\[^>]*?)>\s*$/im);
-            const cmdMatch = clean.match(/^([A-Z]:\\[^>]*?)>\s*$/im);
-            detectedDir = psMatch?.[1] || cmdMatch?.[1] || null;
-          }
+          const detectedDir = detectCwdFromChunk(data, isWsl);
 
           if (detectedDir) {
             const store = useTerminalStore.getState();
@@ -2281,7 +2279,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           if (term.hasSelection()) {
             const sel = term.getSelection().replace(/\s+$/u, '');
             if (sel) {
-              pendingTuiCopyText = sel;
+              pendingTuiCopyRef.current = sel;
               if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
               pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
             }
@@ -2301,7 +2299,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // mouseup so right-click can copy it (TASK-120). Without this, the
     // right-click handler has nothing to copy and the previous clipboard
     // contents leak into the next paste.
-    let pendingTuiCopyText: string | null = null;
+    // pendingTuiCopyText now lives on pendingTuiCopyRef (component scope) so the
+    // keyboard handler can consult it too; the clear timer stays effect-local.
     let pendingTuiCopyClearTimer: ReturnType<typeof setTimeout> | null = null;
     let dragStartPos: { x: number; y: number } | null = null;
     // Set true on right-button mousedown so the onSelectionChange listener
@@ -2312,7 +2311,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     const DRAG_THRESHOLD = 5; // pixels to count as a drag vs. a click
 
     const clearPendingTuiCopy = () => {
-      pendingTuiCopyText = null;
+      pendingTuiCopyRef.current = null;
       if (pendingTuiCopyClearTimer) {
         clearTimeout(pendingTuiCopyClearTimer);
         pendingTuiCopyClearTimer = null;
@@ -2455,7 +2454,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             // we deliberately did not create a visible selection).
             const snapshot = readBufferRange(s, en).replace(/\s+$/u, '');
             if (snapshot) {
-              pendingTuiCopyText = snapshot;
+              pendingTuiCopyRef.current = snapshot;
               if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
               pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
             }
@@ -2499,8 +2498,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       }
       // Mouse reporting consumed a drag: copy the text we snapshotted from
       // the buffer, suppress paste. User clearly intended to copy.
-      if (pendingTuiCopyText) {
-        const text = smartUnwrapForCopy(pendingTuiCopyText, smartUnwrapRef.current);
+      if (pendingTuiCopyRef.current) {
+        const text = smartUnwrapForCopy(pendingTuiCopyRef.current, smartUnwrapRef.current);
         clearPendingTuiCopy();
         // Same guard: a whitespace-only buffer snapshot shouldn't toast
         // "Copied" - that's the misleading "copied but nothing happened" case.
@@ -2601,11 +2600,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       if (term.hasSelection()) {
         const sel = term.getSelection().replace(/\s+$/u, '');
         if (sel) {
-          pendingTuiCopyText = sel;
+          pendingTuiCopyRef.current = sel;
           if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
           pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
         }
-      } else if (pendingTuiCopyText && !rightClickInFlight) {
+      } else if (pendingTuiCopyRef.current && !rightClickInFlight) {
         clearPendingTuiCopy();
       }
     });
