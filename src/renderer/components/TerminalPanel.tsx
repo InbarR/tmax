@@ -1683,11 +1683,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       // wheel events themselves though - Claude's bundle has a parser
       // that turns SGR mouse button codes 64/65 into wheelup/wheeldown
       // key events, and Copilot CLI (same Ink stack) is the same. Detect
-      // "TUI owns the viewport" via baseY === 0 with mouse tracking on,
-      // and let xterm forward the wheel to the PTY as a mouse-button
-      // report. The TUI's own scroller takes it from there. For panes
-      // with real xterm scrollback (baseY > 0) we still use scrollLines
-      // so the user navigates xterm's buffer.
+      // "TUI owns the viewport" via mouse tracking on + alternate buffer
+      // (or baseY === 0 on normal buffer), and let xterm forward the
+      // wheel to the PTY as a mouse-button report. The TUI's own
+      // scroller takes it from there. On alternate buffer we always
+      // forward: after a resize baseY can be >0 (stale frames from a
+      // larger viewport) but the TUI still wants wheel events. For
+      // normal-buffer panes with real scrollback we use scrollLines so
+      // the user navigates xterm's buffer.
       const tracking = term.modes.mouseTrackingMode;
       const buf = term.buffer.active;
       // Diagnostic (throttled to 1/s, no PII): records which branch the wheel
@@ -1711,10 +1714,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           aiPane: !!(inst?.aiSessionId || inst?.aiProcessKind),
         });
       };
-      if (tracking !== 'none' && buf.baseY === 0) {
+      if (tracking !== 'none' && (buf.baseY === 0 || buf.type === 'alternate')) {
         // Let xterm's native handler forward the wheel as a mouse-
         // button report. xterm WON'T scroll its own viewport because
         // mouse tracking is on - it just encodes and writes to the PTY.
+        // On alternate buffer we ALWAYS forward regardless of baseY:
+        // after a resize, xterm can accumulate stale TUI frames as
+        // scrollback (baseY > 0), but the user still wants the TUI's
+        // own scroller to handle wheel events, not xterm's buffer nav.
         logWheel('forward-to-pty');
         return true;
       }
