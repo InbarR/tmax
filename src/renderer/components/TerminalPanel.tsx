@@ -3135,8 +3135,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     const search = searchAddonRef.current;
     const term = terminalRef.current;
     if (!search || !term || !text) return;
-    runJumpToPromptSearch(search, term, text);
-  }, [latestPrompt]);
+    const found = runJumpToPromptSearch(search, term, text);
+    // On alternate buffer (TUI panes), old prompts have been overwritten by
+    // redraws and won't be found in the terminal buffer. Fall back to opening
+    // the session's prompt history dialog so the user can still see it.
+    if (!found && aiSessionId) {
+      useTerminalStore.getState().showPromptsForSession(aiSessionId);
+    }
+  }, [latestPrompt, aiSessionId]);
 
   // TASK-140: per-pane shimmer when this pane's AI session is waiting for
   // the user (awaitingApproval / waitingForUser) AND the user isn't
