@@ -48,6 +48,7 @@ export interface TerminalAPI {
   diagLog(event: string, data?: Record<string, unknown>): void;
   getDiagLogPath(): Promise<string>;
   readDiagLogTail(maxBytes?: number): Promise<string>;
+  showTerminalContextMenu(): Promise<string | null>;
   getSystemFonts(): Promise<string[]>;
   // ── Keybindings file (TASK-39) ────────────────────────────────────
   getKeybindings(): Promise<{ key: string; action: string }[]>;
@@ -381,6 +382,10 @@ const terminalAPI: TerminalAPI = {
 
   readDiagLogTail(maxBytes) {
     return ipcRenderer.invoke(IPC.DIAG_READ_TAIL, maxBytes);
+  },
+
+  showTerminalContextMenu() {
+    return ipcRenderer.invoke(IPC.TERMINAL_CONTEXT_MENU);
   },
 
   getSystemFonts() {

@@ -1295,6 +1295,28 @@ function registerIpcHandlers(): void {
     }
   });
 
+  // ── Terminal context menu (Copy/Paste) ─────────────────────────────
+  ipcMain.handle(IPC.TERMINAL_CONTEXT_MENU, async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return null;
+    return new Promise<string | null>((resolve) => {
+      const template: Electron.MenuItemConstructorOptions[] = [
+        {
+          label: 'Copy',
+          accelerator: 'CmdOrCtrl+C',
+          click: () => resolve('copy'),
+        },
+        {
+          label: 'Paste',
+          accelerator: 'CmdOrCtrl+V',
+          click: () => resolve('paste'),
+        },
+      ];
+      const menu = Menu.buildFromTemplate(template);
+      menu.popup({ window: win, callback: () => resolve(null) });
+    });
+  });
+
   // Read an image file off disk and return a base64 data URL. Used by the
   // in-tmax image preview overlay (TASK-70 follow-up): file:// URLs from
   // the renderer are blocked when the renderer origin is http://localhost

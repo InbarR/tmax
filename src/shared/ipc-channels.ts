@@ -100,6 +100,8 @@ export const IPC = {
   KEYBINDINGS_OPEN_FILE: 'keybindings:openFile',
   KEYBINDINGS_RESET: 'keybindings:reset',
   KEYBINDINGS_CHANGED: 'keybindings:changed',
+  // ── Terminal context menu ────────────────────────────────────────────
+  TERMINAL_CONTEXT_MENU: 'terminal:contextMenu',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

@@ -1277,26 +1277,36 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       // dragged-text snapshot (TASK-261). With neither, fall through to ^C.
       if ((isMac ? event.metaKey : event.ctrlKey) && !event.shiftKey && (event.key === 'c' || event.key === 'C')) {
         if (term.hasSelection()) {
-          // xterm 5.5 uses a real DOM selection — browser's default Ctrl+C
-          // would fire after this handler and overwrite our unwrapped clipboard
-          // write with the raw newline-preserved selection. Block it.
           event.preventDefault();
-          window.terminalAPI.clipboardWrite(smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current));
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          const raw = term.getSelection();
+          const text = smartUnwrapForCopy(raw, smartUnwrapRef.current);
+          copyTextFromKeydown = text;
+          window.terminalAPI.clipboardWrite(text);
           useTerminalStore.getState().addToast('Copied to clipboard');
-          term.clearSelection();
+          // Write again after a tick in case the browser's copy mechanism
+          // fires and overwrites our clipboard.writeText with empty/stale data.
+          const savedText = text;
+          setTimeout(() => {
+            window.terminalAPI.clipboardWrite(savedText);
+            try { term.clearSelection(); } catch {}
+          }, 10);
           return false;
         }
         const snapshot = pendingTuiCopyRef.current;
         if (snapshot) {
           const text = smartUnwrapForCopy(snapshot, smartUnwrapRef.current);
           pendingTuiCopyRef.current = null;
-          // Guard against a whitespace-only snapshot toasting a misleading
-          // "Copied" - and only swallow Ctrl+C when we actually copied, so an
-          // empty snapshot still passes through as ^C/SIGINT.
           if (text.trim()) {
             event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            copyTextFromKeydown = text;
             window.terminalAPI.clipboardWrite(text);
             useTerminalStore.getState().addToast('Copied to clipboard');
+            const savedText = text;
+            setTimeout(() => { window.terminalAPI.clipboardWrite(savedText); }, 10);
             return false;
           }
         }
@@ -1312,7 +1322,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         event.preventDefault(); // Stop xterm's textarea from seeing the newline and echoing CR
         window.terminalAPI.clipboardWrite(smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current));
         useTerminalStore.getState().addToast('Copied to clipboard');
-        term.clearSelection();
+        setTimeout(() => { try { term.clearSelection(); } catch {} }, 0);
         return false;
       }
       // Ctrl+Shift+C (Cmd+Shift+C on Mac): always copy selection. Falls back to
@@ -2288,7 +2298,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             if (sel) {
               pendingTuiCopyRef.current = sel;
               if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
-              pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
+              pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 10000);
             }
           }
         }
@@ -2315,6 +2325,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // response to the right-click - which is exactly the case we're trying
     // to defend against for double-click + right-click.
     let rightClickInFlight = false;
+    let copyTextFromKeydown: string | null = null; // text saved when Ctrl+C keydown handled copy
     const DRAG_THRESHOLD = 5; // pixels to count as a drag vs. a click
 
     const clearPendingTuiCopy = () => {
@@ -2463,7 +2474,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             if (snapshot) {
               pendingTuiCopyRef.current = snapshot;
               if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
-              pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
+              pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 10000);
             }
           }
         }
@@ -2481,62 +2492,50 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // closing the gap left by the TASK-66/#84 fix.
     let lastCopyAt = 0;
     const POST_COPY_PASTE_GUARD_MS = 600;
-    const handleContextMenu = (e: MouseEvent) => {
+    const handleContextMenu = async (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
       // Always release the in-flight flag once contextmenu fires, so the
       // next user-driven empty-selection event clears the snapshot normally.
       rightClickInFlight = false;
+
+      // Snapshot the selection text NOW before the async menu call — the TUI
+      // may redraw and clear the xterm selection while the menu is open.
+      let snapshotText = '';
       if (term.hasSelection()) {
-        const text = smartUnwrapForCopy(term.getSelection(), smartUnwrapRef.current);
-        term.clearSelection();
+        snapshotText = term.getSelection();
+      } else if (pendingTuiCopyRef.current) {
+        snapshotText = pendingTuiCopyRef.current;
+      }
+
+      const action = await window.terminalAPI.showTerminalContextMenu();
+      if (action === 'copy') {
+        const text = smartUnwrapForCopy(snapshotText, smartUnwrapRef.current);
+        try { term.clearSelection(); } catch {}
         clearPendingTuiCopy();
-        // Only claim "Copied" when there's actually something to copy. A
-        // whitespace-only selection (e.g. dragging across blank cells) used to
-        // write an empty clipboard yet still toast "Copied to clipboard",
-        // which reads as a broken copy to the user.
         if (text.trim()) {
           window.terminalAPI.clipboardWrite(text);
           useTerminalStore.getState().addToast('Copied to clipboard');
           lastCopyAt = Date.now();
         }
-        return;
-      }
-      // Mouse reporting consumed a drag: copy the text we snapshotted from
-      // the buffer, suppress paste. User clearly intended to copy.
-      if (pendingTuiCopyRef.current) {
-        const text = smartUnwrapForCopy(pendingTuiCopyRef.current, smartUnwrapRef.current);
-        clearPendingTuiCopy();
-        // Same guard: a whitespace-only buffer snapshot shouldn't toast
-        // "Copied" - that's the misleading "copied but nothing happened" case.
-        if (text.trim()) {
-          window.terminalAPI.clipboardWrite(text);
-          useTerminalStore.getState().addToast('Copied to clipboard');
-          lastCopyAt = Date.now();
+      } else if (action === 'paste') {
+        if (Date.now() - lastCopyAt < POST_COPY_PASTE_GUARD_MS) return;
+        const hasImage = window.terminalAPI.clipboardHasImage();
+        const html = window.terminalAPI.clipboardReadHTML();
+        const plainText = window.terminalAPI.clipboardRead();
+        if (hasImage && !plainText && !html) return;
+        const decision = resolveClipboardPaste({ hasImage, html, plainText });
+        if (decision.kind === 'image') {
+          window.terminalAPI.clipboardSaveImage().then((filePath) => {
+            window.terminalAPI.writePty(terminalId, filePath);
+          });
+        } else if (decision.kind === 'text') {
+          const payload = prepareClipboardPaste(decision.text, cursorHideSignalsRef.current.bracketedPaste);
+          window.terminalAPI.writePty(terminalId, payload);
         }
-        return;
       }
-      // Suppress paste right after a copy: a second quick right-click is
-      // almost always a user double-tapping to confirm the copy worked, not
-      // an immediate paste-back. Without this guard the just-copied text
-      // would land in the prompt below.
-      if (Date.now() - lastCopyAt < POST_COPY_PASTE_GUARD_MS) {
-        return;
-      }
-      const hasImage = window.terminalAPI.clipboardHasImage();
-      const html = window.terminalAPI.clipboardReadHTML();
-      const plainText = window.terminalAPI.clipboardRead();
-      if (hasImage && !plainText && !html) return;
-      const decision = resolveClipboardPaste({ hasImage, html, plainText });
-      if (decision.kind === 'image') {
-        window.terminalAPI.clipboardSaveImage().then((filePath) => {
-          window.terminalAPI.writePty(terminalId, filePath);
-        });
-      } else if (decision.kind === 'text') {
-        const payload = prepareClipboardPaste(decision.text, cursorHideSignalsRef.current.bracketedPaste);
-        window.terminalAPI.writePty(terminalId, payload);
-      }
+      // action === null means menu was dismissed without picking
     };
     // Use capture phase to intercept before any other handler
     containerRef.current.addEventListener('contextmenu', handleContextMenu, true);
@@ -2579,16 +2578,29 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // focus shifts away from the xterm helper textarea after a mouse-drag
     // selection).
     const handleCopyEvent = (e: ClipboardEvent) => {
+      // If our keydown handler already handled copy, write the saved text
+      // to clipboardData so the browser puts it in the system clipboard.
+      // We MUST set clipboardData before calling preventDefault — otherwise
+      // the browser writes empty to clipboard (overwriting our writeText).
+      if (copyTextFromKeydown) {
+        const text = copyTextFromKeydown;
+        copyTextFromKeydown = null;
+        e.clipboardData?.setData('text/plain', text);
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
       try {
         const sel = term.hasSelection() ? term.getSelection() : '';
-        if (!sel) return; // let the browser do its thing
+        if (!sel) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return;
+        }
         const out = smartUnwrapForCopy(sel, smartUnwrapRef.current);
-        e.preventDefault();
         e.clipboardData?.setData('text/plain', out);
-        // Mirror to the system clipboard via our IPC too — DOM clipboardData
-        // only populates the synthetic event, not the OS clipboard, when
-        // preventDefault has been called inside an Electron renderer.
-        window.terminalAPI.clipboardWrite(out);
+        e.preventDefault();
+        e.stopImmediatePropagation();
       } catch { /* defensive */ }
     };
     containerRef.current.addEventListener('copy', handleCopyEvent, true);
@@ -2609,9 +2621,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         if (sel) {
           pendingTuiCopyRef.current = sel;
           if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
-          pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 3000);
+          pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 10000);
         }
       } else if (pendingTuiCopyRef.current && !rightClickInFlight) {
+        // When mouse tracking is on (TUI pane like Copilot CLI), the app
+        // redraws constantly which clears xterm's selection — don't nuke
+        // the snapshot immediately; let the 3-second timer handle expiry.
+        if (term.modes.mouseTrackingMode !== 'none') return;
         clearPendingTuiCopy();
       }
     });
