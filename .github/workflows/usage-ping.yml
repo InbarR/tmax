@@ -1,0 +1,38 @@
+name: Record usage ping
+
+on:
+  repository_dispatch:
+    types: [usage-ping]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: usage-ping-writer
+  cancel-in-progress: false
+
+jobs:
+  append-ping:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Append ping
+        env:
+          MACHINE_ID: ${{ github.event.client_payload.machineId }}
+          VERSION: ${{ github.event.client_payload.version }}
+          OS_NAME: ${{ github.event.client_payload.os }}
+          PING_DATE: ${{ github.event.client_payload.date }}
+        run: |
+          node -e "const fs=require('fs'); const payload={machineId:process.env.MACHINE_ID||'',version:process.env.VERSION||'',os:process.env.OS_NAME||'',date:process.env.PING_DATE||''}; fs.mkdirSync('telemetry',{recursive:true}); fs.appendFileSync('telemetry/pings.jsonl', JSON.stringify(payload)+'\n');"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add telemetry/pings.jsonl
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: record usage ping"
+          git push

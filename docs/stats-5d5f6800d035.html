@@ -66,6 +66,19 @@
   <div class="summary" id="gcPlatforms" style="margin-bottom:0;"></div>
 </div>
 
+<!-- Telemetry: Active Users -->
+<div class="summary">
+  <div class="stat-card"><div class="label">DAU (today)</div><div class="value green" id="telem-dau">-</div></div>
+  <div class="stat-card"><div class="label">WAU (7 days)</div><div class="value" id="telem-wau">-</div></div>
+  <div class="stat-card"><div class="label">MAU (30 days)</div><div class="value" id="telem-mau">-</div></div>
+  <div class="stat-card"><div class="label">Total Unique Users</div><div class="value" id="telem-total">-</div></div>
+</div>
+
+<div class="chart-section" id="telemChartSection" style="display:none;">
+  <div class="chart-title">Daily Active Users</div>
+  <div class="chart-container"><canvas id="telemChart"></canvas></div>
+</div>
+
 <div class="chart-section">
   <div class="chart-title">New installs by version (stacked by OS)</div>
   <div class="chart-container"><canvas id="chart"></canvas></div>
@@ -1102,6 +1115,122 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
 });
 
 load();
+
+// ─── Telemetry: Active Users from pings.jsonl ───────────────────────
+(async function loadTelemetry() {
+  try {
+    const res = await fetch(`https://raw.githubusercontent.com/${REPO}/main/telemetry/pings.jsonl`);
+    if (!res.ok) return;
+    const text = await res.text();
+    const pings = text.trim().split('\n').filter(Boolean).map(line => {
+      try { return JSON.parse(line); } catch { return null; }
+    }).filter(Boolean);
+
+    if (pings.length === 0) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const now = Date.now();
+    const DAY = 86400000;
+
+    // Unique machines per time window
+    const uniqueByDay = new Map(); // date -> Set of machineIds
+    const allMachines = new Set();
+    const last7 = new Set();
+    const last30 = new Set();
+
+    for (const p of pings) {
+      const date = p.date || '';
+      const id = p.machineId || '';
+      if (!id) continue;
+      allMachines.add(id);
+      if (!uniqueByDay.has(date)) uniqueByDay.set(date, new Set());
+      uniqueByDay.get(date).add(id);
+
+      const daysAgo = (now - new Date(date).getTime()) / DAY;
+      if (daysAgo <= 7) last7.add(id);
+      if (daysAgo <= 30) last30.add(id);
+    }
+
+    const todaySet = uniqueByDay.get(today);
+    document.getElementById('telem-dau').textContent = todaySet ? todaySet.size : '0';
+    document.getElementById('telem-wau').textContent = last7.size;
+    document.getElementById('telem-mau').textContent = last30.size;
+    document.getElementById('telem-total').textContent = allMachines.size;
+
+    // DAU chart
+    const days = [...uniqueByDay.entries()]
+      .map(([date, set]) => ({ date, count: set.size }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    if (days.length < 2) return;
+    document.getElementById('telemChartSection').style.display = '';
+
+    const canvas = document.getElementById('telemChart');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.parentElement.getBoundingClientRect();
+    if (rect.width < 2 || rect.height < 2) return;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    const pad = { top: 20, right: 16, bottom: 40, left: 48 };
+    const chartW = W - pad.left - pad.right;
+    const chartH = H - pad.top - pad.bottom;
+    const maxVal = Math.max(...days.map(d => d.count), 1);
+
+    // Grid
+    ctx.strokeStyle = '#45475a';
+    ctx.lineWidth = 0.5;
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#a6adc8';
+    ctx.textAlign = 'right';
+    const gridLines = 4;
+    for (let i = 0; i <= gridLines; i++) {
+      const y = pad.top + chartH - (chartH * i / gridLines);
+      const val = Math.round(maxVal * i / gridLines);
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+      ctx.fillText(val, pad.left - 6, y + 4);
+    }
+
+    // Bars
+    const gap = chartW / days.length;
+    const barW = Math.min(24, gap * 0.7);
+    for (let i = 0; i < days.length; i++) {
+      const d = days[i];
+      const x = pad.left + gap * i + (gap - barW) / 2;
+      const barH = (d.count / maxVal) * chartH;
+      const y = pad.top + chartH - barH;
+      ctx.fillStyle = d.date === today ? '#a6e3a1' : '#89b4fa';
+      ctx.beginPath();
+      ctx.roundRect(x, y, barW, barH, [3, 3, 0, 0]);
+      ctx.fill();
+
+      // Value on top
+      if (d.count > 0) {
+        ctx.fillStyle = '#cdd6f4';
+        ctx.font = '10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(d.count, x + barW / 2, y - 4);
+      }
+
+      // Date label (show every Nth to avoid overlap)
+      const showEvery = Math.max(1, Math.floor(days.length / 15));
+      if (i % showEvery === 0 || i === days.length - 1) {
+        ctx.save();
+        ctx.translate(x + barW / 2, pad.top + chartH + 14);
+        ctx.rotate(-0.4);
+        ctx.fillStyle = '#a6adc8';
+        ctx.font = '9px system-ui';
+        ctx.textAlign = 'center';
+        const label = d.date.slice(5); // MM-DD
+        ctx.fillText(label, 0, 0);
+        ctx.restore();
+      }
+    }
+  } catch { /* telemetry chart is non-critical */ }
+})();
 </script>
 </body>
 </html>
