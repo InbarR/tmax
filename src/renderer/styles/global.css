@@ -1388,6 +1388,23 @@ html.transparency-active .input-dialog {
 }
 
 /* ===== Focus Mode / Normal Mode wrappers ===== */
+/* TASK-240: one stacked layer per workspace. Every workspace's tiling tree is
+   rendered and kept mounted so its xterm instances stay alive and keep
+   consuming PTY output even while hidden; switching only flips which layer is
+   visible (no remount, no blank/stale panes). Layers anchor to .layout-area via
+   the display:contents .tiling-root wrapper. Inactive layers stay SIZED (so
+   xterm measures correctly) but are hidden and non-interactive. */
+.tiling-ws-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.tiling-ws-layer.inactive {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* display:contents makes the normal-mode wrapper transparent to layout —
    children participate as if the div were not there. */
 .tiling-normal-mode {

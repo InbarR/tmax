@@ -4,6 +4,13 @@ import type { DiffMode, DiffResult, AnnotatedFile } from '../shared/diff-types';
 import type { RepoWorktrees } from '../shared/worktree-types';
 import type { BacklogTask } from '../shared/backlog-types';
 
+// TASK-240: every workspace's terminal panes now stay mounted at once, so the
+// per-terminal IPC listeners (pty:data / pty:exit) scale with the total number
+// of terminals across all workspaces - well past Node's default cap of 10,
+// which would otherwise trip a misleading MaxListenersExceededWarning. Listeners
+// are still removed on unmount, so a real leak would surface far below this.
+ipcRenderer.setMaxListeners(2000);
+
 export interface PtyDiag {
   pid: number;
   writeCount: number;

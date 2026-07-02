@@ -121,6 +121,69 @@ test('terminals created in a workspace stay in that workspace when switching', a
   }
 });
 
+test('TASK-240: panes in an inactive workspace stay mounted (alive) across a switch', async () => {
+  // Regression for the "switch back to a workspace and the terminal is blank
+  // until you resize" bug. The fix renders every workspace's tiling tree as a
+  // stacked layer and keeps ALL terminals mounted, so a hidden workspace's
+  // xterm keeps consuming its PTY instead of being torn down. The structural
+  // guard here is that the previous workspace's pane host is still in the DOM
+  // (inside an inactive layer) after switching away, not removed.
+  const { window, close } = await launchTmax();
+  try {
+    await window.waitForSelector('.terminal-panel', { timeout: 15_000 });
+    await window.waitForTimeout(500);
+
+    const wsA = await window.evaluate(() => (window as any).__terminalStore.getState().activeWorkspaceId);
+    const termA = await window.evaluate(() => (window as any).__terminalStore.getState().focusedTerminalId);
+
+    // New workspace B with its own terminal; creating it switches active to B.
+    await createWorkspace(window);
+    await window.evaluate(() => (window as any).__terminalStore.getState().createTerminal());
+    await window.waitForTimeout(400);
+    const termB = await window.evaluate(() => (window as any).__terminalStore.getState().focusedTerminalId);
+
+    // Active is B, but A's pane host must still be mounted - that is what keeps
+    // A's PTY output flowing while hidden. A sits in an inactive layer, B in the
+    // active one.
+    const onB = await window.evaluate(({ a, b }) => {
+      const hosts = [...document.querySelectorAll('[data-pane-host]')].map((e) => (e as HTMLElement).dataset.paneHost);
+      const hostA = document.querySelector(`[data-pane-host="${a}"]`);
+      const hostB = document.querySelector(`[data-pane-host="${b}"]`);
+      return {
+        hasA: hosts.includes(a),
+        hasB: hosts.includes(b),
+        aInInactive: !!hostA?.closest('.tiling-ws-layer.inactive'),
+        bInActive: !!hostB?.closest('.tiling-ws-layer.active'),
+      };
+    }, { a: termA, b: termB });
+    expect(onB.hasA).toBe(true);
+    expect(onB.hasB).toBe(true);
+    expect(onB.aInInactive).toBe(true);
+    expect(onB.bInActive).toBe(true);
+
+    // Switching back to A keeps both mounted and flips which layer is active.
+    await window.evaluate((id) => (window as any).__terminalStore.getState().setActiveWorkspace(id), wsA);
+    await window.waitForTimeout(300);
+    const onA = await window.evaluate(({ a, b }) => {
+      const hosts = [...document.querySelectorAll('[data-pane-host]')].map((e) => (e as HTMLElement).dataset.paneHost);
+      const hostA = document.querySelector(`[data-pane-host="${a}"]`);
+      const hostB = document.querySelector(`[data-pane-host="${b}"]`);
+      return {
+        hasA: hosts.includes(a),
+        hasB: hosts.includes(b),
+        aInActive: !!hostA?.closest('.tiling-ws-layer.active'),
+        bInInactive: !!hostB?.closest('.tiling-ws-layer.inactive'),
+      };
+    }, { a: termA, b: termB });
+    expect(onA.hasA).toBe(true);
+    expect(onA.hasB).toBe(true);
+    expect(onA.aInActive).toBe(true);
+    expect(onA.bInInactive).toBe(true);
+  } finally {
+    await close();
+  }
+});
+
 test('closeWorkspace removes its terminals and switches to a successor', async () => {
   const { window, close } = await launchTmax();
   try {

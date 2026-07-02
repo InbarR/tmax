@@ -200,7 +200,18 @@ const SessionLoading: React.FC = () => (
 );
 
 const TilingLayout: React.FC = () => {
-  const tilingRoot = useTerminalStore((s) => s.layout.tilingRoot);
+  // TASK-240: every workspace's panes stay mounted & live, not just the active
+  // one. Switching workspaces used to swap s.layout, unmounting the previous
+  // workspace's TerminalPanels and disposing their xterm instances - so any PTY
+  // output produced while that workspace was hidden was dropped, and the pane
+  // came back blank/stale until a manual resize forced the running app to
+  // redraw. We now render one tiling tree per workspace as a stacked layer
+  // (active visible, others visibility:hidden but still sized & rendering) and
+  // mount portals for ALL terminals, so every xterm keeps consuming its PTY
+  // and switching back is instant and current.
+  const activeTilingRoot = useTerminalStore((s) => s.layout.tilingRoot);
+  const workspaces = useTerminalStore((s) => s.workspaces);
+  const activeWorkspaceId = useTerminalStore((s) => s.activeWorkspaceId);
   const viewMode = useTerminalStore((s) => s.viewMode);
   const focusedTerminalId = useTerminalStore((s) => s.focusedTerminalId);
   const isRestoring = useTerminalStore((s) => s.isRestoring);
@@ -220,48 +231,87 @@ const TilingLayout: React.FC = () => {
     return host;
   }, []);
 
-  const leafIds = useMemo(() => (tilingRoot ? collectLeafIds(tilingRoot) : []), [tilingRoot]);
+  // Per-workspace tiling tree. The active workspace uses the live s.layout tree
+  // (the workspaces-map entry is only re-snapshotted on switch-away, so it can
+  // be stale); every other workspace uses its stored tree.
+  const workspaceTrees = useMemo(
+    () =>
+      [...workspaces.values()].map((ws) => ({
+        id: ws.id,
+        tree: ws.id === activeWorkspaceId ? activeTilingRoot : ws.layout.tilingRoot,
+      })),
+    [workspaces, activeWorkspaceId, activeTilingRoot],
+  );
 
-  // Drop host nodes for terminals that no longer have a tiled leaf (closed,
+  // Every terminal across every workspace, so each xterm stays mounted & live.
+  const allLeafIds = useMemo(() => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    for (const { tree } of workspaceTrees) {
+      if (!tree) continue;
+      for (const id of collectLeafIds(tree)) {
+        if (!seen.has(id)) {
+          seen.add(id);
+          ids.push(id);
+        }
+      }
+    }
+    return ids;
+  }, [workspaceTrees]);
+
+  // Drop host nodes for terminals that no longer exist in ANY workspace (closed
   // or moved to a floating panel) so they can be garbage-collected.
   useEffect(() => {
     const map = hostsRef.current;
-    const live = new Set(leafIds);
+    const live = new Set(allLeafIds);
     for (const id of Array.from(map.keys())) {
       if (!live.has(id)) map.delete(id);
     }
-  }, [leafIds]);
+  }, [allLeafIds]);
 
-  if (!tilingRoot) {
-    // TASK-117: while session restore is in flight, render a neutral
-    // loading indicator instead of the empty-state hero. The hero showing
-    // mid-restore made users think their panes were lost. Once restore
-    // completes - either by attaching panes (which sets tilingRoot) or
-    // by confirming nothing to restore (which clears isRestoring) - we
-    // fall through to <EmptyState />.
-    if (isRestoring) {
-      return <SessionLoading />;
-    }
-    return <EmptyState />;
-  }
-
-  // Always render a stable wrapper div so React never unmounts the TilingNode tree
-  // on mode changes. Changing the root element type (div vs TilingNode) would cause
-  // a full remount, destroying xterm instances and losing input focus.
-  // In focus mode the CSS class hides non-focused panes via visibility tricks.
-  // In normal mode display:contents makes the wrapper transparent to layout.
+  // Render one stacked layer per workspace. The wrapper is display:contents so
+  // the absolutely-positioned layers anchor to .layout-area (its positioned
+  // ancestor). Each terminal lives in exactly one workspace tree, so its host
+  // attaches to exactly one layer's slot. Layers are keyed by workspace id and
+  // stable across switches - only the active/inactive class flips - so no
+  // TilingNode remount and no xterm churn. The active workspace always has a
+  // layer (the store always holds at least the default workspace), so the empty
+  // workspace falls back to the loading indicator while restoring (TASK-117: no
+  // empty-state flash) or the empty-state hero otherwise.
   return (
     <PaneHostContext.Provider value={getHost}>
-      <div className={viewMode === 'focus' ? 'tiling-focus-mode' : 'tiling-normal-mode'}>
-        <TilingNode node={tilingRoot} />
-        <PanePortals leafIds={leafIds} getHost={getHost} />
-        <RootDropZones />
-        {viewMode === 'focus' && (
-          <FocusModePaneIndicator
-            leafIds={leafIds}
-            focusedId={focusedTerminalId}
-          />
-        )}
+      <div className="tiling-root" style={{ display: 'contents' }}>
+        {workspaceTrees.map(({ id, tree }) => {
+          const isActive = id === activeWorkspaceId;
+          // Only the active layer gets the focus-mode wrapper; inactive layers
+          // stay in normal mode so their visibility:hidden is never overridden
+          // by the focus-mode :has(.focused) rule.
+          const wrapperClass =
+            isActive && viewMode === 'focus' ? 'tiling-focus-mode' : 'tiling-normal-mode';
+          return (
+            <div
+              key={id}
+              className={`tiling-ws-layer ${isActive ? 'active' : 'inactive'}`}
+              aria-hidden={isActive ? undefined : true}
+            >
+              <div className={wrapperClass}>
+                {tree ? (
+                  <TilingNode node={tree} />
+                ) : isActive ? (
+                  isRestoring ? <SessionLoading /> : <EmptyState />
+                ) : null}
+                {isActive && <RootDropZones />}
+                {isActive && viewMode === 'focus' && (
+                  <FocusModePaneIndicator
+                    leafIds={tree ? collectLeafIds(tree) : []}
+                    focusedId={focusedTerminalId}
+                  />
+                )}
+              </div>
+            </div>
+          );
+        })}
+        <PanePortals leafIds={allLeafIds} getHost={getHost} />
       </div>
     </PaneHostContext.Provider>
   );
