@@ -20,7 +20,8 @@ import { GitDiffService, resolveGitRoot } from './git-diff-service';
 import { listWorktrees, createWorktree, deleteWorktree, getBranches } from './git-worktree-service';
 import { getDescendantNames } from './process-tree';
 import { registerBacklogHandlers } from './backlog-service';
-import { sendUsagePing } from './telemetry';
+// Telemetry temporarily disabled — will switch to App Insights
+// import { sendUsagePing } from './telemetry';
 import type { DiffMode } from '../shared/diff-types';
 import * as chokidar from 'chokidar';
 import type { FSWatcher } from 'chokidar';
@@ -1700,7 +1701,8 @@ app.whenReady().then(() => {
     console.log('Claude Code monitor ready');
     createWindow();
     console.log('Window created');
-    setTimeout(() => sendUsagePing().catch(() => {}), 5000);
+    // Telemetry temporarily disabled — will switch to App Insights
+    // setTimeout(() => sendUsagePing().catch(() => {}), 5000);
 
     // Click on a tmax OS notification toast → bring tmax to the front. Same
     // restore/show/focus dance as the global show-window hotkey below.

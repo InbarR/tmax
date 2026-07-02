@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.11.2
+
+Bug fixes for scrolling and clipboard copy in TUI panes (Claude Code, Copilot CLI).
+
+### Bug Fixes
+
+- **Scroll in TUI panes** — mouse wheel now works reliably in AI panes after a resize; previously the terminal would stop scrolling until you switched away and back.
+- **Ctrl+C copy in TUI panes** — copying selected text with Ctrl+C now works in mouse-reporting panes (Claude Code, Copilot CLI) instead of silently failing.
+- **Last-prompt badge click** — clicking the "last prompt" badge in a TUI pane now opens the prompts dialog instead of doing nothing.
+- **Copy event race** — fixed a race condition where the system clipboard could be overwritten with empty text during copy.
+- **fsevents crash on quit** — fixed SIGABRT crash on macOS when closing the app (file watchers are now properly closed before teardown).
+- **fsevents bundling** — packaged app no longer hangs on "Restoring session..." on macOS (fsevents is now correctly bundled).
+
 ## v1.11.1
 
 Bug fixes and polish.
