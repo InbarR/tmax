@@ -83,6 +83,11 @@ Built with Electron, React, TypeScript, xterm.js, and node-pty.
 - Filter input (supports `foo AND bar` for multi-token matches), show/hide dotfiles toggle, collapse all button
 - WSL filesystem support
 
+**Directories & Worktrees**
+- **Dirs panel** - a live list of the working directories across your open terminals; click one to focus that pane, so you can navigate a busy session by folder. Tracks each pane's CWD as you `cd` around (WSL paths are translated for display)
+- **Worktrees panel** (🌳 Worktrees) - lists the Git worktrees for the repos in your open terminals, grouped by repo. See each worktree's branch and path at a glance, refresh on demand, and open one in a terminal - handy when you run parallel agents across worktrees
+- Non-git and worktree-less repos are hidden automatically, so the panel only shows repos that actually have worktrees
+
 **Diff Review**
 - Built-in diff review overlay for code changes
 - File tree with filter search
@@ -160,6 +165,33 @@ Right-click any tab for:
 - Hide Tab Bar
 - New Terminal (pick shell)
 - Close / Close Others / Close All
+
+## Status Bar & Overflow Menu
+
+The bottom status bar is the app's navigation hub. On the left, quick-toggle buttons open the main panels:
+
+- **Tabs**, **Dirs**, **Explorer**, **Sessions**, **Worktrees**, and **Backlog** - each opens (or docks) the matching panel described above
+- The right side shows the layout mode (**Grid** / Focus), a clickable **terminal count**, zoom level, and the app **version** (click it to open the in-app Changelog)
+- Hover any pane title to reveal its **⋯ menu** with Float, Hide, Diff, Move to workspace, and more
+
+The status bar **⋯ overflow menu** collects app-level actions:
+
+- 🔍 **Search prompts** (`Ctrl+Shift+Y`) - cross-session prompt search
+- 📢 **Broadcast typing** (`Ctrl+Shift+A`) - type once and mirror your keystrokes into every tiled pane at the same time; toggle it off to go back to single-pane input
+- 🎨 **Tab colors** (`Ctrl+Shift+O`) - auto-assign a color to every tab based on its working directory
+- 📜 **Changelog** - view what changed in this version, rendered in-app (also opens by clicking the version number)
+- 📋 **Copy diagnostics path** - copy the diagnostic log file path to the clipboard
+- ⚠️ **Report an issue** - file a GitHub issue with context pre-filled (see below)
+
+## Diagnostics & Reporting
+
+tmax keeps a rolling **diagnostic log** to make bug reports actionable without any manual setup:
+
+- Written to `tmax-diag.log` in the app's user-data folder, capturing app lifecycle and troubleshooting events (startup, window focus/sleep, PTY and input edge cases, etc.)
+- **PII-redacted at the source**: your home directory and username are stripped from every entry (paths become `~` or `<user>`) before anything is written, so the log is safe to share
+- Buffered writes and automatic rotation at a size cap keep it lightweight and bounded
+- **Copy diagnostics path** (⋯ menu) puts the file path on your clipboard if you want to open or attach it yourself
+- **Report an issue** (⋯ menu) opens the GitHub new-issue page with a template plus your version and platform pre-filled, and copies the same template with the last ~25 KB of the diagnostic log to your clipboard (a shorter ~5 KB tail is embedded directly in the issue URL). Review and trim before submitting - nothing is sent anywhere automatically
 
 ## Download
 
