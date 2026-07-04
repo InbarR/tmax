@@ -6,6 +6,12 @@
 
 <p align="center"><strong>Get the max out of your terminal.</strong><br />A powerful cross-platform multi-terminal app with tiling layouts, floating panels, and a keyboard-driven workflow.</p>
 
+<p align="center">
+  <a href="https://inbarr.github.io/tmax/overview/"><strong>📖 Interactive Overview</strong></a> · 
+  <a href="https://inbarr.github.io/tmax/"><strong>🌐 Landing Page</strong></a> · 
+  <a href="https://github.com/InbarR/tmax/releases/latest"><strong>⬇️ Download</strong></a>
+</p>
+
 Built with Electron, React, TypeScript, xterm.js, and node-pty.
 
 ![Windows](https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white) ![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black) ![Electron](https://img.shields.io/badge/Electron-30-47848F) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
