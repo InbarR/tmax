@@ -2,14 +2,12 @@
 
 ## v1.11.3
 
-Modernized UI, anonymous usage telemetry, and quality-of-life improvements.
+Modernized UI and quality-of-life improvements.
 
 ### New Features
 
 - **Modernized visual theme** — softer borders, subtle glow on focused panes, glass-effect context menus and toasts, refined tab bar styling with smoother transitions.
 - **Cut in context menu** — right-click now offers Cut in addition to Copy and Paste.
-- **Anonymous usage telemetry** — opt-out daily ping to App Insights (no PII, SHA-256 machine hash only). Disable via Settings → `telemetry.enabled = false`.
-- **Stats dashboard** — the stats page now shows live DAU/WAU/MAU from App Insights alongside download counts.
 
 ### Improvements
 
