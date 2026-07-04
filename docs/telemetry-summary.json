@@ -1,11 +1,25 @@
 {
-  "generatedAt": null,
-  "dau": 0,
-  "wau": 0,
-  "mau": 0,
-  "total": 0,
-  "daily": [],
-  "byOs": {},
-  "byVersion": {},
-  "byTimezone": {}
+  "generatedAt": "2026-07-04T19:55:30.879Z",
+  "dau": 2,
+  "wau": 2,
+  "mau": 2,
+  "total": 2,
+  "daily": [
+    {
+      "date": "2026-07-04",
+      "users": 2
+    }
+  ],
+  "byOs": {
+    "win32": 2
+  },
+  "byVersion": {
+    "1.11.2": 2,
+    "1.12.0": 1,
+    "1.11.3": 1
+  },
+  "byTimezone": {
+    "UTC": 1,
+    "Asia/Jerusalem": 1
+  }
 }
