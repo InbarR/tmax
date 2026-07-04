@@ -1303,6 +1303,11 @@ function registerIpcHandlers(): void {
     return new Promise<string | null>((resolve) => {
       const template: Electron.MenuItemConstructorOptions[] = [
         {
+          label: 'Cut',
+          accelerator: 'CmdOrCtrl+X',
+          click: () => resolve('cut'),
+        },
+        {
           label: 'Copy',
           accelerator: 'CmdOrCtrl+C',
           click: () => resolve('copy'),

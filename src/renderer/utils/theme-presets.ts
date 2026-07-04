@@ -24,8 +24,8 @@ export interface ThemePreset {
 
 const CATPPUCCIN_CHROME: Record<string, string> = {
   '--bg-primary': '#1e1e2e',
-  '--bg-secondary': '#313244',
-  '--border-color': '#45475a',
+  '--bg-secondary': '#282839',
+  '--border-color': 'rgba(255, 255, 255, 0.06)',
   '--focus-border': '#89b4fa',
   '--text-primary': '#cdd6f4',
   '--text-secondary': '#a6adc8',

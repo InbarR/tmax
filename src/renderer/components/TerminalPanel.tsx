@@ -2510,7 +2510,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       }
 
       const action = await window.terminalAPI.showTerminalContextMenu();
-      if (action === 'copy') {
+      if (action === 'cut') {
+        const text = smartUnwrapForCopy(snapshotText, smartUnwrapRef.current);
+        try { term.clearSelection(); } catch {}
+        clearPendingTuiCopy();
+        if (text.trim()) {
+          window.terminalAPI.clipboardWrite(text);
+          useTerminalStore.getState().addToast('Cut to clipboard');
+          lastCopyAt = Date.now();
+        }
+      } else if (action === 'copy') {
         const text = smartUnwrapForCopy(snapshotText, smartUnwrapRef.current);
         try { term.clearSelection(); } catch {}
         clearPendingTuiCopy();
