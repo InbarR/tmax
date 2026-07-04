@@ -1,23 +1,11 @@
 {
-  "generatedAt": "2026-07-04T19:38:26.058Z",
-  "dau": 3,
-  "wau": 3,
-  "mau": 3,
-  "total": 3,
-  "daily": [
-    {
-      "date": "2026-07-04",
-      "users": 3
-    }
-  ],
-  "byOs": {
-    "win32": 3
-  },
-  "byVersion": {
-    "1.11.2": 3
-  },
-  "byDomain": {
-    "unknown": 2,
-    "middleeast.corp.microsoft.com": 1
-  }
+  "generatedAt": null,
+  "dau": 0,
+  "wau": 0,
+  "mau": 0,
+  "total": 0,
+  "daily": [],
+  "byOs": {},
+  "byVersion": {},
+  "byTimezone": {}
 }

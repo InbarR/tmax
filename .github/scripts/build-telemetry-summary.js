@@ -20,12 +20,14 @@ if (!API_KEY) {
 }
 
 // Common filter: real usage-ping events only (drop smoke tests), with a
-// non-empty machineId projected as `mid`.
+// non-empty machineId projected as `mid`. The machineId is a full SHA-256 hex
+// digest (64 chars); we require that length so legacy pings from earlier builds
+// that used a truncated 16-char hash are ignored and don't inflate user counts.
 const BASE = `customEvents
 | where name == "usage-ping"
 | where isempty(application_Version) or application_Version !startswith "smoketest"
 | extend mid = tostring(customDimensions.machineId)
-| where isnotempty(mid)`;
+| where isnotempty(mid) and strlen(mid) == 64`;
 
 const QUERIES = {
   // Windowed distinct-machine counts in a single row.
@@ -48,9 +50,9 @@ const QUERIES = {
 | where timestamp >= ago(30d)
 | summarize users = dcount(mid) by key = tostring(application_Version)
 | order by users desc`,
-  byDomain: `${BASE}
+  byTimezone: `${BASE}
 | where timestamp >= ago(30d)
-| summarize users = dcount(mid) by key = tostring(customDimensions.domain)
+| summarize users = dcount(mid) by key = tostring(customDimensions.timezone)
 | order by users desc`,
 };
 
@@ -118,12 +120,12 @@ function toBreakdown(result) {
 
 (async function main() {
   try {
-    const [windows, daily, byOs, byVersion, byDomain] = await Promise.all([
+    const [windows, daily, byOs, byVersion, byTimezone] = await Promise.all([
       runQuery(QUERIES.windows),
       runQuery(QUERIES.daily),
       runQuery(QUERIES.byOs),
       runQuery(QUERIES.byVersion),
-      runQuery(QUERIES.byDomain),
+      runQuery(QUERIES.byTimezone),
     ]);
 
     const w = rows(windows)[0] || {};
@@ -136,7 +138,7 @@ function toBreakdown(result) {
       daily: rows(daily).map((r) => ({ date: r.day, users: Number(r.users) || 0 })),
       byOs: toBreakdown(byOs),
       byVersion: toBreakdown(byVersion),
-      byDomain: toBreakdown(byDomain),
+      byTimezone: toBreakdown(byTimezone),
     };
 
     fs.writeFileSync(OUT_PATH, JSON.stringify(summary, null, 2) + '\n');

@@ -67,8 +67,10 @@
 </div>
 
 <!-- Telemetry: Active Users (from Application Insights) -->
+<h2 style="font-size:18px;font-weight:700;margin:32px 0 4px;">Active Usage</h2>
+<div class="subtitle" style="margin-bottom:16px;">Anonymous in-app telemetry (opt-out), aggregated from Azure Application Insights. Counts distinct machines, never individuals.</div>
 <div class="summary">
-  <div class="stat-card"><div class="label">DAU (today)</div><div class="value green" id="telem-dau">-</div><div class="label" style="margin-top:4px;text-transform:none;letter-spacing:0;">App Insights</div></div>
+  <div class="stat-card"><div class="label">DAU (today)</div><div class="value green" id="telem-dau">-</div><div class="label" style="margin-top:4px;text-transform:none;letter-spacing:0;">App telemetry</div></div>
   <div class="stat-card"><div class="label">WAU (7 days)</div><div class="value" id="telem-wau">-</div></div>
   <div class="stat-card"><div class="label">MAU (30 days)</div><div class="value" id="telem-mau">-</div></div>
   <div class="stat-card"><div class="label">Total Unique Users</div><div class="value" id="telem-total">-</div></div>
@@ -80,11 +82,11 @@
 </div>
 
 <div class="chart-section" id="telemBreakdownSection" style="display:none;">
-  <div class="chart-title">Active users by OS, version &amp; org <span style="color:var(--dim);font-weight:normal;font-size:12px;">(last 30 days)</span></div>
+  <div class="chart-title">Active users by OS, version &amp; timezone <span style="color:var(--dim);font-weight:normal;font-size:12px;">(last 30 days)</span></div>
   <div class="summary" style="margin-bottom:0;">
     <div class="stat-card" style="text-align:left;"><div class="label">Operating System</div><div id="telem-os" style="margin-top:6px;font-size:13px;line-height:1.7;">-</div></div>
     <div class="stat-card" style="text-align:left;"><div class="label">Version</div><div id="telem-version" style="margin-top:6px;font-size:13px;line-height:1.7;">-</div></div>
-    <div class="stat-card" style="text-align:left;"><div class="label">Organization</div><div id="telem-domain" style="margin-top:6px;font-size:13px;line-height:1.7;">-</div></div>
+    <div class="stat-card" style="text-align:left;"><div class="label">Timezone</div><div id="telem-timezone" style="margin-top:6px;font-size:13px;line-height:1.7;">-</div></div>
   </div>
   <div style="color:var(--dim);font-size:12px;margin-top:8px;" id="telemAsOf"></div>
 </div>
@@ -1161,10 +1163,10 @@ function osLabel(k) {
     document.getElementById('telem-total').textContent = summary.total ?? '0';
 
     // Breakdowns (last 30 days)
-    if (summary.byOs || summary.byVersion || summary.byDomain) {
+    if (summary.byOs || summary.byVersion || summary.byTimezone) {
       renderTelemBreakdown('telem-os', summary.byOs, osLabel);
       renderTelemBreakdown('telem-version', summary.byVersion);
-      renderTelemBreakdown('telem-domain', summary.byDomain);
+      renderTelemBreakdown('telem-timezone', summary.byTimezone);
       document.getElementById('telemBreakdownSection').style.display = '';
       if (summary.generatedAt) {
         document.getElementById('telemAsOf').textContent =
