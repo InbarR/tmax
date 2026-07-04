@@ -1,0 +1,56 @@
+name: Telemetry Summary
+
+# Queries the tmax Application Insights resource and writes an aggregated,
+# anonymous summary to docs/telemetry-summary.json, which the public stats page
+# reads. No secret is ever exposed to the page: only aggregate counts are
+# committed. Requires a repo secret APPINSIGHTS_API_KEY (an App Insights
+# read-only API key created in Portal -> API Access).
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # every 6 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Query App Insights and write summary
+        env:
+          APPINSIGHTS_API_KEY: ${{ secrets.APPINSIGHTS_API_KEY }}
+        run: |
+          set -e
+          if [ -z "$APPINSIGHTS_API_KEY" ]; then
+            echo "APPINSIGHTS_API_KEY not set; skipping telemetry summary."
+            exit 0
+          fi
+          mkdir -p docs
+          node .github/scripts/build-telemetry-summary.js
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/telemetry-summary.json
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+          git commit -m "chore: telemetry summary snapshot"
+          for attempt in 1 2 3 4 5; do
+            if git push; then
+              echo "Push succeeded on attempt $attempt"
+              exit 0
+            fi
+            echo "Push rejected, rebasing and retrying (attempt $attempt)"
+            git pull --rebase origin main
+          done
+          echo "Push still failing after 5 attempts; skipping this snapshot"
+          exit 0

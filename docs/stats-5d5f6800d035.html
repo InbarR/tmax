@@ -66,9 +66,9 @@
   <div class="summary" id="gcPlatforms" style="margin-bottom:0;"></div>
 </div>
 
-<!-- Telemetry: Active Users -->
+<!-- Telemetry: Active Users (from Application Insights) -->
 <div class="summary">
-  <div class="stat-card"><div class="label">DAU (today)</div><div class="value green" id="telem-dau">-</div></div>
+  <div class="stat-card"><div class="label">DAU (today)</div><div class="value green" id="telem-dau">-</div><div class="label" style="margin-top:4px;text-transform:none;letter-spacing:0;">App Insights</div></div>
   <div class="stat-card"><div class="label">WAU (7 days)</div><div class="value" id="telem-wau">-</div></div>
   <div class="stat-card"><div class="label">MAU (30 days)</div><div class="value" id="telem-mau">-</div></div>
   <div class="stat-card"><div class="label">Total Unique Users</div><div class="value" id="telem-total">-</div></div>
@@ -77,6 +77,16 @@
 <div class="chart-section" id="telemChartSection" style="display:none;">
   <div class="chart-title">Daily Active Users</div>
   <div class="chart-container"><canvas id="telemChart"></canvas></div>
+</div>
+
+<div class="chart-section" id="telemBreakdownSection" style="display:none;">
+  <div class="chart-title">Active users by OS, version &amp; org <span style="color:var(--dim);font-weight:normal;font-size:12px;">(last 30 days)</span></div>
+  <div class="summary" style="margin-bottom:0;">
+    <div class="stat-card" style="text-align:left;"><div class="label">Operating System</div><div id="telem-os" style="margin-top:6px;font-size:13px;line-height:1.7;">-</div></div>
+    <div class="stat-card" style="text-align:left;"><div class="label">Version</div><div id="telem-version" style="margin-top:6px;font-size:13px;line-height:1.7;">-</div></div>
+    <div class="stat-card" style="text-align:left;"><div class="label">Organization</div><div id="telem-domain" style="margin-top:6px;font-size:13px;line-height:1.7;">-</div></div>
+  </div>
+  <div style="color:var(--dim);font-size:12px;margin-top:8px;" id="telemAsOf"></div>
 </div>
 
 <div class="chart-section">
@@ -1116,50 +1126,56 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
 
 load();
 
-// ─── Telemetry: Active Users from pings.jsonl ───────────────────────
+// ─── Telemetry: Active Users from Application Insights summary ──────
+// Reads docs/telemetry-summary.json, produced every few hours by the
+// Telemetry Summary GitHub Action from the tmax App Insights resource.
+// Only aggregate counts live in that file - no per-event data, no keys.
+function renderTelemBreakdown(elId, obj, labelFn) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]);
+  if (entries.length === 0) { el.textContent = '-'; return; }
+  el.innerHTML = entries
+    .map(([k, v]) => {
+      const label = labelFn ? labelFn(k) : k;
+      return `<div style="display:flex;justify-content:space-between;gap:12px;"><span>${label}</span><span style="color:var(--dim)">${v}</span></div>`;
+    })
+    .join('');
+}
+
+function osLabel(k) {
+  return { win32: 'Windows', darwin: 'macOS', linux: 'Linux' }[k] || k || 'unknown';
+}
+
 (async function loadTelemetry() {
   try {
-    const res = await fetch(`https://raw.githubusercontent.com/${REPO}/main/telemetry/pings.jsonl`);
+    const res = await fetch('telemetry-summary.json', { cache: 'no-store' });
     if (!res.ok) return;
-    const text = await res.text();
-    const pings = text.trim().split('\n').filter(Boolean).map(line => {
-      try { return JSON.parse(line); } catch { return null; }
-    }).filter(Boolean);
-
-    if (pings.length === 0) return;
+    const summary = await res.json();
 
     const today = new Date().toISOString().slice(0, 10);
-    const now = Date.now();
-    const DAY = 86400000;
 
-    // Unique machines per time window
-    const uniqueByDay = new Map(); // date -> Set of machineIds
-    const allMachines = new Set();
-    const last7 = new Set();
-    const last30 = new Set();
+    document.getElementById('telem-dau').textContent = summary.dau ?? '0';
+    document.getElementById('telem-wau').textContent = summary.wau ?? '0';
+    document.getElementById('telem-mau').textContent = summary.mau ?? '0';
+    document.getElementById('telem-total').textContent = summary.total ?? '0';
 
-    for (const p of pings) {
-      const date = p.date || '';
-      const id = p.machineId || '';
-      if (!id) continue;
-      allMachines.add(id);
-      if (!uniqueByDay.has(date)) uniqueByDay.set(date, new Set());
-      uniqueByDay.get(date).add(id);
-
-      const daysAgo = (now - new Date(date).getTime()) / DAY;
-      if (daysAgo <= 7) last7.add(id);
-      if (daysAgo <= 30) last30.add(id);
+    // Breakdowns (last 30 days)
+    if (summary.byOs || summary.byVersion || summary.byDomain) {
+      renderTelemBreakdown('telem-os', summary.byOs, osLabel);
+      renderTelemBreakdown('telem-version', summary.byVersion);
+      renderTelemBreakdown('telem-domain', summary.byDomain);
+      document.getElementById('telemBreakdownSection').style.display = '';
+      if (summary.generatedAt) {
+        document.getElementById('telemAsOf').textContent =
+          'As of ' + new Date(summary.generatedAt).toLocaleString();
+      }
     }
 
-    const todaySet = uniqueByDay.get(today);
-    document.getElementById('telem-dau').textContent = todaySet ? todaySet.size : '0';
-    document.getElementById('telem-wau').textContent = last7.size;
-    document.getElementById('telem-mau').textContent = last30.size;
-    document.getElementById('telem-total').textContent = allMachines.size;
-
-    // DAU chart
-    const days = [...uniqueByDay.entries()]
-      .map(([date, set]) => ({ date, count: set.size }))
+    // Daily Active Users chart
+    const days = (summary.daily || [])
+      .map((d) => ({ date: d.date, count: d.users }))
+      .filter((d) => d.date)
       .sort((a, b) => a.date.localeCompare(b.date));
 
     if (days.length < 2) return;
