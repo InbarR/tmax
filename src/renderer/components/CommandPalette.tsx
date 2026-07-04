@@ -229,8 +229,11 @@ const CommandPalette: React.FC = () => {
       { id: 'checkForUpdates', label: 'Check for Updates', action: () => {
         window.terminalAPI.checkForUpdates();
       }},
-      { id: 'openDiagLog', label: 'Open Diagnostics Log', action: () => {
-        window.terminalAPI.getDiagLogPath().then((p: string) => (window.terminalAPI as any).openPath(p));
+      { id: 'openDiagLog', label: 'Copy Diagnostics Log Path', action: () => {
+        window.terminalAPI.getDiagLogPath().then((p: string) => {
+          navigator.clipboard.writeText(p);
+          store().addToast('Diagnostics path copied to clipboard');
+        });
       }},
       { id: 'resetMouseMode', label: 'Reset Terminal (recover scroll / selection / display)', action: () => {
         // Manual escape hatch for the bug where a TUI (e.g. Copilot CLI,

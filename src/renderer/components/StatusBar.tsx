@@ -778,12 +778,15 @@ const StatusBar: React.FC = () => {
             <button
               className="context-menu-item"
               onClick={() => {
-                window.terminalAPI.getDiagLogPath().then((p: string) => (window.terminalAPI as any).openPath(p));
+                window.terminalAPI.getDiagLogPath().then((p: string) => {
+                  navigator.clipboard.writeText(p);
+                  useTerminalStore.getState().addToast('Diagnostics path copied to clipboard');
+                });
                 setOverflowOpen(false);
               }}
-              title="Open the renderer/main diagnostics log file"
+              title="Copy the diagnostics log file path to clipboard"
             >
-              📋 Open diagnostics log
+              📋 Copy diagnostics path
             </button>
             <button
               className="context-menu-item"
