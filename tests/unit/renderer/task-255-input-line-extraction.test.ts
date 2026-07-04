@@ -77,4 +77,29 @@ describe('TASK-255: input-line extraction stops at the inline prompt', () => {
     );
     expect(extractInputLineFromBuffer(buf)).toBe('ls');
   });
+
+  // The real AI-CLI input box indents the `>` marker (the box's left border
+  // cleans to leading spaces). The marker must still be stripped, so an empty
+  // box seeds '' rather than a lone '>'.
+  test('indented (boxed) empty input seeds nothing, not a lone ">"', () => {
+    const buf = mkBuf(
+      [
+        { text: '● Considering... thinking some more' },
+        { text: '  > ' }, // boxed empty input, marker indented (cursor here)
+      ],
+      1,
+    );
+    expect(extractInputLineFromBuffer(buf)).toBe('');
+  });
+
+  test('indented (boxed) input strips the marker and keeps the typed text', () => {
+    const buf = mkBuf(
+      [
+        { text: '● Considering...' },
+        { text: '  > fix the bug' }, // boxed input with text, marker indented
+      ],
+      1,
+    );
+    expect(extractInputLineFromBuffer(buf)).toBe('fix the bug');
+  });
 });

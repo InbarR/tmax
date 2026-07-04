@@ -1,0 +1,193 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1480" height="1060" viewBox="0 0 1480 1060" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#9399b2"/>
+    </marker>
+    <marker id="arrO" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#fab387"/>
+    </marker>
+    <marker id="arrB" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#89b4fa"/>
+    </marker>
+    <marker id="arrG" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#a6e3a1"/>
+    </marker>
+    <marker id="arrP" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#cba6f7"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1480" height="1060" fill="#1e1e2e"/>
+  <text x="40" y="46" fill="#cdd6f4" font-size="26" font-weight="700">tmax architecture</text>
+  <text x="245" y="46" fill="#7f849c" font-size="16">— Electron: Renderer (React) ⇄ Preload (contextBridge) ⇄ Main (Node)</text>
+
+  <!-- ================= RENDERER ================= -->
+  <rect x="40" y="74" width="900" height="356" rx="12" fill="#26273a" stroke="#585b70" stroke-width="1.5"/>
+  <text x="60" y="100" fill="#89b4fa" font-size="16" font-weight="700">RENDERER — React  ·  src/renderer</text>
+
+  <rect x="60" y="116" width="180" height="46" rx="7" fill="#313244" stroke="#6c7086"/>
+  <text x="150" y="138" fill="#cdd6f4" font-size="14" text-anchor="middle">index → App.tsx</text>
+  <text x="150" y="154" fill="#7f849c" font-size="11" text-anchor="middle">+ DetachedApp</text>
+
+  <rect x="252" y="116" width="220" height="46" rx="7" fill="#313244" stroke="#6c7086"/>
+  <text x="362" y="137" fill="#cdd6f4" font-size="14" text-anchor="middle" font-weight="600">terminal-store (Zustand)</text>
+  <text x="362" y="153" fill="#7f849c" font-size="11" text-anchor="middle">panes · layout · workspaces · sessions</text>
+
+  <rect x="484" y="116" width="200" height="46" rx="7" fill="#313244" stroke="#6c7086"/>
+  <text x="584" y="137" fill="#cdd6f4" font-size="14" text-anchor="middle">terminal-registry</text>
+  <text x="584" y="153" fill="#7f849c" font-size="11" text-anchor="middle">live xterm instances (outside React)</text>
+
+  <rect x="696" y="116" width="224" height="46" rx="7" fill="#313244" stroke="#6c7086"/>
+  <text x="808" y="137" fill="#cdd6f4" font-size="14" text-anchor="middle">hooks / useKeybindings</text>
+  <text x="808" y="153" fill="#7f849c" font-size="11" text-anchor="middle">shortcuts · command palette</text>
+
+  <!-- components -->
+  <rect x="60" y="182" width="860" height="232" rx="9" fill="#1e1e2e" stroke="#45475a"/>
+  <text x="74" y="202" fill="#94e2d5" font-size="13" font-weight="700">components (35)</text>
+
+  <rect x="74" y="214" width="180" height="58" rx="7" fill="#363a4f" stroke="#fab387" stroke-width="1.5"/>
+  <text x="164" y="238" fill="#cdd6f4" font-size="14" text-anchor="middle" font-weight="600">TerminalPanel</text>
+  <text x="164" y="256" fill="#a6adc8" font-size="11" text-anchor="middle">xterm.js · mouse · paste</text>
+
+  <rect x="268" y="214" width="200" height="58" rx="7" fill="#363a4f" stroke="#6c7086"/>
+  <text x="368" y="234" fill="#cdd6f4" font-size="14" text-anchor="middle" font-weight="600">TilingLayout</text>
+  <text x="368" y="250" fill="#a6adc8" font-size="10.5" text-anchor="middle">tiling tree · focus mode</text>
+  <text x="368" y="264" fill="#a6adc8" font-size="10.5" text-anchor="middle">workspace layers · portals</text>
+
+  <rect x="482" y="214" width="190" height="58" rx="7" fill="#363a4f" stroke="#89b4fa" stroke-width="1.5"/>
+  <text x="577" y="238" fill="#cdd6f4" font-size="14" text-anchor="middle" font-weight="600">CopilotPanel</text>
+  <text x="577" y="256" fill="#a6adc8" font-size="11" text-anchor="middle">AI sessions · search</text>
+
+  <rect x="686" y="214" width="220" height="58" rx="7" fill="#363a4f" stroke="#a6e3a1" stroke-width="1.5"/>
+  <text x="796" y="238" fill="#cdd6f4" font-size="14" text-anchor="middle" font-weight="600">BacklogBoard</text>
+  <text x="796" y="256" fill="#a6adc8" font-size="11" text-anchor="middle">kanban · projects</text>
+
+  <rect x="74" y="290" width="394" height="50" rx="7" fill="#2a2b3c" stroke="#585b70"/>
+  <text x="271" y="311" fill="#cdd6f4" font-size="13" text-anchor="middle">PromptComposer · PromptSearchDialog</text>
+  <text x="271" y="328" fill="#a6adc8" font-size="11" text-anchor="middle">CommandPalette · TranscriptPanel · DiffReview</text>
+
+  <rect x="482" y="290" width="424" height="50" rx="7" fill="#2a2b3c" stroke="#585b70"/>
+  <text x="694" y="311" fill="#cdd6f4" font-size="13" text-anchor="middle">FileExplorer · DirPanel · WorkspaceTabBar · StatusBar</text>
+  <text x="694" y="328" fill="#a6adc8" font-size="11" text-anchor="middle">Settings · FloatingPanel · ShortcutsHelp · Toast</text>
+
+  <rect x="74" y="356" width="832" height="44" rx="7" fill="#181825" stroke="#45475a"/>
+  <text x="490" y="383" fill="#7f849c" font-size="12.5" text-anchor="middle">all components read/dispatch through  terminal-store  and call  window.terminalAPI</text>
+
+  <!-- ================= SHARED ================= -->
+  <rect x="968" y="74" width="472" height="200" rx="12" fill="#2a2533" stroke="#585b70" stroke-width="1.5"/>
+  <text x="988" y="100" fill="#cba6f7" font-size="16" font-weight="700">src/shared  ·  the main⇄renderer contract</text>
+  <rect x="988" y="116" width="200" height="44" rx="7" fill="#302b3d" stroke="#6c7086"/>
+  <text x="1088" y="143" fill="#cdd6f4" font-size="13" text-anchor="middle">ipc-channels.ts</text>
+  <rect x="1200" y="116" width="220" height="44" rx="7" fill="#302b3d" stroke="#6c7086"/>
+  <text x="1310" y="143" fill="#cdd6f4" font-size="13" text-anchor="middle">and-filter.ts (AND/NOT)</text>
+  <rect x="988" y="172" width="432" height="44" rx="7" fill="#302b3d" stroke="#6c7086"/>
+  <text x="1204" y="199" fill="#cdd6f4" font-size="13" text-anchor="middle">backlog-types · copilot-types · diff-types · worktree-types</text>
+  <text x="988" y="248" fill="#7f849c" font-size="12">imported by both the Main and Renderer processes</text>
+  <text x="988" y="266" fill="#7f849c" font-size="12">(types + pure helpers only — no Node or DOM APIs)</text>
+
+  <!-- ================= PRELOAD ================= -->
+  <rect x="40" y="456" width="900" height="64" rx="12" fill="#3a3320" stroke="#fab387" stroke-width="1.5"/>
+  <text x="60" y="480" fill="#fab387" font-size="15" font-weight="700">PRELOAD  ·  src/preload</text>
+  <text x="60" y="503" fill="#cdd6f4" font-size="13">window.terminalAPI  —  contextBridge (frozen)  ·  ipcRenderer.invoke / on  ·  the ONLY renderer↔OS boundary</text>
+
+  <!-- ================= MAIN ================= -->
+  <rect x="40" y="548" width="1400" height="380" rx="12" fill="#23283a" stroke="#585b70" stroke-width="1.5"/>
+  <text x="60" y="574" fill="#74c7ec" font-size="16" font-weight="700">MAIN — Node  ·  src/main</text>
+
+  <rect x="60" y="590" width="260" height="50" rx="7" fill="#313244" stroke="#89dceb" stroke-width="1.5"/>
+  <text x="190" y="611" fill="#cdd6f4" font-size="15" text-anchor="middle" font-weight="700">main.ts</text>
+  <text x="190" y="628" fill="#a6adc8" font-size="11" text-anchor="middle">IPC handler hub · BrowserWindows</text>
+
+  <rect x="60" y="660" width="260" height="56" rx="7" fill="#313244" stroke="#fab387" stroke-width="1.5"/>
+  <text x="190" y="683" fill="#cdd6f4" font-size="14" text-anchor="middle" font-weight="600">pty-manager.ts</text>
+  <text x="190" y="701" fill="#a6adc8" font-size="11" text-anchor="middle">node-pty / ConPTY · resize · write</text>
+
+  <!-- AI session tracking subgroup -->
+  <rect x="344" y="590" width="430" height="206" rx="9" fill="#1c2435" stroke="#89b4fa" stroke-width="1.5"/>
+  <text x="360" y="611" fill="#89b4fa" font-size="13" font-weight="700">AI session tracking (read-only)</text>
+  <rect x="360" y="624" width="398" height="42" rx="6" fill="#313244" stroke="#6c7086"/>
+  <text x="559" y="650" fill="#cdd6f4" font-size="12.5" text-anchor="middle">copilot- / claude-code- session-monitor  +  -watcher</text>
+  <rect x="360" y="676" width="398" height="42" rx="6" fill="#313244" stroke="#6c7086"/>
+  <text x="559" y="702" fill="#cdd6f4" font-size="12.5" text-anchor="middle">*-events-parser  (extract prompts / turns)</text>
+  <rect x="360" y="728" width="250" height="46" rx="6" fill="#313244" stroke="#89b4fa"/>
+  <text x="485" y="749" fill="#cdd6f4" font-size="13" text-anchor="middle" font-weight="600">copilot-session-db</text>
+  <text x="485" y="765" fill="#a6adc8" font-size="10.5" text-anchor="middle">SQLite FTS5: sessions · turns</text>
+  <rect x="624" y="728" width="134" height="46" rx="6" fill="#313244" stroke="#6c7086"/>
+  <text x="691" y="749" fill="#cdd6f4" font-size="12.5" text-anchor="middle">copilot-</text>
+  <text x="691" y="765" fill="#cdd6f4" font-size="12.5" text-anchor="middle">notification</text>
+
+  <!-- backlog -->
+  <rect x="798" y="590" width="290" height="56" rx="7" fill="#313244" stroke="#a6e3a1" stroke-width="1.5"/>
+  <text x="943" y="613" fill="#cdd6f4" font-size="14" text-anchor="middle" font-weight="600">backlog-writer · backlog-service</text>
+  <text x="943" y="630" fill="#a6adc8" font-size="11" text-anchor="middle">native read/write of task .md files</text>
+
+  <rect x="798" y="662" width="290" height="50" rx="7" fill="#313244" stroke="#cba6f7" stroke-width="1.5"/>
+  <text x="943" y="683" fill="#cdd6f4" font-size="14" text-anchor="middle" font-weight="600">version-checker</text>
+  <text x="943" y="700" fill="#a6adc8" font-size="11" text-anchor="middle">Squirrel auto-update (Windows)</text>
+
+  <rect x="798" y="728" width="290" height="48" rx="7" fill="#313244" stroke="#6c7086"/>
+  <text x="943" y="749" fill="#cdd6f4" font-size="13" text-anchor="middle">git-diff-service · git-worktree-service</text>
+  <text x="943" y="765" fill="#a6adc8" font-size="11" text-anchor="middle">diffs · worktrees</text>
+
+  <rect x="1108" y="590" width="312" height="50" rx="7" fill="#313244" stroke="#6c7086"/>
+  <text x="1264" y="611" fill="#cdd6f4" font-size="13" text-anchor="middle">config-store · keybindings-file</text>
+  <text x="1264" y="628" fill="#a6adc8" font-size="11" text-anchor="middle">persisted settings &amp; shortcuts</text>
+
+  <rect x="1108" y="656" width="312" height="50" rx="7" fill="#313244" stroke="#6c7086"/>
+  <text x="1264" y="677" fill="#cdd6f4" font-size="13" text-anchor="middle">wsl-session-manager · wsl-utils</text>
+  <text x="1264" y="694" fill="#a6adc8" font-size="11" text-anchor="middle">WSL distro sessions &amp; paths</text>
+
+  <rect x="1108" y="722" width="312" height="50" rx="7" fill="#313244" stroke="#6c7086"/>
+  <text x="1264" y="743" fill="#cdd6f4" font-size="13" text-anchor="middle">diag-logger · process-tree</text>
+  <text x="1264" y="760" fill="#a6adc8" font-size="11" text-anchor="middle">PII-redacted diagnostics · AI process scan</text>
+
+  <!-- ================= EXTERNAL ================= -->
+  <rect x="40" y="952" width="1400" height="86" rx="12" fill="#181825" stroke="#45475a" stroke-width="1.5"/>
+  <text x="60" y="976" fill="#9399b2" font-size="14" font-weight="700">OS / filesystem / network</text>
+  <rect x="60" y="986" width="240" height="40" rx="7" fill="#313244" stroke="#fab387"/>
+  <text x="180" y="1011" fill="#cdd6f4" font-size="13" text-anchor="middle">Shells: pwsh · bash · WSL</text>
+  <rect x="320" y="986" width="320" height="40" rx="7" fill="#313244" stroke="#89b4fa"/>
+  <text x="480" y="1011" fill="#cdd6f4" font-size="13" text-anchor="middle">AI CLIs → ~/.copilot · ~/.claude events.jsonl</text>
+  <rect x="660" y="986" width="300" height="40" rx="7" fill="#313244" stroke="#a6e3a1"/>
+  <text x="810" y="1011" fill="#cdd6f4" font-size="13" text-anchor="middle">backlog/tasks/*.md  (+ Backlog.md CLI)</text>
+  <rect x="980" y="986" width="300" height="40" rx="7" fill="#313244" stroke="#cba6f7"/>
+  <text x="1130" y="1011" fill="#cdd6f4" font-size="13" text-anchor="middle">GitHub releases · update feed</text>
+
+  <!-- ================= FLOW ARROWS ================= -->
+  <!-- PTY flow (orange): TerminalPanel <-> preload <-> main.ts <-> pty-manager <-> shell -->
+  <line x1="164" y1="272" x2="164" y2="455" stroke="#fab387" stroke-width="2.5" marker-end="url(#arrO)"/>
+  <line x1="164" y1="456" x2="164" y2="589" stroke="#fab387" stroke-width="2.5" marker-end="url(#arrO)" opacity="0.5"/>
+  <line x1="190" y1="640" x2="190" y2="659" stroke="#fab387" stroke-width="2.5" marker-end="url(#arrO)"/>
+  <line x1="190" y1="716" x2="190" y2="985" stroke="#fab387" stroke-width="2.5" marker-end="url(#arrO)"/>
+  <text x="200" y="540" fill="#fab387" font-size="11.5">pty:data / pty:write / resize</text>
+
+  <!-- AI flow (blue): events.jsonl -> monitor -> parser -> db -> main -> preload -> CopilotPanel -->
+  <line x1="480" y1="985" x2="510" y2="722" stroke="#89b4fa" stroke-width="2.5" marker-end="url(#arrB)"/>
+  <text x="490" y="850" fill="#89b4fa" font-size="11.5">watch .jsonl</text>
+  <line x1="320" y1="610" x2="343" y2="640" stroke="#89b4fa" stroke-width="2" marker-end="url(#arrB)" opacity="0.7"/>
+  <line x1="577" y1="589" x2="577" y2="520" stroke="#89b4fa" stroke-width="2.5" marker-end="url(#arrB)"/>
+  <line x1="577" y1="455" x2="577" y2="273" stroke="#89b4fa" stroke-width="2.5" marker-end="url(#arrB)"/>
+  <text x="587" y="540" fill="#89b4fa" font-size="11.5">session list · prompt search (FTS)</text>
+
+  <!-- backlog flow (green): BacklogBoard -> preload -> backlog-writer -> .md -->
+  <line x1="796" y1="272" x2="796" y2="455" stroke="#a6e3a1" stroke-width="2.5" marker-end="url(#arrG)"/>
+  <line x1="850" y1="456" x2="900" y2="589" stroke="#a6e3a1" stroke-width="2.5" marker-end="url(#arrG)" opacity="0.6"/>
+  <line x1="900" y1="646" x2="845" y2="985" stroke="#a6e3a1" stroke-width="2.5" marker-end="url(#arrG)"/>
+  <text x="806" y="540" fill="#a6e3a1" font-size="11.5">read/write tasks</text>
+
+  <!-- update flow (purple): version-checker <-> github -->
+  <line x1="990" y1="712" x2="1090" y2="985" stroke="#cba6f7" stroke-width="2.5" marker-end="url(#arrP)"/>
+  <text x="1000" y="850" fill="#cba6f7" font-size="11.5">check / download (v* tag → CI build)</text>
+
+  <!-- ================= LEGEND ================= -->
+  <rect x="968" y="290" width="472" height="150" rx="10" fill="#181825" stroke="#45475a"/>
+  <text x="988" y="314" fill="#cdd6f4" font-size="14" font-weight="700">Data flows</text>
+  <line x1="990" y1="338" x2="1028" y2="338" stroke="#fab387" stroke-width="3" marker-end="url(#arrO)"/>
+  <text x="1038" y="343" fill="#cdd6f4" font-size="13">Terminal I/O  (hot path: xterm ⇄ pty)</text>
+  <line x1="990" y1="366" x2="1028" y2="366" stroke="#89b4fa" stroke-width="3" marker-end="url(#arrB)"/>
+  <text x="1038" y="371" fill="#cdd6f4" font-size="13">AI sessions  (.jsonl → SQLite → UI)</text>
+  <line x1="990" y1="394" x2="1028" y2="394" stroke="#a6e3a1" stroke-width="3" marker-end="url(#arrG)"/>
+  <text x="1038" y="399" fill="#cdd6f4" font-size="13">Backlog  (native .md read/write)</text>
+  <line x1="990" y1="422" x2="1028" y2="422" stroke="#cba6f7" stroke-width="3" marker-end="url(#arrP)"/>
+  <text x="1038" y="427" fill="#cdd6f4" font-size="13">Auto-update  (GitHub releases)</text>
+</svg>

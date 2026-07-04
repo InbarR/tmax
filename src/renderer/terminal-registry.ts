@@ -120,20 +120,24 @@ export function extractInputLineFromBuffer(buf: BufferLike): string {
     else text += '\n' + clean;
   }
 
-  // Strip a leading shell prompt from the first line, if present.
-  text = text
-    .replace(/^PS [^>]*>\s*/, '')
-    .replace(/^[A-Za-z]:\\[^>]*>\s*/, '')
-    .replace(/^[>❯➜»]\s*/, '');
-
   // Remove the uniform left padding an input box adds to every row (dedent),
   // then trim trailing whitespace per line and surrounding blank space.
   const lines = text.split('\n');
   const indents = lines.filter((l) => l.trim()).map((l) => (l.match(/^ */)?.[0].length ?? 0));
   const dedent = indents.length ? Math.min(...indents) : 0;
-  return lines
+  text = lines
     .map((l) => l.slice(dedent).replace(/\s+$/, ''))
     .join('\n')
     .replace(/^\n+|\n+$/g, '')
     .trim();
+
+  // Strip a leading shell prompt / inline AI-CLI prompt marker from the first
+  // line. Done AFTER the dedent: an AI-CLI input box indents its `>` marker (the
+  // box's left border cleans to leading spaces), so before dedenting the marker
+  // isn't at column 0 and this strip would miss it - leaving an empty box to
+  // seed a lone ">" in the Prompt Editor (TASK-255 follow-up).
+  return text
+    .replace(/^PS [^>]*>\s*/, '')
+    .replace(/^[A-Za-z]:\\[^>]*>\s*/, '')
+    .replace(/^[>❯➜»]\s*/, '');
 }

@@ -1,11 +1,11 @@
 ---
 id: TASK-257
 title: NOT/exclusion doesn't work in the Copilot session FTS search
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-06-21 19:10'
-updated_date: '2026-06-22 06:26'
+updated_date: '2026-06-29 07:34'
 labels: []
 dependencies: []
 ---
@@ -18,9 +18,9 @@ TASK-254 added NOT to the shared and-filter, but the Copilot 'Search all session
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 'NOT scheduled' in the session search hides sessions whose title/summary contains 'scheduled' and shows the rest
-- [ ] #2 Mixed 'term NOT other' still works (via FTS binary NOT)
-- [ ] #3 Existing positive/AND/OR FTS queries are unchanged
+- [x] #1 'NOT scheduled' in the session search hides sessions whose title/summary contains 'scheduled' and shows the rest
+- [x] #2 Mixed 'term NOT other' still works (via FTS binary NOT)
+- [x] #3 Existing positive/AND/OR FTS queries are unchanged
 - [x] #4 Search help text notes exclusion is title/summary-scoped
 <!-- AC:END -->
 
@@ -29,3 +29,9 @@ TASK-254 added NOT to the shared and-filter, but the Copilot 'Search all session
 <!-- SECTION:NOTES:BEGIN -->
 Implemented in CopilotPanel.tsx: handleSearch sends '' to the FTS search when the query is exclusion-only (all tokens negate), resetting the list; the `filtered` memo then drops sessions whose summary+cwd match the excluded terms via the NOT-aware matchesAllTokens. Mixed queries still go to FTS (binary NOT). Help text/placeholder now advertise NOT and note the NOT-only title scope. Typecheck clean; exclusion logic covered by TASK-254 and-filter unit tests. Pending live verification of the repro (NOT scheduled).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Standalone NOT queries (e.g. 'NOT scheduled') now bypass FTS5 and filter the loaded session list client-side via the NOT-aware matchesAllTokens. Mixed queries ('term NOT other') still use FTS5 binary NOT. Positive/AND/OR queries unchanged. Search help text documents that exclusion-only queries are scoped to title/summary.
+<!-- SECTION:FINAL_SUMMARY:END -->

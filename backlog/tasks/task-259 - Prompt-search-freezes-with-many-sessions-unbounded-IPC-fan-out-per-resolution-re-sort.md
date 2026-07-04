@@ -3,11 +3,11 @@ id: TASK-259
 title: >-
   Prompt search freezes with many sessions (unbounded IPC fan-out +
   per-resolution re-sort)
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-06-22 06:48'
-updated_date: '2026-06-22 08:07'
+updated_date: '2026-06-29 07:34'
 labels: []
 dependencies: []
 ---
@@ -35,3 +35,9 @@ Real fix (the bounded pool alone did not help - the bottleneck was the MAIN proc
 
 Follow-on filter bug: the DB searchPrompts (copilot-session-db) detected operators with /\b(AND|OR)\b/ - no i-flag, no NOT - so a lowercase query like "pr and 137 and not step" was treated as ONE literal LIKE term and matched nothing, while the list fell back to the browse set (looked unfiltered). Fixed: case-insensitive operator detection + NOT -> NOT LIKE. Placeholder now advertises AND/OR/NOT. Main-process change -> needs a full restart.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Replaced unbounded per-session IPC fan-out (~1500 concurrent file reads) with SQLite-backed prompt loading for Copilot sessions + bounded 8-worker pool for Claude Code sessions. Sorts once per 100ms batch instead of per-resolution. Also fixed case-insensitive operator detection (AND/OR/NOT) in DB searchPrompts. Touches main/preload/IPC layers - requires full restart.
+<!-- SECTION:FINAL_SUMMARY:END -->

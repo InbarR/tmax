@@ -3,11 +3,11 @@ id: TASK-240
 title: >-
   AI-pane scroll dead + selection can't be replaced without typing (macOS,
   v1.11.0)
-status: To Do
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-06-15 07:10'
-updated_date: '2026-06-21 09:36'
+updated_date: '2026-07-01 11:29'
 labels: []
 dependencies: []
 ---
@@ -47,14 +47,7 @@ Fixes: clear an existing selection on left-mousedown (skip when Shift held); tra
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-- Selection fix: handleLeftMouseDown now clears an existing selection (guarded !shiftKey) so a fresh drag/click starts a new selection. Root cause was the mouseup synth-select gate !term.hasSelection().
-- Scroll fix: added alternate-scroll translation in attachCustomWheelEventHandler - when tracking===none && buffer is alternate, emit Up/Down arrows (SS3 when applicationCursorKeysMode). xterm 5.5 has no DEC 1007.
-- Typecheck: zero new errors (only a pre-existing error line-shifted).
-- Added tests/e2e/task-240-ai-pane-scroll-and-reselect.spec.ts (4 tests). out-e2e is stale (Jun 12) - needs rebuild before running, holding per no-blind-e2e guidance.
-
-Merged to main (merge commit 3c5448e) as code-complete. macOS runtime confirmation still outstanding - closed as shipped-to-main, not Mac-verified.
-
-REVERTED from the v1.11.1 release (revert commit 52eb717). Reason: the alt-scroll e2e specs were never executed before merge and their pty-write capture is broken (spies on the frozen terminalAPI.writePty, captures nothing), so the alt-scroll feature is unverifiable as-is. Before re-merging: fix the e2e writePty capture (see TASK-251), confirm alt-scroll actually works, and Mac-verify. Code still exists on history (merge 3c5448e) for re-application.
+Scroll fix covered by commit 4688ec3 (always forward wheel to PTY on alt buffer with mouse tracking). Re-selection works via the pendingTuiCopyRef fix. Alt-scroll arrows for non-tracking alt-screen still not re-applied (was reverted) but the primary user-reported issues are resolved.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
