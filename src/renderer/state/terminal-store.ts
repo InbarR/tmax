@@ -452,6 +452,9 @@ function luminanceRgb({ r, g, b }: { r: number; g: number; b: number }): number 
 export interface TabTintResult {
   /** rgba string for the pane title-bar background. */
   titleBg: string;
+  /** Solid rgb string for a slim accent stripe under the title bar, keeping the
+   *  pane's color identity strong while the fill itself stays subtle. */
+  titleAccent: string;
   /** Solid hex (or rgba if baseBg is rgba) for xterm.theme.background. */
   terminalBg: string;
   /** xterm.theme.foreground override (dark tone when bg is too light). */
@@ -482,14 +485,18 @@ export function computeTabTint(
   const base = hexToRgb(baseBgHex);
   // Defensive: malformed colors → fall back to base bg untouched.
   if (!tint || !base) {
-    return { titleBg: tintHex, terminalBg: baseBgHex };
+    return { titleBg: tintHex, titleAccent: tintHex, terminalBg: baseBgHex };
   }
   const i = Math.max(0, Math.min(100, intensity)) / 100;
   const isNeutral = chroma(tintHex) <= NEUTRAL_CHROMA_THRESHOLD;
 
-  // Title bar: focused = full intensity, unfocused = half. Cap at 0.95
-  // so the bar still reads as chrome rather than a void.
-  const titleAlpha = Math.min(0.95, focused ? i : i / 2);
+  // Title bar: a SUBTLE tint, not a wall of color. Cap much lower than before
+  // so the colored bar reads as tinted chrome; the pane's real color identity
+  // comes from the slim solid accent stripe (titleAccent) rendered under the
+  // bar. focused = fuller tint, unfocused = half. Neutrals may fill more since
+  // a grey/black bar is chrome, not a loud accent.
+  const titleCap = isNeutral ? 0.85 : 0.22;
+  const titleAlpha = Math.min(titleCap, focused ? i * 0.55 : i * 0.28);
 
   // Body fill: vivid colors are accents, never walls. Hard cap at 0.20
   // alpha so a colored pane reads as "tinted" rather than "filled". At
@@ -505,6 +512,10 @@ export function computeTabTint(
   const blendedBody = blendRgb(tint, base, bodyAlpha);
   const terminalBg = rgbToHex(blendedBody);
   const titleBg = `rgba(${tint.r}, ${tint.g}, ${tint.b}, ${titleAlpha})`;
+  // Solid accent stripe colour: dimmed a touch when unfocused so the active
+  // pane's stripe stands out.
+  const accentAlpha = focused ? 0.9 : 0.45;
+  const titleAccent = `rgba(${tint.r}, ${tint.g}, ${tint.b}, ${accentAlpha})`;
 
   // Light pane: flip xterm foreground / cursor to dark so text stays
   // readable. Threshold tuned at 0.55 - matches the user-verified value
@@ -513,11 +524,12 @@ export function computeTabTint(
   return useDarkText
     ? {
         titleBg,
+        titleAccent,
         terminalBg,
         terminalFg: '#1a1a1a',
         terminalCursor: '#1a1a1a',
       }
-    : { titleBg, terminalBg };
+    : { titleBg, titleAccent, terminalBg };
 }
 
 /**

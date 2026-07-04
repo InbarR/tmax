@@ -3257,7 +3257,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       {title && (
         <div
           className={`terminal-pane-title${floatTitleBar ? ' float-titlebar' : ''}${isMultiSelected ? ' multi-selected' : ''}`}
-          style={tint ? { background: tint.titleBg } : undefined}
+          style={tint ? { background: tint.titleBg, ['--pane-accent' as string]: tint.titleAccent } : undefined}
           onMouseDown={(e) => {
             // TASK-107: Middle-click on the title bar closes the pane,
             // mirroring the tab middle-click-close UX in TabBar. Bail when

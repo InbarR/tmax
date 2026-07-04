@@ -5,8 +5,8 @@
    translucent overlays without each preset shipping its own rgba list. */
 :root {
   --bg-primary: #1e1e2e;
-  --bg-secondary: #313244;
-  --border-color: #45475a;
+  --bg-secondary: #282839;
+  --border-color: rgba(255, 255, 255, 0.06);
   --focus-border: #89b4fa;
   --text-primary: #cdd6f4;
   --text-secondary: #a6adc8;
@@ -21,6 +21,13 @@
   --rgb-accent-success: 166, 227, 161;
   --rgb-accent-warning: 249, 226, 175;
   --rgb-accent-danger: 243, 139, 168;
+  /* Modern depth tokens */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
 }
 
 /* ===== Reset ===== */
@@ -91,10 +98,10 @@ html.transparency-active .settings-backdrop,
 html.transparency-active .shortcuts-backdrop,
 html.transparency-active .palette-backdrop {
   --bg-primary: #1e1e2e;
-  --bg-secondary: #313244;
+  --bg-secondary: #282839;
   --tab-bg: #313244;
   --tab-active: #45475a;
-  --border-color: #45475a;
+  --border-color: rgba(255, 255, 255, 0.08);
 }
 
 html.transparency-active .settings-dialog,
@@ -121,14 +128,14 @@ html.transparency-active .input-dialog {
 .tab-bar {
   display: flex;
   flex-direction: row;
-  height: 38px;
-  min-height: 38px;
-  background: var(--bg-secondary);
+  height: 40px;
+  min-height: 40px;
+  background: linear-gradient(to bottom, #2a2a3c, var(--bg-secondary));
   overflow-x: auto;
   overflow-y: hidden;
   align-items: center;
-  padding: 0 4px;
-  gap: 2px;
+  padding: 4px 6px;
+  gap: 3px;
   border-bottom: 1px solid var(--border-color);
   -webkit-app-region: no-drag;
 }
@@ -145,17 +152,17 @@ html.transparency-active .input-dialog {
   display: flex;
   align-items: center;
   padding: 0 28px 0 12px;
-  height: 30px;
+  height: 32px;
   cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
   position: relative;
   background: transparent;
   color: var(--text-secondary);
   font-size: 12.5px;
   user-select: none;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   min-width: 0;
   max-width: 200px;
 }
@@ -163,14 +170,15 @@ html.transparency-active .input-dialog {
 .tab:hover {
   background: rgba(var(--rgb-accent), 0.08);
   color: var(--text-primary);
+  border-color: rgba(var(--rgb-accent), 0.12);
 }
 
 .tab.active {
-  background: rgba(var(--rgb-accent), 0.18);
+  background: rgba(var(--rgb-accent), 0.14);
   color: var(--text-primary);
   font-weight: 600;
-  border-color: var(--accent);
-  box-shadow: inset 0 2px 0 0 var(--accent);
+  border-color: rgba(var(--rgb-accent), 0.3);
+  box-shadow: 0 0 8px rgba(var(--rgb-accent), 0.15);
 }
 
 .tab.dormant {
@@ -497,16 +505,32 @@ html.transparency-active .input-dialog {
 }
 
 /* ===== Split Resizer ===== */
+/* No visible divider - panes sit flush against each other (their own 1px
+   borders provide the only separation). A transparent ::before still extends a
+   grab area a few px each side so dragging to resize keeps working. Highlights
+   on hover so the grab target is discoverable. */
 .split-resizer {
-  flex: 0 0 4px;
-  background: var(--border-color);
-  transition: background 0.15s ease;
+  flex: 0 0 0px;
+  background: transparent;
+  transition: background 0.2s ease;
   z-index: 10;
+  position: relative;
+}
+
+.split-resizer::before {
+  content: '';
+  position: absolute;
+}
+.split-resizer.horizontal::before {
+  inset: 0 -4px;
+}
+.split-resizer.vertical::before {
+  inset: -4px 0;
 }
 
 .split-resizer:hover,
 .split-resizer.dragging {
-  background: var(--focus-border);
+  background: rgba(var(--rgb-accent), 0.5);
 }
 
 .split-resizer.horizontal {
@@ -522,12 +546,14 @@ html.transparency-active .input-dialog {
   width: 100%;
   height: 100%;
   border: 1px solid var(--border-color);
+  border-radius: 2px;
   overflow: hidden;
   position: relative;
   display: flex;
   flex-direction: column;
   /* Isolate layout/paint: terminal updates don't trigger reflows of siblings */
   contain: layout style;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 /* Crisper terminal text on HiDPI displays — prevents subpixel fringing */
@@ -536,8 +562,21 @@ html.transparency-active .input-dialog {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Focus indication is a soft neutral border plus a gentle accent glow - no
+   hard accent-colored edge, which previously read as a stray blue line along
+   the pane (and its title seam). The glow reads as "lifted / active" without
+   drawing a literal line. */
 .terminal-panel.focused {
-  box-shadow: inset 0 0 0 1px rgba(var(--rgb-accent), 0.3);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.terminal-panel.focused > .terminal-pane-title {
+  /* Keep the accent stripe when the pane has a color; only the neutral
+     fallback border brightens on focus. */
+  border-bottom-color: var(--pane-accent, rgba(255, 255, 255, 0.12));
+  color: var(--text-primary);
+  opacity: 1;
 }
 
 /* TASK-72: Multi-select indicator. Distinct from .focused (which is a soft
@@ -572,10 +611,14 @@ html.transparency-active .input-dialog {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-secondary);
-  background: var(--bg-secondary);
-  padding: 2px 6px 2px 10px;
-  border-bottom: 1px solid var(--border-color);
-  opacity: 0.85;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.03), transparent);
+  padding: 3px 6px 3px 10px;
+  /* When a pane has a tab color, --pane-accent is set inline and this renders a
+     slim solid stripe under the (now subtly-tinted) title bar - color identity
+     as a modern accent line instead of a heavy full-bar fill. Falls back to the
+     neutral chrome border when no accent is set. */
+  border-bottom: 2px solid var(--pane-accent, var(--border-color));
+  opacity: 0.9;
   line-height: 1.3;
   transition: opacity 0.2s;
 }
@@ -1379,7 +1422,9 @@ html.transparency-active .input-dialog {
 /* TASK-158: stable host nodes. The slot is rendered by React inside each
    leaf; the .pane-host (which holds the portaled TerminalPanel + its xterm)
    is re-parented imperatively into the slot as the tree reshapes. Both fill
-   the leaf so xterm sizes to the full pane. */
+   the leaf so xterm sizes to the full pane. A small inset gives tiled panes a
+   hairline gap so their rounded corners read as distinct "cards" instead of an
+   edge-to-edge grid - a subtle but modern touch. */
 .pane-host-slot,
 .pane-host {
   position: absolute;
@@ -2397,13 +2442,14 @@ html.transparency-active .input-dialog {
 .context-menu {
   position: fixed;
   z-index: 1000;
-  min-width: 180px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 4px 0;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  min-width: 220px;
+  background: color-mix(in srgb, var(--bg-secondary) 90%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  padding: 6px;
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(0, 0, 0, 0.25);
   font-size: 13px;
+  backdrop-filter: blur(16px) saturate(1.2);
 }
 /* Full-screen catcher so a click anywhere dismisses the palette rebind menu
    without closing the palette itself. */
@@ -2413,12 +2459,14 @@ html.transparency-active .input-dialog {
   z-index: 1001;
 }
 .context-menu-header {
-  padding: 5px 12px 6px;
+  padding: 6px 10px 6px;
   font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-secondary);
-  border-bottom: 1px solid var(--border-color);
-  margin-bottom: 4px;
+  opacity: 0.75;
+  border-bottom: none;
+  margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2429,22 +2477,27 @@ html.transparency-active .input-dialog {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 6px 14px;
+  padding: 8px 10px;
   border: none;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-primary);
   cursor: pointer;
   text-align: left;
   font-size: 13px;
-  gap: 8px;
+  gap: 10px;
+  transition: background 0.1s ease, color 0.1s ease;
 }
 
+/* Neutral, GitHub-style hover: a soft light overlay rather than an accent
+   tint, so it reads clean and calm across every theme. */
 .context-menu-item:hover {
-  background: rgba(var(--rgb-accent), 0.15);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-primary);
 }
 
 .context-menu-item.sub {
-  padding-left: 24px;
+  padding-left: 22px;
   color: var(--text-secondary);
 }
 
@@ -2457,26 +2510,32 @@ html.transparency-active .input-dialog {
 }
 
 .context-menu-item.danger:hover {
-  background: rgba(var(--rgb-accent-danger), 0.15);
+  background: rgba(var(--rgb-accent-danger), 0.14);
 }
 
 .context-menu-item .shortcut {
   margin-left: auto;
   color: var(--text-secondary);
   font-size: 11px;
+  opacity: 0.7;
 }
 
 .context-menu-separator {
   height: 1px;
   background: var(--border-color);
-  margin: 4px 8px;
+  margin: 5px 6px;
 }
 
 .context-menu-shortcut {
   margin-left: auto;
-  padding-left: 16px;
+  padding: 1px 6px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 10px;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  opacity: 0.85;
 }
 
 .context-menu-sub {
@@ -2605,13 +2664,13 @@ html.transparency-active .input-dialog {
 .status-bar {
   display: flex;
   align-items: center;
-  height: 24px;
-  min-height: 24px;
-  background: var(--bg-secondary);
+  height: 30px;
+  min-height: 30px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.02), transparent), var(--bg-secondary);
   border-top: 1px solid var(--border-color);
   padding: 0 10px;
   font-size: 11px;
-  gap: 8px;
+  gap: 10px;
 }
 
 .status-section {
@@ -2696,12 +2755,12 @@ html.transparency-active .input-dialog {
 .status-dev-pill {
   color: #ffb84d;
   background: rgba(255, 184, 77, 0.12);
-  border: 1px solid rgba(255, 184, 77, 0.45);
+  border: 1px solid rgba(255, 184, 77, 0.4);
   font-weight: 700;
   font-size: 10px;
   letter-spacing: 0.5px;
-  padding: 1px 6px;
-  border-radius: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
   cursor: default;
   user-select: none;
 }
@@ -3097,22 +3156,26 @@ html.transparency-active .input-dialog {
   text-decoration: underline;
 }
 
+/* Footer nav chips (Tabs / Dirs / Explorer / ...). Borderless by default so the
+   footer reads as a clean toolbar, not a row of boxed buttons; a soft rounded
+   pill appears on hover / when active. */
 .status-mode-btn {
   background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: 11px;
-  padding: 1px 6px;
+  padding: 3px 9px;
   cursor: pointer;
   font-family: inherit;
   line-height: 1.4;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 
 .status-mode-btn:hover {
-  background: rgba(var(--rgb-accent), 0.15);
+  background: rgba(var(--rgb-accent), 0.12);
   color: var(--text-primary);
-  border-color: var(--focus-border);
+  border-color: transparent;
 }
 
 .status-mode-btn.status-broadcast-active {
@@ -5147,10 +5210,11 @@ select.settings-input {
 .palette {
   width: 500px;
   max-height: 420px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--focus-border);
-  border-radius: 8px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(16px) saturate(1.2);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -5183,19 +5247,20 @@ select.settings-input {
 .palette-list {
   overflow-y: auto;
   flex: 1;
-  padding: 4px 0;
+  padding: 6px;
 }
 
 .palette-item {
   display: flex;
   align-items: center;
-  padding: 8px 16px;
+  padding: 8px 12px;
   cursor: pointer;
-  gap: 8px;
+  gap: 10px;
+  border-radius: var(--radius-sm);
 }
 
 .palette-item.selected {
-  background: rgba(var(--rgb-accent), 0.15);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .palette-label {
@@ -5208,10 +5273,11 @@ select.settings-input {
   font-family: 'Cascadia Code', 'Consolas', monospace;
   font-size: 11px;
   color: var(--text-secondary);
-  background: var(--bg-primary);
-  padding: 2px 6px;
-  border-radius: 3px;
-  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
 }
 
 /* TASK-193: right-click "Change shortcut" recording state on a palette row. */
@@ -6051,13 +6117,14 @@ select.settings-input {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--bg-secondary, #1e1e2e);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 8px 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  animation: toast-slide-in 0.3s ease-out;
-  max-width: 320px;
+  background: rgba(30, 30, 46, 0.92);
+  border: 1px solid rgba(var(--rgb-accent), 0.2);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  box-shadow: var(--shadow-md), 0 0 12px rgba(var(--rgb-accent), 0.08);
+  backdrop-filter: blur(12px);
+  animation: toast-slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 340px;
 }
 
 .toast-message {
