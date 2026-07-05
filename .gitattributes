@@ -1,0 +1,4 @@
+# Shell scripts and macOS .command helpers must stay LF, or they break when
+# executed on macOS/Linux (a stray CR causes "bad interpreter" / syntax errors).
+*.sh            text eol=lf
+*.command       text eol=lf
