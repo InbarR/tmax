@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.11.4
+
+macOS self-update and native database fixes.
+
+### New Features
+
+- **macOS DMG-swap self-updater** — tmax on macOS can now auto-update itself by downloading and swapping the DMG, with a force-test mode for verification.
+- **First-install Gatekeeper helper** — the macOS DMG ships a helper script that clears quarantine flags on first launch, bypassing the "unidentified developer" warning.
+
+### Bug Fixes
+
+- **better-sqlite3 ABI rebuild** — native module is now compiled against the correct Electron ABI (123), fixing potential crashes on session database access.
+
 ## v1.11.3
 
 Modernized UI and quality-of-life improvements.

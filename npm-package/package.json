@@ -1,6 +1,6 @@
 {
   "name": "tmax-terminal",
-  "version": "1.11.3",
+  "version": "1.11.4",
   "description": "Powerful multi-terminal app with tiling, floating panels, and keyboard-driven workflow",
   "license": "MIT",
   "author": "InbarR",
@@ -9,14 +9,26 @@
     "url": "https://github.com/InbarR/tmax"
   },
   "homepage": "https://github.com/InbarR/tmax",
-  "keywords": ["terminal", "tiling", "multiplexer", "electron", "tmux", "split", "pane"],
+  "keywords": [
+    "terminal",
+    "tiling",
+    "multiplexer",
+    "electron",
+    "tmux",
+    "split",
+    "pane"
+  ],
   "bin": {
     "tmax": "cli.js"
   },
   "scripts": {
     "postinstall": "node install.js"
   },
-  "os": ["win32", "darwin", "linux"],
+  "os": [
+    "win32",
+    "darwin",
+    "linux"
+  ],
   "engines": {
     "node": ">=16"
   }
