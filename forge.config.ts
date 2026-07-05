@@ -136,8 +136,24 @@ const config: ForgeConfig = {
   makers: [
     // Windows
     new MakerSquirrel({ authors: "tmax", description: "Powerful multi-terminal app", setupIcon: "./assets/icon.ico", iconUrl: "https://raw.githubusercontent.com/InbarR/tmax/main/assets/icon.ico", ...(windowsSign ? { windowsSign } : {}) }),
-    // macOS
-    new MakerDMG({ format: "ULFO" }),
+    // macOS. Include a double-click "Install tmax.command" helper alongside the
+    // app + Applications shortcut. tmax is only ad-hoc signed, so a plain
+    // drag-to-Applications leaves the download quarantine flag in place and
+    // Gatekeeper blocks the first launch. The helper copies the app in and runs
+    // `xattr -cr` so first-time users aren't stuck. (Updates self-clear via the
+    // built-in updater, so this is only needed for the very first install.)
+    new MakerDMG({
+      format: "ULFO",
+      additionalDMGOptions: { window: { size: { width: 660, height: 400 } } },
+      contents: (opts: { appPath: string }) => {
+        const path = require("path");
+        return [
+          { x: 330, y: 130, type: "file", path: path.resolve(__dirname, "assets", "Install tmax.command") },
+          { x: 180, y: 320, type: "file", path: path.resolve(opts.appPath) },
+          { x: 480, y: 320, type: "link", path: "/Applications" },
+        ];
+      },
+    }),
     // Linux
     new MakerDeb({
       options: {
