@@ -1169,8 +1169,14 @@ function osLabel(k) {
       renderTelemBreakdown('telem-timezone', summary.byTimezone);
       document.getElementById('telemBreakdownSection').style.display = '';
       if (summary.generatedAt) {
+        const gen = new Date(summary.generatedAt);
+        const utc = gen.toLocaleString('en-GB', {
+          timeZone: 'UTC',
+          day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
         document.getElementById('telemAsOf').textContent =
-          'As of ' + new Date(summary.generatedAt).toLocaleString();
+          `As of ${utc} UTC (${relativeDate(summary.generatedAt)})`;
       }
     }
 
