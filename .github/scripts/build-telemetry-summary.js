@@ -23,11 +23,16 @@ if (!API_KEY) {
 // non-empty machineId projected as `mid`. The machineId is a full SHA-256 hex
 // digest (64 chars); we require that length so legacy pings from earlier builds
 // that used a truncated 16-char hash are ignored and don't inflate user counts.
+// We also drop pings whose org domain looks like a CI runner VM (GitHub-hosted
+// runners launch the app during e2e/packaging tests and would otherwise count
+// as fake first-run "users").
 const BASE = `customEvents
 | where name == "usage-ping"
 | where isempty(application_Version) or application_Version !startswith "smoketest"
 | extend mid = tostring(customDimensions.machineId)
-| where isnotempty(mid) and strlen(mid) == 64`;
+| extend dom = tolower(tostring(customDimensions.domain))
+| where isnotempty(mid) and strlen(mid) == 64
+| where isempty(dom) or not(dom matches regex @"^(runner|fv-az|mac-|ghrunner|azdev)")`;
 
 const QUERIES = {
   // Windowed distinct-machine counts in a single row.
