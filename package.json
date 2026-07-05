@@ -19,6 +19,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
     "upgrade": "node scripts/build-upgrade.js",
+    "rebuild:native": "electron-rebuild --force --only better-sqlite3",
     "postinstall": "node scripts/fix-node-pty.js"
   },
   "dependencies": {
@@ -51,6 +52,7 @@
     "@electron-forge/maker-zip": "^7.4.0",
     "@electron-forge/plugin-auto-unpack-natives": "^7.4.0",
     "@electron-forge/plugin-vite": "^7.4.0",
+    "@electron/rebuild": "^3.7.2",
     "@playwright/test": "^1.59.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/dompurify": "^3.0.5",

@@ -100,6 +100,33 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # Rebuild better-sqlite3 against Electron's ABI (NODE_MODULE_VERSION 123
+      # for Electron 30), not the build machine's Node ABI. `npm install` fetches
+      # a plain-Node prebuilt binary via prebuild-install (ABI 115 on the Node 20
+      # runner), and @electron/rebuild's own run can be skipped by a stale
+      # build/Release/.forge-meta marker — so without this the packaged app ships
+      # a wrong-ABI binary and better-sqlite3 fails to load ("compiled against a
+      # different Node.js version"), silently degrading the Copilot-session panel
+      # to a slow filesystem scan. --force defeats the stale marker; --arch
+      # handles cross-arch (win arm64 / mac x64) builds; --only keeps node-pty's
+      # patched build untouched.
+      - name: Rebuild native modules against Electron ABI
+        run: npx electron-rebuild --force --only better-sqlite3 --arch=${{ matrix.arch }}
+
+      # Fail the build loudly if the rebuild did NOT produce an Electron-ABI
+      # binary, instead of silently shipping a broken one again. Runs electron as
+      # plain Node (ELECTRON_RUN_AS_NODE) and requires better-sqlite3 — a mismatch
+      # throws "NODE_MODULE_VERSION". Only checks the native-arch matrix entries
+      # (win x64 / mac arm64 / linux x64), since a cross-arch binary can't be
+      # executed on the runner; those still get rebuilt for their target --arch.
+      - name: Verify better-sqlite3 matches Electron ABI
+        if: (matrix.platform == 'win32' && matrix.arch == 'x64') || (matrix.platform == 'darwin' && matrix.arch == 'arm64') || (matrix.platform == 'linux' && matrix.arch == 'x64')
+        shell: bash
+        env:
+          ELECTRON_RUN_AS_NODE: '1'
+        run: |
+          npx electron -e "require('better-sqlite3'); console.log('better-sqlite3 loads under Electron ABI ' + process.versions.modules)"
+
       - name: Build for ${{ matrix.platform }}-${{ matrix.arch }}
         run: npm run build -- --arch=${{ matrix.arch }}
         env:
