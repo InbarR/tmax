@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-05T19:14:15.419Z",
-  "dau": 75,
-  "wau": 75,
-  "mau": 75,
-  "total": 75,
+  "generatedAt": "2026-07-05T20:57:13.837Z",
+  "dau": 77,
+  "wau": 77,
+  "mau": 77,
+  "total": 77,
   "daily": [
     {
       "date": "2026-07-04",
@@ -11,21 +11,21 @@
     },
     {
       "date": "2026-07-05",
-      "users": 75
+      "users": 77
     }
   ],
   "byOs": {
-    "win32": 66,
+    "win32": 68,
     "darwin": 9
   },
   "byVersion": {
-    "1.11.3": 46,
-    "1.11.4": 41,
+    "1.11.3": 47,
+    "1.11.4": 42,
     "1.11.2": 1
   },
   "byTimezone": {
-    "Asia/Jerusalem": 71,
-    "America/Los_Angeles": 3,
+    "Asia/Jerusalem": 72,
+    "America/Los_Angeles": 4,
     "Europe/London": 1
   }
 }
