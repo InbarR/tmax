@@ -43293,28 +43293,28 @@
       }
     },
     {
-      "t": "2026-07-06T15:00:02.776Z",
+      "t": "2026-07-06T19:43:10.728Z",
       "releases": {
         "v1.11.4": {
-          "RELEASES": 2064,
+          "RELEASES": 2355,
           "RELEASES-arm64": 0,
           "RELEASES-x64": 0,
-          "tmax-1.11.4-1.x86_64.rpm": 7,
+          "tmax-1.11.4-1.x86_64.rpm": 8,
           "tmax-1.11.4-arm64-full.nupkg": 0,
-          "tmax-1.11.4-arm64-Setup.exe": 1,
-          "tmax-1.11.4-arm64.dmg": 13,
-          "tmax-1.11.4-full.nupkg": 141,
+          "tmax-1.11.4-arm64-Setup.exe": 3,
+          "tmax-1.11.4-arm64.dmg": 14,
+          "tmax-1.11.4-full.nupkg": 142,
           "tmax-1.11.4-x64-full.nupkg": 0,
-          "tmax-1.11.4-x64-Setup.exe": 40,
-          "tmax-1.11.4-x64.dmg": 0,
+          "tmax-1.11.4-x64-Setup.exe": 42,
+          "tmax-1.11.4-x64.dmg": 1,
           "tmax-1.11.4.Setup.exe": 0,
-          "tmax-darwin-arm64-portable.zip": 2610,
-          "tmax-darwin-x64-portable.zip": 60,
+          "tmax-darwin-arm64-portable.zip": 2979,
+          "tmax-darwin-x64-portable.zip": 68,
           "tmax-linux-x64-portable.zip": 12,
-          "tmax-win32-arm64-portable.zip": 0,
+          "tmax-win32-arm64-portable.zip": 2,
           "tmax-win32-x64-1.11.4.zip": 0,
-          "tmax-win32-x64-portable.zip": 4,
-          "tmax_1.11.4_amd64.deb": 0
+          "tmax-win32-x64-portable.zip": 5,
+          "tmax_1.11.4_amd64.deb": 1
         },
         "mac-update-test": {
           "tmax-darwin-arm64.dmg": 2,
@@ -43580,7 +43580,7 @@
           "tmax_1.7.0_amd64.deb": 1
         },
         "v1.6.1": {
-          "RELEASES": 3489,
+          "RELEASES": 3490,
           "RELEASES-arm64": 3,
           "RELEASES-x64": 50,
           "tmax-1.6.1-1.x86_64.rpm": 1,
@@ -43960,7 +43960,7 @@
         },
         "v1.3.1": {
           "tmax-1.3.1-1.x86_64.rpm": 2,
-          "tmax-1.3.1-arm64.dmg": 3,
+          "tmax-1.3.1-arm64.dmg": 4,
           "tmax-1.3.1-x64.dmg": 3,
           "tmax-1.3.1.Setup.exe": 3,
           "tmax-darwin-arm64-1.3.1.zip": 2,
