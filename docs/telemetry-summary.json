@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-06T12:36:24.038Z",
+  "generatedAt": "2026-07-06T12:37:18.609Z",
   "dau": 98,
   "wau": 106,
   "mau": 106,
@@ -16,6 +16,23 @@
     {
       "date": "2026-07-06",
       "users": 98
+    }
+  ],
+  "cumulative": [
+    {
+      "date": "2026-07-04",
+      "newUsers": 3,
+      "total": 3
+    },
+    {
+      "date": "2026-07-05",
+      "newUsers": 74,
+      "total": 77
+    },
+    {
+      "date": "2026-07-06",
+      "newUsers": 29,
+      "total": 106
     }
   ],
   "byOs": {
