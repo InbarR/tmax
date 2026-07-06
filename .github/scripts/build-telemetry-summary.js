@@ -46,6 +46,15 @@ const QUERIES = {
   daily: `${BASE}
 | summarize users = dcount(mid) by day = format_datetime(startofday(timestamp), "yyyy-MM-dd")
 | order by day asc`,
+  // Cumulative unique machines over time, by first-seen day. Counting each
+  // machine on the day it first appeared and running-summing gives a true
+  // cumulative-unique growth curve (summing the per-day `daily` counts would
+  // double-count machines active on more than one day).
+  cumulative: `${BASE}
+| summarize firstSeen = min(startofday(timestamp)) by mid
+| summarize newUsers = count() by day = format_datetime(firstSeen, "yyyy-MM-dd")
+| order by day asc
+| serialize cumUsers = row_cumsum(newUsers)`,
   // Breakdowns over the last 30 days.
   byOs: `${BASE}
 | where timestamp >= ago(30d)
@@ -125,9 +134,10 @@ function toBreakdown(result) {
 
 (async function main() {
   try {
-    const [windows, daily, byOs, byVersion, byTimezone] = await Promise.all([
+    const [windows, daily, cumulative, byOs, byVersion, byTimezone] = await Promise.all([
       runQuery(QUERIES.windows),
       runQuery(QUERIES.daily),
+      runQuery(QUERIES.cumulative),
       runQuery(QUERIES.byOs),
       runQuery(QUERIES.byVersion),
       runQuery(QUERIES.byTimezone),
@@ -141,6 +151,7 @@ function toBreakdown(result) {
       mau: Number(w.mau) || 0,
       total: Number(w.total) || 0,
       daily: rows(daily).map((r) => ({ date: r.day, users: Number(r.users) || 0 })),
+      cumulative: rows(cumulative).map((r) => ({ date: r.day, newUsers: Number(r.newUsers) || 0, total: Number(r.cumUsers) || 0 })),
       byOs: toBreakdown(byOs),
       byVersion: toBreakdown(byVersion),
       byTimezone: toBreakdown(byTimezone),
