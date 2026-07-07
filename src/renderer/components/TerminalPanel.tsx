@@ -8,7 +8,7 @@ import { useTerminalStore, TAB_COLORS, computeTabTint, findSessionById, getSessi
 import { registerTerminal, unregisterTerminal, getTerminalEntry } from '../terminal-registry';
 import { MOUSE_RESET_SEQUENCE } from '../utils/terminal-recover';
 import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache';
-import { isMac, formatKeyForPlatform } from '../utils/platform';
+import { isMac, formatKeyForPlatform, isLetterShortcut } from '../utils/platform';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
 import { prepareClipboardPaste, resolveClipboardPaste } from '../utils/paste';
 import { smartUnwrapForCopy } from '../utils/smart-unwrap';
@@ -1248,13 +1248,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         return false;
       }
       // Ctrl+F (Cmd+F on Mac): open search
-      if ((isMac ? event.metaKey : event.ctrlKey) && !event.shiftKey && (event.key === 'f' || event.key === 'F')) {
+      if ((isMac ? event.metaKey : event.ctrlKey) && !event.shiftKey && isLetterShortcut(event, 'f')) {
         setShowSearch(true);
         requestAnimationFrame(() => searchInputRef.current?.focus());
         return false;
       }
       // Ctrl+V / Cmd+V or Ctrl+Shift+V: paste
-      if ((event.ctrlKey || event.metaKey) && (event.key === 'v' || event.key === 'V')) {
+      if ((event.ctrlKey || event.metaKey) && isLetterShortcut(event, 'v')) {
         event.preventDefault(); // Stop browser native paste (would cause double paste)
         const decision = resolveClipboardPaste({
           hasImage: window.terminalAPI.clipboardHasImage(),
@@ -1275,7 +1275,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       // copy. Two sources: a native xterm selection, or - in a mouse-reporting
       // pane (Claude Code / TUI) where drag makes no native selection - the
       // dragged-text snapshot (TASK-261). With neither, fall through to ^C.
-      if ((isMac ? event.metaKey : event.ctrlKey) && !event.shiftKey && (event.key === 'c' || event.key === 'C')) {
+      if ((isMac ? event.metaKey : event.ctrlKey) && !event.shiftKey && isLetterShortcut(event, 'c')) {
         if (term.hasSelection()) {
           event.preventDefault();
           event.stopPropagation();
@@ -1328,7 +1328,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       // Ctrl+Shift+C (Cmd+Shift+C on Mac): always copy selection. Falls back to
       // the mouse-reporting drag snapshot (TASK-261) when there's no native
       // xterm selection, same as plain Ctrl+C above.
-      if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && (event.key === 'c' || event.key === 'C')) {
+      if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && isLetterShortcut(event, 'c')) {
         const sel = term.hasSelection() ? term.getSelection() : pendingTuiCopyRef.current;
         if (sel) {
           const text = smartUnwrapForCopy(sel, smartUnwrapRef.current);
@@ -1725,15 +1725,45 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         });
       };
       if (tracking !== 'none' && (buf.baseY === 0 || buf.type === 'alternate')) {
-        // Let xterm's native handler forward the wheel as a mouse-
-        // button report. xterm WON'T scroll its own viewport because
-        // mouse tracking is on - it just encodes and writes to the PTY.
-        // On alternate buffer we ALWAYS forward regardless of baseY:
-        // after a resize, xterm can accumulate stale TUI frames as
-        // scrollback (baseY > 0), but the user still wants the TUI's
-        // own scroller to handle wheel events, not xterm's buffer nav.
+        // TASK-267: manually encode and write the mouse wheel report to the
+        // PTY. Previously we returned `true` to let xterm's native handler
+        // forward the wheel, but xterm's internal path calls
+        // viewport.getLinesScrolled() which returns 0 when _currentRowHeight
+        // is stale (after resize/viewport-reset in long sessions), silently
+        // dropping the event. By encoding ourselves we bypass that failure.
         logWheel('forward-to-pty');
-        return true;
+
+        // Determine scroll lines (at least 1 per wheel tick)
+        const cellH =
+          (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { height?: number } } } } } })
+            ._core?._renderService?.dimensions?.css?.cell?.height || 16;
+        const rawLines = Math.abs(e.deltaY) / cellH;
+        const lines = Math.max(1, Math.round(rawLines));
+
+        // Detect mouse encoding from xterm's core mouse service
+        const coreMouseService = (term as any)._core?.coreMouseService;
+        const encoding: string = coreMouseService?.activeEncoding || 'SGR';
+
+        // Mouse position relative to the terminal grid
+        const col = Math.min(term.cols, Math.max(1, Math.ceil((e.offsetX || 1) / ((term as any)._core?._renderService?.dimensions?.css?.cell?.width || 8))));
+        const row = Math.min(term.rows, Math.max(1, Math.ceil((e.offsetY || 1) / cellH)));
+
+        // Build the report string based on encoding
+        let report: string;
+        if (encoding === 'SGR' || encoding === 'SGR_PIXELS') {
+          // SGR: \x1b[<btn;col;rowM for press (wheel has no release)
+          const btn = e.deltaY < 0 ? 64 : 65;
+          report = `\x1b[<${btn};${col};${row}M`;
+        } else {
+          // DEFAULT (X10/UTF8): \x1b[M + (btn+32) + (col+32) + (row+32)
+          const btn = e.deltaY < 0 ? 64 : 65;
+          report = `\x1b[M${String.fromCharCode(btn + 32)}${String.fromCharCode(col + 32)}${String.fromCharCode(row + 32)}`;
+        }
+
+        // Send one report per scroll line (matches xterm's native behavior)
+        const payload = report.repeat(lines);
+        window.terminalAPI.writePty(terminalId, payload);
+        return false; // We handled it — don't let xterm's broken path run
       }
       // Normal path: scrollLines moves xterm's ydisp via the buffer
       // service. xterm's own refresh syncs viewport.scrollTop on the
