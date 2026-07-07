@@ -77,8 +77,13 @@
 </div>
 
 <div class="chart-section" id="telemChartSection" style="display:none;">
-  <div class="chart-title">Daily Active Users <span style="color:var(--dim);font-weight:normal;font-size:12px;">&amp; cumulative unique</span></div>
+  <div class="chart-title">Daily Active Users</div>
   <div class="chart-container"><canvas id="telemChart"></canvas></div>
+</div>
+
+<div class="chart-section" id="telemCumSection" style="display:none;">
+  <div class="chart-title">Cumulative unique users <span style="color:var(--dim);font-weight:normal;font-size:12px;">(total distinct machines over time)</span></div>
+  <div class="chart-container"><canvas id="telemCumChart"></canvas></div>
 </div>
 
 <div class="chart-section" id="telemBreakdownSection" style="display:none;">
@@ -1199,26 +1204,10 @@ function osLabel(k) {
     ctx.scale(dpr, dpr);
     const W = rect.width, H = rect.height;
 
-    const pad = { top: 24, right: 52, bottom: 40, left: 48 };
+    const pad = { top: 20, right: 16, bottom: 40, left: 48 };
     const chartW = W - pad.left - pad.right;
     const chartH = H - pad.top - pad.bottom;
     const maxVal = Math.max(...days.map(d => d.count), 1);
-
-    // Cumulative unique users, aligned to the same day axis. summary.cumulative
-    // only has entries on days a new machine first appeared, so carry the last
-    // value forward across quiet days to get a continuous curve.
-    const cumRaw = (summary.cumulative || [])
-      .filter((c) => c.date)
-      .sort((a, b) => a.date.localeCompare(b.date));
-    let cumSeries = null, cumMax = 0;
-    if (cumRaw.length) {
-      let ci = 0, last = 0;
-      cumSeries = days.map((d) => {
-        while (ci < cumRaw.length && cumRaw[ci].date <= d.date) { last = cumRaw[ci].total; ci++; }
-        return last;
-      });
-      cumMax = Math.max(...cumSeries, 1);
-    }
 
     // Grid
     ctx.strokeStyle = '#45475a';
@@ -1270,47 +1259,92 @@ function osLabel(k) {
       }
     }
 
-    // Cumulative unique-users line (right axis).
-    if (cumSeries) {
-      const cx = (i) => pad.left + gap * i + gap / 2;
-      const cy = (v) => pad.top + chartH - (v / cumMax) * chartH;
-
-      // Right axis ticks
-      ctx.strokeStyle = '#45475a';
-      ctx.fillStyle = '#a6adc8';
-      ctx.font = '11px system-ui';
-      ctx.textAlign = 'left';
-      for (let i = 0; i <= gridLines; i++) {
-        const y = pad.top + chartH - (chartH * i / gridLines);
-        ctx.fillText(Math.round(cumMax * i / gridLines), W - pad.right + 8, y + 4);
-      }
-
-      // Line
-      ctx.strokeStyle = '#f9e2af';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      cumSeries.forEach((v, i) => { const X = cx(i), Y = cy(v); i === 0 ? ctx.moveTo(X, Y) : ctx.lineTo(X, Y); });
-      ctx.stroke();
-
-      // Points + final value label
-      ctx.fillStyle = '#f9e2af';
-      cumSeries.forEach((v, i) => {
-        const X = cx(i), Y = cy(v);
-        ctx.beginPath(); ctx.arc(X, Y, 2.5, 0, Math.PI * 2); ctx.fill();
-        if (i === cumSeries.length - 1) {
-          ctx.font = '10px system-ui'; ctx.textAlign = 'right';
-          ctx.fillText(v, X - 5, Y - 6);
-        }
+    // --- Separate chart: cumulative unique users over time ---
+    // summary.cumulative only has entries on days a new machine first appeared,
+    // so carry the last value forward across quiet days for a continuous curve.
+    const cumRaw = (summary.cumulative || [])
+      .filter((c) => c.date)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    if (cumRaw.length >= 2) {
+      let ci = 0, last = 0;
+      const cum = days.map((d) => {
+        while (ci < cumRaw.length && cumRaw[ci].date <= d.date) { last = cumRaw[ci].total; ci++; }
+        return { date: d.date, count: last };
       });
 
-      // Legend
-      const ly = 12;
-      ctx.textAlign = 'left'; ctx.font = '10px system-ui';
-      ctx.fillStyle = '#89b4fa'; ctx.fillRect(pad.left, ly - 6, 10, 8);
-      ctx.fillStyle = '#a6adc8'; ctx.fillText('Daily active', pad.left + 14, ly + 1);
-      ctx.strokeStyle = '#f9e2af'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(pad.left + 92, ly - 2); ctx.lineTo(pad.left + 108, ly - 2); ctx.stroke();
-      ctx.fillStyle = '#a6adc8'; ctx.fillText('Cumulative unique', pad.left + 112, ly + 1);
+      const cumSection = document.getElementById('telemCumSection');
+      cumSection.style.display = '';
+      const cc = document.getElementById('telemCumChart');
+      const cctx = cc.getContext('2d');
+      const crect = cc.parentElement.getBoundingClientRect();
+      if (crect.width >= 2 && crect.height >= 2) {
+        cc.width = crect.width * dpr;
+        cc.height = crect.height * dpr;
+        cctx.scale(dpr, dpr);
+        const CW = crect.width, CH = crect.height;
+        const cpad = { top: 20, right: 16, bottom: 40, left: 48 };
+        const cChartW = CW - cpad.left - cpad.right;
+        const cChartH = CH - cpad.top - cpad.bottom;
+        const cMax = Math.max(...cum.map(d => d.count), 1);
+
+        // Grid + left axis
+        cctx.strokeStyle = '#45475a';
+        cctx.lineWidth = 0.5;
+        cctx.font = '11px system-ui';
+        cctx.fillStyle = '#a6adc8';
+        cctx.textAlign = 'right';
+        for (let i = 0; i <= gridLines; i++) {
+          const y = cpad.top + cChartH - (cChartH * i / gridLines);
+          cctx.beginPath(); cctx.moveTo(cpad.left, y); cctx.lineTo(CW - cpad.right, y); cctx.stroke();
+          cctx.fillText(Math.round(cMax * i / gridLines), cpad.left - 6, y + 4);
+        }
+
+        const cgap = cChartW / cum.length;
+        const px = (i) => cpad.left + cgap * i + cgap / 2;
+        const py = (v) => cpad.top + cChartH - (v / cMax) * cChartH;
+
+        // Filled area under the curve
+        const grad = cctx.createLinearGradient(0, cpad.top, 0, cpad.top + cChartH);
+        grad.addColorStop(0, 'rgba(166,227,161,0.28)');
+        grad.addColorStop(1, 'rgba(166,227,161,0.0)');
+        cctx.beginPath();
+        cctx.moveTo(px(0), cpad.top + cChartH);
+        cum.forEach((d, i) => cctx.lineTo(px(i), py(d.count)));
+        cctx.lineTo(px(cum.length - 1), cpad.top + cChartH);
+        cctx.closePath();
+        cctx.fillStyle = grad;
+        cctx.fill();
+
+        // Line
+        cctx.strokeStyle = '#a6e3a1';
+        cctx.lineWidth = 2;
+        cctx.beginPath();
+        cum.forEach((d, i) => { const X = px(i), Y = py(d.count); i === 0 ? cctx.moveTo(X, Y) : cctx.lineTo(X, Y); });
+        cctx.stroke();
+
+        // Points + value labels
+        cctx.fillStyle = '#a6e3a1';
+        const cShowEvery = Math.max(1, Math.floor(cum.length / 15));
+        cum.forEach((d, i) => {
+          const X = px(i), Y = py(d.count);
+          cctx.beginPath(); cctx.arc(X, Y, 2.5, 0, Math.PI * 2); cctx.fill();
+          if (i === cum.length - 1 || i % cShowEvery === 0) {
+            cctx.fillStyle = '#cdd6f4'; cctx.font = '10px system-ui'; cctx.textAlign = 'center';
+            cctx.fillText(d.count, X, Y - 7);
+            cctx.fillStyle = '#a6e3a1';
+          }
+          // Date label
+          if (i % cShowEvery === 0 || i === cum.length - 1) {
+            cctx.save();
+            cctx.translate(X, cpad.top + cChartH + 14);
+            cctx.rotate(-0.4);
+            cctx.fillStyle = '#a6adc8'; cctx.font = '9px system-ui'; cctx.textAlign = 'center';
+            cctx.fillText(d.date.slice(5), 0, 0);
+            cctx.restore();
+            cctx.fillStyle = '#a6e3a1';
+          }
+        });
+      }
     }
   } catch { /* telemetry chart is non-critical */ }
 })();
