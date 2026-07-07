@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-07-06T23:04:52.515Z",
-  "dau": 107,
+  "generatedAt": "2026-07-07T02:52:14.976Z",
+  "dau": 51,
   "wau": 115,
   "mau": 115,
   "total": 115,
@@ -16,6 +16,10 @@
     {
       "date": "2026-07-06",
       "users": 107
+    },
+    {
+      "date": "2026-07-07",
+      "users": 51
     }
   ],
   "cumulative": [
@@ -48,8 +52,8 @@
     "Asia/Jerusalem": 99,
     "America/Los_Angeles": 11,
     "Europe/London": 2,
-    "America/Chicago": 1,
     "America/New_York": 1,
+    "America/Chicago": 1,
     "Asia/Baghdad": 1,
     "UTC": 1
   }
