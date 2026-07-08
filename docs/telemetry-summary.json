@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-08T21:05:02.102Z",
+  "generatedAt": "2026-07-08T23:04:14.823Z",
   "dau": 145,
   "wau": 163,
   "mau": 163,
@@ -66,13 +66,13 @@
   "byTimezone": {
     "Asia/Jerusalem": 135,
     "America/Los_Angeles": 21,
-    "Europe/London": 2,
     "Europe/Moscow": 2,
+    "Europe/London": 2,
     "America/New_York": 1,
-    "Asia/Calcutta": 1,
-    "Etc/GMT-2": 1,
-    "Asia/Baghdad": 1,
     "America/Chicago": 1,
-    "UTC": 1
+    "Etc/GMT-2": 1,
+    "Asia/Calcutta": 1,
+    "UTC": 1,
+    "Asia/Baghdad": 1
   }
 }
