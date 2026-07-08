@@ -44,6 +44,9 @@ export interface TerminalDefaults {
   // TASK-52: stitch CLI-rendered hard newlines + indent continuations
   // back into single paragraphs at copy time. Default true.
   smartUnwrapCopy?: boolean;
+  // Copy a mouse selection to the clipboard on mouse-up, no Ctrl+C needed.
+  // Default true.
+  copyOnSelect?: boolean;
 }
 
 export type BackgroundMaterial = 'none' | 'auto' | 'mica' | 'acrylic' | 'tabbed';
@@ -287,6 +290,7 @@ export const defaultConfig: AppConfig = {
     fontFamily: 'CaskaydiaCove Nerd Font, CaskaydiaCove NF, Cascadia Code, Consolas, monospace',
     scrollback: 50000,
     smartUnwrapCopy: true,
+    copyOnSelect: true,
   },
   copilotCommand: 'copilot',
   claudeCodeCommand: 'claude',

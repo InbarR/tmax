@@ -382,6 +382,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   // TASK-52: read latest config in the copy handlers without rebuilding
   // the terminal. Updated by a small effect below.
   const smartUnwrapRef = useRef<boolean>(true);
+  // Mirrors config.terminal.copyOnSelect for the mouse handlers (which capture
+  // config at terminal-init time). When true, a mouse selection is written to
+  // the clipboard on mouse-up. Ctrl+C handling is untouched by this.
+  const copyOnSelectRef = useRef<boolean>(true);
   // TASK-261: snapshot of the text the user dragged over in a mouse-reporting
   // pane (Claude Code / TUI apps), where xterm makes no native selection.
   // Lifted to a component-scoped ref so BOTH the keyboard handler (Ctrl+C /
@@ -2508,6 +2512,18 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             }
           }
         }
+        // Copy-on-select: when enabled, write the just-made selection to the
+        // clipboard on mouse-up so the user never needs Ctrl+C. Covers native
+        // xterm selections (drag / double / triple-click) and mouse-reporting
+        // TUI drags, where xterm makes no selection and we fall back to the
+        // buffer snapshot captured above (pendingTuiCopyRef). Gated on an actual
+        // selection gesture so a plain click never re-copies a stale snapshot.
+        // Ctrl+C / SIGINT handling is deliberately untouched.
+        if (copyOnSelectRef.current && (wasDrag || term.hasSelection())) {
+          const raw = term.hasSelection() ? term.getSelection() : (pendingTuiCopyRef.current ?? '');
+          const text = raw ? smartUnwrapForCopy(raw, smartUnwrapRef.current) : '';
+          if (text.trim()) window.terminalAPI.clipboardWrite(text);
+        }
         dragStartPos = null;
       }
     };
@@ -2736,6 +2752,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   useEffect(() => {
     smartUnwrapRef.current = config?.terminal?.smartUnwrapCopy ?? true;
   }, [config?.terminal?.smartUnwrapCopy]);
+
+  // Keep copy-on-select in sync with the live config, same as smart-unwrap.
+  useEffect(() => {
+    copyOnSelectRef.current = config?.terminal?.copyOnSelect ?? true;
+  }, [config?.terminal?.copyOnSelect]);
 
   // React to fontSize and fontFamily changes
   const configFontFamily = config?.terminal?.fontFamily;
