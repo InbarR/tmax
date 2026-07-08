@@ -22,6 +22,37 @@ async function writeToTerminal(window: Page, text: string): Promise<void> {
   }, text);
 }
 
+// Locate the marker's real position in the buffer and return drag coordinates
+// spanning it. Data-driven (not a hardcoded row) so a busy prompt / MOTD that
+// shifts the marker down doesn't make the drag miss - which would leave the
+// clipboard stale and fail for the wrong reason.
+async function dragCoordsForMarker(window: Page, marker: string) {
+  return window.evaluate((mk: string) => {
+    const id = (window as any).__terminalStore.getState().focusedTerminalId;
+    const entry = (window as any).__getTerminalEntry(id);
+    const term = entry?.terminal;
+    const buf = term.buffer.active;
+    let row = -1;
+    let col = -1;
+    for (let i = 0; i < buf.length; i++) {
+      const line = buf.getLine(i)?.translateToString(true) ?? '';
+      const idx = line.indexOf(mk);
+      if (idx >= 0) { row = i; col = idx; break; }
+    }
+    if (row < 0) return null;
+    const dim = (term as any)._core?._renderService?.dimensions;
+    const cw = dim?.css?.cell?.width ?? dim?.actualCellWidth ?? 9;
+    const ch = dim?.css?.cell?.height ?? dim?.actualCellHeight ?? 18;
+    const screen = document.querySelector('.terminal-panel .xterm-screen') as HTMLElement;
+    const rect = screen.getBoundingClientRect();
+    const viewportRow = row - buf.viewportY;
+    const startX = rect.left + cw * (col + 0.2);
+    const endX = rect.left + cw * (col + mk.length) + cw * 0.6;
+    const y = rect.top + ch * (viewportRow + 0.5);
+    return { startX, endX, y };
+  }, marker);
+}
+
 test('copy-on-select: native drag selection copies on mouse-up (no Ctrl+C, no right-click)', async () => {
   const { window, close } = await launchTmax();
   try {
@@ -38,25 +69,12 @@ test('copy-on-select: native drag selection copies on mouse-up (no Ctrl+C, no ri
     await setClipboard(window, '__STALE_ONSELECT_A__');
     await window.waitForTimeout(100);
 
-    const coords = await window.evaluate(() => {
-      const id = (window as any).__terminalStore.getState().focusedTerminalId;
-      const entry = (window as any).__getTerminalEntry(id);
-      const term = entry?.terminal;
-      const dim = (term as any)._core?._renderService?.dimensions;
-      const cw = dim?.css?.cell?.width ?? dim?.actualCellWidth ?? 9;
-      const ch = dim?.css?.cell?.height ?? dim?.actualCellHeight ?? 18;
-      const screen = document.querySelector('.terminal-panel .xterm-screen') as HTMLElement;
-      const rect = screen.getBoundingClientRect();
-      // SELECT_ONSELECT_A is 17 chars long, on row 1 (after \r\n).
-      const startX = rect.left + 1;
-      const endX = rect.left + cw * 17 + cw * 0.6;
-      const y = rect.top + ch * 1.5;
-      return { startX, endX, y };
-    });
+    const coords = await dragCoordsForMarker(window, 'SELECT_ONSELECT_A');
+    expect(coords, 'marker SELECT_ONSELECT_A should be found in the buffer').not.toBeNull();
 
-    await window.mouse.move(coords.startX, coords.y);
+    await window.mouse.move(coords!.startX, coords!.y);
     await window.mouse.down();
-    await window.mouse.move(coords.endX, coords.y, { steps: 10 });
+    await window.mouse.move(coords!.endX, coords!.y, { steps: 10 });
     await window.mouse.up();
     await window.waitForTimeout(300);
 
@@ -89,25 +107,12 @@ test('copy-on-select: mouse-reporting TUI drag copies on mouse-up (no gesture)',
     await setClipboard(window, '__STALE_ONSELECT_B__');
     await window.waitForTimeout(100);
 
-    const coords = await window.evaluate(() => {
-      const id = (window as any).__terminalStore.getState().focusedTerminalId;
-      const entry = (window as any).__getTerminalEntry(id);
-      const term = entry?.terminal;
-      const dim = (term as any)._core?._renderService?.dimensions;
-      const cw = dim?.css?.cell?.width ?? dim?.actualCellWidth ?? 9;
-      const ch = dim?.css?.cell?.height ?? dim?.actualCellHeight ?? 18;
-      const screen = document.querySelector('.terminal-panel .xterm-screen') as HTMLElement;
-      const rect = screen.getBoundingClientRect();
-      // SELECT_ONSELECT_B is 17 chars long, on row 1 (after \r\n).
-      const startX = rect.left + 1;
-      const endX = rect.left + cw * 17 + cw * 0.6;
-      const y = rect.top + ch * 1.5;
-      return { startX, endX, y };
-    });
+    const coords = await dragCoordsForMarker(window, 'SELECT_ONSELECT_B');
+    expect(coords, 'marker SELECT_ONSELECT_B should be found in the buffer').not.toBeNull();
 
-    await window.mouse.move(coords.startX, coords.y);
+    await window.mouse.move(coords!.startX, coords!.y);
     await window.mouse.down();
-    await window.mouse.move(coords.endX, coords.y, { steps: 10 });
+    await window.mouse.move(coords!.endX, coords!.y, { steps: 10 });
     await window.mouse.up();
     await window.waitForTimeout(300);
 
