@@ -382,6 +382,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   // TASK-52: read latest config in the copy handlers without rebuilding
   // the terminal. Updated by a small effect below.
   const smartUnwrapRef = useRef<boolean>(true);
+  // Mirrors config.terminal.copyOnSelect for the mouse handlers (which capture
+  // config at terminal-init time). When true, a mouse selection is written to
+  // the clipboard on mouse-up. Ctrl+C handling is untouched by this.
+  const copyOnSelectRef = useRef<boolean>(true);
   // TASK-261: snapshot of the text the user dragged over in a mouse-reporting
   // pane (Claude Code / TUI apps), where xterm makes no native selection.
   // Lifted to a component-scoped ref so BOTH the keyboard handler (Ctrl+C /
@@ -2411,6 +2415,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         const dx = e.clientX - dragStartPos.x;
         const dy = e.clientY - dragStartPos.y;
         const wasDrag = Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD;
+        // Text this gesture produced in a mouse-reporting TUI pane (xterm made
+        // no native selection). Set below when the drag yields a snapshot;
+        // used by copy-on-select so it never falls back to a stale ref.
+        let freshTuiSnapshot: string | null = null;
 
         // TASK-224: reliable single-click open for image-path links. xterm's
         // own link activation is hover-state dependent and misfires in AI CLI
@@ -2502,11 +2510,31 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
             // we deliberately did not create a visible selection).
             const snapshot = readBufferRange(s, en).replace(/\s+$/u, '');
             if (snapshot) {
+              freshTuiSnapshot = snapshot;
               pendingTuiCopyRef.current = snapshot;
               if (pendingTuiCopyClearTimer) clearTimeout(pendingTuiCopyClearTimer);
               pendingTuiCopyClearTimer = setTimeout(clearPendingTuiCopy, 10000);
             }
           }
+        }
+        // Copy-on-select: copy the text THIS gesture produced to the clipboard
+        // on mouse-up, so no Ctrl+C is needed. Source is the fresh native
+        // selection or - in a mouse-reporting TUI pane, where xterm makes no
+        // selection - this gesture's buffer snapshot (never a stale ref, so a
+        // later empty drag can't re-copy old text). After copying a TUI
+        // snapshot we consume it, so a following Ctrl+C still sends ^C/SIGINT
+        // (closing the CLI) instead of being treated as a copy. Ctrl+C handling
+        // is otherwise untouched.
+        if (copyOnSelectRef.current) {
+          let copyText: string | null = null;
+          if (term.hasSelection()) {
+            copyText = term.getSelection();
+          } else if (freshTuiSnapshot) {
+            copyText = freshTuiSnapshot;
+            clearPendingTuiCopy();
+          }
+          const text = copyText ? smartUnwrapForCopy(copyText, smartUnwrapRef.current) : '';
+          if (text.trim()) window.terminalAPI.clipboardWrite(text);
         }
         dragStartPos = null;
       }
@@ -2736,6 +2764,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
   useEffect(() => {
     smartUnwrapRef.current = config?.terminal?.smartUnwrapCopy ?? true;
   }, [config?.terminal?.smartUnwrapCopy]);
+
+  // Keep copy-on-select in sync with the live config, same as smart-unwrap.
+  useEffect(() => {
+    copyOnSelectRef.current = config?.terminal?.copyOnSelect ?? true;
+  }, [config?.terminal?.copyOnSelect]);
 
   // React to fontSize and fontFamily changes
   const configFontFamily = config?.terminal?.fontFamily;
