@@ -207,11 +207,6 @@ export interface TerminalConfig {
   // hard newlines + 1-2 space continuation indents back into single
   // paragraphs. Disable if it ever clobbers code/structure.
   smartUnwrapCopy?: boolean;
-  // When true (default), selecting text with the mouse copies it to the
-  // clipboard immediately on mouse-up - no Ctrl+C needed. Covers native
-  // selections and mouse-reporting TUI drags (Copilot CLI / Claude Code).
-  // Ctrl+C behaviour is unchanged. Disable to only copy on an explicit gesture.
-  copyOnSelect?: boolean;
 }
 
 export type BackgroundMaterial = 'none' | 'auto' | 'mica' | 'acrylic' | 'tabbed';
