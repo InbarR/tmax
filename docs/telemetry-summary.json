@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-10T20:20:51.787Z",
+  "generatedAt": "2026-07-10T21:59:39.588Z",
   "dau": 117,
   "wau": 186,
   "mau": 186,
@@ -89,9 +89,9 @@
     "Asia/Calcutta": 2,
     "America/New_York": 1,
     "America/Chicago": 1,
-    "Etc/GMT-2": 1,
     "Asia/Baghdad": 1,
     "UTC": 1,
+    "Etc/GMT-2": 1,
     "Europe/Brussels": 1,
     "Asia/Bangkok": 1
   }
