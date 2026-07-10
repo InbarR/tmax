@@ -1685,28 +1685,19 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // xterm 5.x API; an earlier _core.coreMouseService probe returned
     // undefined through the TS facade and made the heuristic unreliable.
     let lastWheelDiagAt = 0;
+    // ── Bulletproof wheel handler ──────────────────────────────────────
+    // Fractional-pixel accumulator for trackpad (macOS smooth scroll sends
+    // tiny deltaY values that individually round to 0 lines). Shared across
+    // all wheel events for this terminal instance.
+    let wheelAccumulator = 0;
+
     term.attachCustomWheelEventHandler((e: WheelEvent): boolean => {
       if (e.shiftKey) return true;
-      // TASK-179: Ink-based TUIs (Claude Code, Copilot CLI) render their
-      // entire UI in place via CUU + erase + redraw, so nothing flows
-      // into xterm's scrollback (baseY stays at 0). They DO handle
-      // wheel events themselves though - Claude's bundle has a parser
-      // that turns SGR mouse button codes 64/65 into wheelup/wheeldown
-      // key events, and Copilot CLI (same Ink stack) is the same. Detect
-      // "TUI owns the viewport" via mouse tracking on + alternate buffer
-      // (or baseY === 0 on normal buffer), and let xterm forward the
-      // wheel to the PTY as a mouse-button report. The TUI's own
-      // scroller takes it from there. On alternate buffer we always
-      // forward: after a resize baseY can be >0 (stale frames from a
-      // larger viewport) but the TUI still wants wheel events. For
-      // normal-buffer panes with real scrollback we use scrollLines so
-      // the user navigates xterm's buffer.
+
       const tracking = term.modes.mouseTrackingMode;
       const buf = term.buffer.active;
-      // Diagnostic (throttled to 1/s, no PII): records which branch the wheel
-      // takes plus pane state, so non-deterministic "mouse scroll doesn't work"
-      // reports can be pinned to forward-to-PTY vs scroll-own-buffer. Logs only
-      // modes/counts/flags - never buffer or selection content.
+
+      // Diagnostic (throttled to 1/s)
       const logWheel = (path: string) => {
         const now = Date.now();
         if (now - lastWheelDiagAt < 1000) return;
@@ -1721,70 +1712,100 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           viewportY: buf.viewportY,
           rows: term.rows,
           deltaDir: e.deltaY === 0 ? 0 : (e.deltaY > 0 ? 1 : -1),
+          deltaMode: e.deltaMode,
           aiPane: !!(inst?.aiSessionId || inst?.aiProcessKind),
         });
       };
+
+      // ── Compute cell dimensions from DOM (most reliable source) ──
+      const screen = containerRef.current?.querySelector('.xterm-screen') as HTMLElement | null;
+      const cellW = screen ? screen.clientWidth / term.cols : (
+        (term as any)._core?._renderService?.dimensions?.css?.cell?.width || 8
+      );
+      const cellH = screen ? screen.clientHeight / term.rows : (
+        (term as any)._core?._renderService?.dimensions?.css?.cell?.height || 16
+      );
+
+      // ── Normalize deltaY to pixel amount regardless of deltaMode ──
+      let pixelDelta: number;
+      if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+        pixelDelta = e.deltaY * cellH;
+      } else if (e.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+        pixelDelta = e.deltaY * cellH * term.rows;
+      } else {
+        // DOM_DELTA_PIXEL (most common: trackpad, smooth scroll)
+        pixelDelta = e.deltaY;
+      }
+
+      // ── Accumulate fractional pixels → whole lines ──
+      wheelAccumulator += pixelDelta;
+      const lines = Math.trunc(wheelAccumulator / cellH);
+      if (lines === 0) {
+        // Not enough accumulated for a full line yet (trackpad micro-scroll)
+        // Still log if this is a new direction (prevents "scroll feels dead")
+        return false;
+      }
+      // Remove consumed pixels, keep the fractional remainder
+      wheelAccumulator -= lines * cellH;
+
+      // Cap to prevent huge bursts (e.g. fast trackpad fling sending 200 lines)
+      const cappedLines = Math.sign(lines) * Math.min(Math.abs(lines), term.rows);
+
+      // ── PATH A: TUI with mouse tracking (Copilot CLI, Claude Code) ──
+      // Send mouse wheel reports directly to PTY, bypassing xterm's broken
+      // getLinesScrolled() path which fails when _currentRowHeight is stale.
       if (tracking !== 'none' && (buf.baseY === 0 || buf.type === 'alternate')) {
-        // TASK-267: manually encode and write the mouse wheel report to the
-        // PTY. Previously we returned `true` to let xterm's native handler
-        // forward the wheel, but xterm's internal path calls
-        // viewport.getLinesScrolled() which returns 0 when _currentRowHeight
-        // is stale (after resize/viewport-reset in long sessions), silently
-        // dropping the event. By encoding ourselves we bypass that failure.
         logWheel('forward-to-pty');
 
-        // Determine scroll lines (at least 1 per wheel tick)
-        const cellH =
-          (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { height?: number } } } } } })
-            ._core?._renderService?.dimensions?.css?.cell?.height || 16;
-        const rawLines = Math.abs(e.deltaY) / cellH;
-        const lines = Math.max(1, Math.round(rawLines));
-
-        // Detect mouse encoding from xterm's core mouse service
+        // Detect encoding from xterm's core mouse service
         const coreMouseService = (term as any)._core?.coreMouseService;
         const encoding: string = coreMouseService?.activeEncoding || 'SGR';
 
-        // Mouse position relative to the terminal grid
-        const col = Math.min(term.cols, Math.max(1, Math.ceil((e.offsetX || 1) / ((term as any)._core?._renderService?.dimensions?.css?.cell?.width || 8))));
-        const row = Math.min(term.rows, Math.max(1, Math.ceil((e.offsetY || 1) / cellH)));
+        // Mouse position: use event offset mapped to grid coordinates.
+        // Clamp to valid range (1-based, within terminal dimensions).
+        const col = Math.min(term.cols, Math.max(1, Math.round((e.offsetX || cellW) / cellW)));
+        const row = Math.min(term.rows, Math.max(1, Math.round((e.offsetY || cellH) / cellH)));
 
-        // Build the report string based on encoding
+        // Build report based on active encoding
         let report: string;
+        const btn = lines < 0 ? 64 : 65; // 64=scroll-up, 65=scroll-down
         if (encoding === 'SGR' || encoding === 'SGR_PIXELS') {
-          // SGR: \x1b[<btn;col;rowM for press (wheel has no release)
-          const btn = e.deltaY < 0 ? 64 : 65;
           report = `\x1b[<${btn};${col};${row}M`;
         } else {
-          // DEFAULT (X10/UTF8): \x1b[M + (btn+32) + (col+32) + (row+32)
-          const btn = e.deltaY < 0 ? 64 : 65;
-          report = `\x1b[M${String.fromCharCode(btn + 32)}${String.fromCharCode(col + 32)}${String.fromCharCode(row + 32)}`;
+          // DEFAULT (X10): \x1b[M + (btn+32) + (col+32) + (row+32)
+          // Coords are clamped to 223 (byte limit - 32)
+          const safeCol = Math.min(col, 223);
+          const safeRow = Math.min(row, 223);
+          report = `\x1b[M${String.fromCharCode(btn + 32)}${String.fromCharCode(safeCol + 32)}${String.fromCharCode(safeRow + 32)}`;
         }
 
-        // Send one report per scroll line (matches xterm's native behavior)
-        const payload = report.repeat(lines);
-        window.terminalAPI.writePty(terminalId, payload);
-        return false; // We handled it — don't let xterm's broken path run
+        // Send one report per line (capped to prevent flooding)
+        const count = Math.min(Math.abs(cappedLines), 15);
+        window.terminalAPI.writePty(terminalId, report.repeat(count));
+        return false;
       }
-      // Normal path: scrollLines moves xterm's ydisp via the buffer
-      // service. xterm's own refresh syncs viewport.scrollTop on the
-      // next rAF, so the scrollbar tracks. Same path drag-select uses,
-      // so we get parity. Returning false also blocks the wheel-to-PTY
-      // forwarding for the mouse-tracking-with-scrollback case (rare,
-      // but means the user can still navigate xterm history without
-      // sending stray wheel reports to whatever's reading the PTY).
-      const rowHeight =
-        (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { height?: number } } } } } })
-          ._core?._renderService?.dimensions?.css?.cell?.height || 16;
-      const linesRaw = e.deltaY / rowHeight;
-      const lines = linesRaw === 0
-        ? 0
-        : (linesRaw > 0 ? Math.max(1, Math.round(linesRaw)) : Math.min(-1, Math.round(linesRaw)));
-      if (lines !== 0) {
-        logWheel('scrollLines');
-        try { term.scrollLines(lines); } catch { /* term disposed */ }
-      } else {
-        logWheel('noop-zero-lines');
+
+      // ── PATH B: Alternate buffer WITHOUT mouse tracking (less, vim, etc.) ──
+      // These apps use the alternate screen but handle scroll via Up/Down keys.
+      // xterm has no scrollback here, so scrollLines() is useless.
+      if (buf.type === 'alternate') {
+        logWheel('alt-arrow-keys');
+        // Send Up/Down arrow keys (DECCKM-aware: application mode = \x1bOA/B,
+        // normal mode = \x1b[A/B)
+        const appMode = term.modes.applicationCursorKeysMode;
+        const up = appMode ? '\x1bOA' : '\x1b[A';
+        const down = appMode ? '\x1bOB' : '\x1b[B';
+        const arrow = lines < 0 ? up : down;
+        const count = Math.min(Math.abs(cappedLines), 15);
+        window.terminalAPI.writePty(terminalId, arrow.repeat(count));
+        return false;
       }
+
+      // ── PATH C: Normal buffer with scrollback (plain shell) ──
+      // Use xterm's scrollLines() for buffer navigation. This is the safest
+      // path — scrollLines is a public API that moves viewportY directly.
+      logWheel('scrollLines');
+      try { term.scrollLines(cappedLines); } catch { /* term disposed */ }
       return false;
     });
 
