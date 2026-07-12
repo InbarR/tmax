@@ -36,6 +36,14 @@ const Settings: React.FC = () => {
     appearance: 'Appearance',
   };
 
+  const TAB_ICONS: Record<Tab, string> = {
+    terminal: '>_',
+    shells: '⚡',
+    keybindings: '⌥',
+    theme: '◐',
+    appearance: '◈',
+  };
+
   return (
     <div className="settings-backdrop" onMouseDown={close}>
       <div className="settings-dialog" onMouseDown={(e) => e.stopPropagation()}>
@@ -47,6 +55,7 @@ const Settings: React.FC = () => {
           <nav className="settings-sidebar">
             {(['terminal', 'shells', 'keybindings', 'theme', 'appearance'] as Tab[]).map((t) => (
               <button key={t} className={`settings-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
+                <span className="settings-tab-icon">{TAB_ICONS[t]}</span>
                 {TAB_LABELS[t]}
               </button>
             ))}

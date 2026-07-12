@@ -4037,26 +4037,29 @@ body.broadcast-on .terminal-panel {
   position: fixed;
   inset: 0;
   z-index: 600;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   justify-content: center;
   align-items: center;
+  animation: palette-backdrop-in 0.15s ease-out;
 }
 
 .settings-dialog {
   width: 820px;
   max-width: calc(100vw - 32px);
-  /* Pin height so the dialog doesn't reflow when switching tabs - short
-     tabs (Terminal) reserve the same vertical footprint as tall ones
-     (Theme, Keybindings); long tab bodies scroll inside .settings-body. */
   height: min(82vh, 660px);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.2);
+  background: color-mix(in srgb, var(--bg-secondary) 96%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(24px) saturate(1.3);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: palette-slide-in 0.18s ease-out;
 }
 
 .settings-header {
@@ -4083,28 +4086,39 @@ body.broadcast-on .terminal-panel {
 
 /* Vertical sidebar: column of tab buttons. */
 .settings-sidebar {
-  width: 168px;
+  width: 180px;
   flex-shrink: 0;
-  border-right: 1px solid var(--border-color);
-  padding: 14px 10px;
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 12px 8px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  background: rgba(0, 0, 0, 0.12);
+  gap: 1px;
+  background: rgba(0, 0, 0, 0.15);
 }
 
 .settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   text-align: left;
-  padding: 8px 12px;
+  padding: 7px 12px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   position: relative;
-  transition: background 0.12s, color 0.12s;
+  transition: background 0.1s, color 0.1s;
+}
+
+.settings-tab-icon {
+  font-size: 11px;
+  width: 18px;
+  text-align: center;
+  opacity: 0.6;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
 }
 
 .settings-tab:hover {
@@ -4113,21 +4127,18 @@ body.broadcast-on .terminal-panel {
 }
 
 .settings-tab.active {
-  background: rgba(var(--rgb-accent), 0.14);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
+  font-weight: 500;
 }
 
-/* Left accent on the active tab. Sticks out 6px from the rounded button so
-   it reads as a "selected" indicator without disrupting hover state. */
+.settings-tab.active .settings-tab-icon {
+  opacity: 0.9;
+}
+
+/* No left accent - Raycast uses filled bg only */
 .settings-tab.active::before {
-  content: '';
-  position: absolute;
-  left: -10px;
-  top: 6px;
-  bottom: 6px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: var(--focus-border);
+  display: none;
 }
 
 .settings-body {
@@ -4151,14 +4162,15 @@ body.broadcast-on .terminal-panel {
 }
 
 .settings-group-header {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-secondary);
-  padding-bottom: 6px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  opacity: 0.7;
 }
 
 .settings-group-body {
@@ -4178,15 +4190,13 @@ body.broadcast-on .terminal-panel {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 8px 0;
-  border-radius: 6px;
-  margin: 0 -8px;
-  padding-left: 8px;
-  padding-right: 8px;
+  padding: 12px 0;
+  border-radius: 0;
+  margin: 0;
 }
 
 .setting-row:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: none;
 }
 
 .setting-info {
@@ -4196,16 +4206,17 @@ body.broadcast-on .terminal-panel {
 
 .setting-label {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-primary);
   line-height: 1.35;
 }
 
 .setting-desc {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--text-secondary);
-  margin-top: 3px;
+  margin-top: 2px;
   line-height: 1.4;
+  opacity: 0.7;
 }
 
 .settings-input {
@@ -4261,11 +4272,11 @@ select.settings-input {
   font-weight: 600;
 }
 
-/* Slide toggle switch */
+/* Slide toggle switch — iOS-style pill */
 .toggle-switch {
   position: relative;
-  width: 40px;
-  height: 22px;
+  width: 44px;
+  height: 24px;
   flex-shrink: 0;
   cursor: pointer;
 }
@@ -4278,9 +4289,9 @@ select.settings-input {
 .toggle-track {
   position: absolute;
   inset: 0;
-  border-radius: 11px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   transition: background 0.2s, border-color 0.2s;
 }
 .toggle-switch input:checked + .toggle-track {
@@ -4292,15 +4303,16 @@ select.settings-input {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: var(--text-secondary);
-  transition: transform 0.2s, background 0.2s;
+  transition: transform 0.2s ease, background 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 .toggle-switch input:checked + .toggle-track::after {
-  transform: translateX(18px);
-  background: var(--bg-primary);
+  transform: translateX(20px);
+  background: #fff;
 }
 
 /* Font face combo box */
@@ -5932,10 +5944,10 @@ select.settings-input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border-color);
-  font-size: 13px;
-  font-weight: 600;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 14px;
+  font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -5979,14 +5991,16 @@ select.settings-input {
 .ai-prompts-list {
   overflow-y: auto;
   flex: 1;
-  padding: 4px 0;
+  padding: 6px 8px;
 }
 
 .ai-prompt-item {
   display: flex;
-  gap: 8px;
-  padding: 6px 14px;
+  gap: 10px;
+  padding: 8px 12px;
   align-items: flex-start;
+  border-radius: var(--radius-sm);
+  transition: background 0.08s ease;
 }
 
 .ai-prompt-item.clickable {
@@ -5995,39 +6009,41 @@ select.settings-input {
 
 .ai-prompt-item:hover,
 .ai-prompt-item.selected {
-  background: rgba(var(--rgb-accent), 0.08);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .ai-prompt-item.selected {
-  background: rgba(var(--rgb-accent), 0.12);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .ai-prompt-index {
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 10px;
   color: var(--text-secondary);
-  background: var(--bg-primary);
+  background: rgba(255, 255, 255, 0.06);
   border-radius: 50%;
-  margin-top: 1px;
+  margin-top: 2px;
+  opacity: 0.7;
 }
 
 .ai-prompt-text {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-primary);
   line-height: 1.4;
   word-break: break-word;
 }
 
 .ai-prompts-footer {
-  padding: 6px 14px;
-  border-top: 1px solid var(--border-color);
+  padding: 8px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
   font-size: 11px;
   color: var(--text-secondary);
+  opacity: 0.6;
 }
 
 .ai-prompts-hint {

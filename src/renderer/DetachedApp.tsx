@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import { isMac } from './utils/platform';
+import { isMac, isLetterShortcut } from './utils/platform';
 import { prepareClipboardPaste, resolveClipboardPaste } from './utils/paste';
 import { applyChromeVarsFromTheme } from './utils/theme-chrome';
 import '@xterm/xterm/css/xterm.css';
@@ -107,7 +107,7 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
       };
       term.attachCustomKeyEventHandler((event) => {
         if (event.type !== 'keydown') return true;
-        if ((event.ctrlKey || event.metaKey) && (event.key === 'v' || event.key === 'V')) {
+        if ((event.ctrlKey || event.metaKey) && isLetterShortcut(event, 'v')) {
           const decision = resolveClipboardPaste({
             hasImage: window.terminalAPI.clipboardHasImage(),
             html: window.terminalAPI.clipboardReadHTML(),
@@ -122,12 +122,12 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
           }
           return false;
         }
-        if ((isMac ? event.metaKey : event.ctrlKey) && !event.shiftKey && event.key === 'c' && term.hasSelection()) {
+        if ((isMac ? event.metaKey : event.ctrlKey) && !event.shiftKey && isLetterShortcut(event, 'c') && term.hasSelection()) {
           navigator.clipboard.writeText(term.getSelection());
           term.clearSelection();
           return false;
         }
-        if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && event.key === 'C') {
+        if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && isLetterShortcut(event, 'c')) {
           const sel = term.getSelection();
           if (sel) navigator.clipboard.writeText(sel);
           return false;

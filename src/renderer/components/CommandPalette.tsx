@@ -589,8 +589,16 @@ const CommandPalette: React.FC = () => {
 
   // Right-click opens a small menu (Reassign / Reset), rather than jumping
   // straight into capture - so a stray right-click can't silently rebind.
+  // For session/prompt results, show "Show prompts" option.
   const handleContextMenu = useCallback((e: React.MouseEvent, result: SearchResult) => {
-    if (result.category !== 'command') return; // only commands are rebindable
+    if (result.category === 'session' || result.category === 'prompt') {
+      e.preventDefault();
+      // Extract session ID from result
+      const sessionId = result.id.replace(/^(session|prompt):/, '').split(':')[0];
+      setRebindMenu({ x: e.clientX, y: e.clientY, cmd: { id: 'session-ctx', label: result.label, action: () => {} }, action: `__session__${sessionId}` });
+      return;
+    }
+    if (result.category !== 'command') return;
     const cmdId = result.id.replace('cmd:', '');
     const action = actionForCommandId(cmdId);
     if (!action) return;
@@ -700,20 +708,74 @@ const CommandPalette: React.FC = () => {
             style={{ position: 'fixed', left: rebindMenu.x, top: rebindMenu.y }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="context-menu-header">{rebindMenu.cmd.label}</div>
-            <button
-              className="context-menu-item"
-              onClick={() => { const a = rebindMenu.action; setRebindMenu(null); setRebindingAction(a); }}
-            >
-              Reassign shortcut…
-            </button>
-            {Array.isArray(configKeybindings) && configKeybindings.some((b) => b.action === rebindMenu.action) && (
-              <button
-                className="context-menu-item"
-                onClick={() => { resetBinding(rebindMenu.action); setRebindMenu(null); useTerminalStore.getState().addToast('Shortcut reset to default'); }}
-              >
-                Reset to default
-              </button>
+            <div className="context-menu-header">{rebindMenu.cmd.label.slice(0, 50)}</div>
+            {rebindMenu.action.startsWith('__session__') ? (
+              <>
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const sessionId = rebindMenu.action.replace('__session__', '');
+                    setRebindMenu(null);
+                    close();
+                    requestAnimationFrame(() => {
+                      const store = useTerminalStore.getState();
+                      // Find terminal with this session and show its prompts
+                      for (const [tid, t] of store.terminals) {
+                        if (t.aiSessionId === sessionId) {
+                          store.showPromptsForTerminal(tid);
+                          return;
+                        }
+                      }
+                      // No live pane — open the session first, then prompts will be available
+                      const sess = store.copilotSessions.find((s) => s.id === sessionId)
+                        || store.claudeCodeSessions.find((s) => s.id === sessionId);
+                      if (sess) {
+                        if (sess.provider === 'copilot') store.openCopilotSession(sessionId);
+                        else store.openClaudeCodeSession(sessionId);
+                      }
+                    });
+                  }}
+                >
+                  Show prompts
+                </button>
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const sessionId = rebindMenu.action.replace('__session__', '');
+                    setRebindMenu(null);
+                    close();
+                    requestAnimationFrame(() => {
+                      const store = useTerminalStore.getState();
+                      for (const [tid, t] of store.terminals) {
+                        if (t.aiSessionId === sessionId) {
+                          store.toggleTranscript();
+                          store.setFocus(tid);
+                          return;
+                        }
+                      }
+                    });
+                  }}
+                >
+                  Show transcript
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className="context-menu-item"
+                  onClick={() => { const a = rebindMenu.action; setRebindMenu(null); setRebindingAction(a); }}
+                >
+                  Reassign shortcut…
+                </button>
+                {Array.isArray(configKeybindings) && configKeybindings.some((b) => b.action === rebindMenu.action) && (
+                  <button
+                    className="context-menu-item"
+                    onClick={() => { resetBinding(rebindMenu.action); setRebindMenu(null); useTerminalStore.getState().addToast('Shortcut reset to default'); }}
+                  >
+                    Reset to default
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
