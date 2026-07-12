@@ -4,7 +4,7 @@ import { isMac, formatKeyForPlatform } from '../utils/platform';
 import { THEME_PRESETS, themesEqual, type ThemePreset } from '../utils/theme-presets';
 import { DEFAULT_BINDINGS } from '../hooks/useKeybindings';
 
-type Tab = 'terminal' | 'keybindings' | 'shells' | 'theme' | 'appearance';
+type Tab = 'terminal' | 'keybindings' | 'shells' | 'appearance';
 
 const Settings: React.FC = () => {
   const show = useTerminalStore((s) => s.showSettings);
@@ -32,16 +32,14 @@ const Settings: React.FC = () => {
     terminal: 'Terminal',
     shells: 'Shells',
     keybindings: 'Keybindings',
-    theme: 'Theme',
     appearance: 'Appearance',
   };
 
   const TAB_ICONS: Record<Tab, string> = {
     terminal: '🖥️',
-    shells: '⚡',
+    shells: '🐢',
     keybindings: '⌨️',
-    theme: '🎨',
-    appearance: '✨',
+    appearance: '🎨',
   };
 
   return (
@@ -53,7 +51,7 @@ const Settings: React.FC = () => {
         </div>
         <div className="settings-layout">
           <nav className="settings-sidebar">
-            {(['terminal', 'shells', 'keybindings', 'theme', 'appearance'] as Tab[]).map((t) => (
+            {(['terminal', 'shells', 'keybindings', 'appearance'] as Tab[]).map((t) => (
               <button key={t} className={`settings-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
                 <span className="settings-tab-icon">{TAB_ICONS[t]}</span>
                 {TAB_LABELS[t]}
@@ -64,8 +62,10 @@ const Settings: React.FC = () => {
             {tab === 'terminal' && <TerminalSettings />}
             {tab === 'keybindings' && <KeybindingsSettings />}
             {tab === 'shells' && <ShellsSettings />}
-            {tab === 'theme' && <ThemeSettings />}
-            {tab === 'appearance' && <AppearanceSettings />}
+            {tab === 'appearance' && <>
+              <AppearanceSettings />
+              <ThemeSettings />
+            </>}
           </div>
         </div>
       </div>

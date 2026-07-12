@@ -99,7 +99,7 @@ const PromptSearchDialog: React.FC = () => {
       // 1. SQLite recent prompts (fast, single indexed query)
       if (sqliteOn) {
         try {
-          const rows = await api.getCopilotRecentPrompts(100);
+          const rows = await api.getCopilotRecentPrompts(300);
           if (cancelled || !Array.isArray(rows)) { if (!cancelled) setLoading(false); return; }
           for (const r of rows) {
             const prompt = (r.user_message || '').slice(0, 300);
@@ -232,72 +232,12 @@ const PromptSearchDialog: React.FC = () => {
     [tokens],
   );
 
-  // When SQLite is active and the user types a query, search the DB directly
-  // instead of filtering only the initial in-memory entries client-side.
+  // SQLite search disabled — client-side filtering of preloaded entries only.
+  // Previous implementation triggered IPC queries on every keystroke which
+  // could freeze the main process even with worker threads (TASK-259 redux).
   const sqliteActive = useTerminalStore((s) => s.copilotSqliteActive);
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [sqliteResults, setSqliteResults] = useState<SearchEntry[] | null>(null);
-  const [searchInFlight, setSearchInFlight] = useState(false);
-  const searchVersionRef = useRef(0);
-
-  useEffect(() => {
-    if (!show || !sqliteActive) return;
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-
-    // Clear stale results immediately so client-side filtering takes over while waiting
-    setSqliteResults(null);
-    setSearchInFlight(false);
-
-    // Need 4+ chars for SQLite search (LIKE is a full table scan, short queries are too broad)
-    if (!filterQuery.trim() || filterQuery.trim().length < 4) {
-      return;
-    }
-
-    setSearchInFlight(true);
-    const version = ++searchVersionRef.current;
-    searchDebounceRef.current = setTimeout(() => {
-      const api = window.terminalAPI as any;
-      api.searchCopilotPrompts?.(filterQuery)?.then((rows: any[] | null) => {
-        if (searchVersionRef.current !== version) return;
-        setSearchInFlight(false);
-        if (!rows) { setSqliteResults(null); return; }
-        const results: SearchEntry[] = [];
-        for (const row of rows) {
-          const prompt = (row.user_message || '').slice(0, 300);
-          if (isTrivial(prompt)) continue;
-          let terminalId: string | null = null;
-          let paneTitle = row.summary || row.session_id.slice(0, 8);
-          for (const [tid, t] of terminals) {
-            if (t.aiSessionId === row.session_id) {
-              terminalId = tid;
-              paneTitle = t.title || paneTitle;
-              break;
-            }
-          }
-          const ts = row.timestamp ? new Date(row.timestamp).getTime() : 0;
-          const sessionFolder = shortPath(row.cwd || '');
-          results.push({
-            sessionId: row.session_id,
-            provider: 'copilot',
-            promptIndex: 0,
-            prompt,
-            terminalId,
-            paneTitle,
-            sessionFolder,
-            sessionCwd: row.cwd || '',
-            ageMs: Math.max(0, Date.now() - ts),
-            haystack: `${prompt}\n${paneTitle}\n${sessionFolder}`.toLowerCase(),
-          });
-        }
-        results.sort((a, b) => a.ageMs - b.ageMs);
-        setSqliteResults(results);
-      }).catch(() => {
-        if (searchVersionRef.current === version) { setSqliteResults(null); setSearchInFlight(false); }
-      });
-    }, 600);
-
-    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
-  }, [filterQuery, show, sqliteActive]);
+  const sqliteResults: SearchEntry[] | null = null;
+  const searchInFlight = false;
 
   // Combined match list: SQLite Copilot results blended with client-side
   // AND-filtered Claude Code entries when SQLite is active. Otherwise, client-
@@ -438,14 +378,9 @@ const PromptSearchDialog: React.FC = () => {
           />
           {(entries.length > 0 || searchInFlight) && (
             <span className="prompt-search-count" aria-live="polite">
-              {searchInFlight ? 'searching…' : (
-                <>
-                  {allMatches.length === entries.length
-                    ? `${entries.length}`
-                    : `${allMatches.length} of ${entries.length}`}
-                  {allMatches.length > filtered.length ? ` (showing ${filtered.length})` : ''}
-                </>
-              )}
+              {tokens.length > 0
+                ? `${allMatches.length} of ${entries.length}`
+                : `${entries.length}`}
             </span>
           )}
         </div>

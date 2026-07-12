@@ -446,6 +446,53 @@ function createWindow(): void {
   mainWindow.on('maximize', () => { applyMaterialToWindow(mainWindow!); });
   mainWindow.on('unmaximize', () => { applyMaterialToWindow(mainWindow!); });
 
+  // TASK-271: Track which display the window is on so we can restore to the
+  // correct monitor after minimize. Windows reports garbage bounds (-32000)
+  // during the minimize event itself, so we track the display continuously
+  // via move/resize events and use the last known good value on restore.
+  let lastKnownDisplayId: number | null = null;
+  const trackDisplay = () => {
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized()) return;
+    try {
+      const bounds = mainWindow.getBounds();
+      if (bounds.x <= -30000 || bounds.y <= -30000) return;
+      const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+      lastKnownDisplayId = screen.getDisplayNearestPoint(center).id;
+    } catch { /* ignore */ }
+  };
+  mainWindow.on('move', trackDisplay);
+  mainWindow.on('resize', trackDisplay);
+  mainWindow.on('maximize', trackDisplay);
+  // Capture initial display
+  trackDisplay();
+
+  mainWindow.on('restore', () => {
+    if (!mainWindow || mainWindow.isDestroyed() || lastKnownDisplayId == null) return;
+    // Small delay — Windows needs a moment to settle the restored bounds
+    setTimeout(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      try {
+        const bounds = mainWindow.getBounds();
+        const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+        const currentDisplay = screen.getDisplayNearestPoint(center);
+        if (currentDisplay.id === lastKnownDisplayId) return; // correct monitor
+
+        // Wrong monitor — move back to the last known display
+        const targetDisplay = screen.getAllDisplays().find(d => d.id === lastKnownDisplayId);
+        if (!targetDisplay) return;
+        const wa = targetDisplay.workArea;
+        const wasMaximized = mainWindow.isMaximized();
+        if (wasMaximized) mainWindow.unmaximize();
+        const width = Math.min(bounds.width, wa.width);
+        const height = Math.min(bounds.height, wa.height);
+        const x = wa.x + Math.max(0, Math.round((wa.width - width) / 2));
+        const y = wa.y + Math.max(0, Math.round((wa.height - height) / 2));
+        mainWindow.setBounds({ x, y, width, height });
+        if (wasMaximized) mainWindow.maximize();
+      } catch { /* best effort */ }
+    }, 100);
+  });
+
   // TASK-171: persist window placement so the next launch can restore the
   // user's last-used display + size. Debounced to avoid hammering disk
   // during a drag-resize. Skipped in E2E mode - the test fixture parks
