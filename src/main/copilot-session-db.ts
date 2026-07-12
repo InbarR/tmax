@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import * as os from 'node:os';
 import * as fs from 'node:fs';
+import { Worker } from 'node:worker_threads';
 import type { CopilotSessionSummary } from '../shared/copilot-types';
 
 interface SessionRow {
@@ -339,6 +340,160 @@ export class CopilotSessionDB {
     } catch {
       return null;
     }
+  }
+
+  // --- Worker-thread based async methods (never block the main thread) ---
+
+  private worker: Worker | null = null;
+  private workerReqId = 0;
+  private workerCallbacks = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void; timer: ReturnType<typeof setTimeout> }>();
+
+  /** Inline worker source — runs SQLite in a separate thread */
+  private static WORKER_SOURCE = `
+    const { parentPort, workerData } = require('node:worker_threads');
+    let db = null;
+    try {
+      const fs = require('node:fs');
+      if (fs.existsSync(workerData.dbPath)) {
+        const Database = require(workerData.sqliteModulePath);
+        db = new Database(workerData.dbPath, { readonly: true, fileMustExist: true });
+      }
+    } catch (e) {
+      parentPort.postMessage({ id: -1, error: 'init failed: ' + e });
+    }
+
+    function searchPrompts(query, limit) {
+      if (!db || !query || !query.trim()) return null;
+      limit = limit || 100;
+      const hasOps = /\\b(AND|OR|NOT)\\b/i.test(query);
+      if (hasOps) {
+        const parts = query.split(/\\b(AND|OR|NOT)\\b/i).map(p => p.trim()).filter(p => p);
+        const conds = [], params = [];
+        let op = 'AND', neg = false;
+        for (const part of parts) {
+          const kw = part.toUpperCase();
+          if (kw === 'AND' || kw === 'OR') { op = kw; }
+          else if (kw === 'NOT') { neg = true; }
+          else if (part) {
+            if (conds.length > 0) conds.push(op);
+            conds.push(neg ? 't.user_message NOT LIKE ?' : 't.user_message LIKE ?');
+            params.push('%' + part + '%');
+            neg = false;
+          }
+        }
+        if (conds.length === 0) return null;
+        return db.prepare(
+          'SELECT t.session_id, t.user_message, t.timestamp, s.summary, s.cwd FROM turns t JOIN sessions s ON s.id = t.session_id WHERE (' + conds.join(' ') + ') AND t.user_message IS NOT NULL AND length(t.user_message) > 3 ORDER BY t.timestamp DESC LIMIT ?'
+        ).all(...params, limit);
+      }
+      return db.prepare(
+        'SELECT t.session_id, t.user_message, t.timestamp, s.summary, s.cwd FROM turns t JOIN sessions s ON s.id = t.session_id WHERE t.user_message LIKE ? AND t.user_message IS NOT NULL AND length(t.user_message) > 3 ORDER BY t.timestamp DESC LIMIT ?'
+      ).all('%' + query + '%', limit);
+    }
+
+    function getRecentPrompts(limit) {
+      if (!db) return null;
+      return db.prepare(
+        'SELECT t.session_id, t.user_message, t.timestamp, s.summary, s.cwd FROM turns t JOIN sessions s ON s.id = t.session_id WHERE t.user_message IS NOT NULL AND length(t.user_message) > 3 ORDER BY t.timestamp DESC LIMIT ?'
+      ).all(limit || 300);
+    }
+
+    const methods = { searchPrompts, getRecentPrompts };
+    parentPort.on('message', (msg) => {
+      try {
+        const fn = methods[msg.method];
+        if (!fn) throw new Error('Unknown: ' + msg.method);
+        parentPort.postMessage({ id: msg.id, result: fn(...(msg.args || [])) });
+      } catch (err) {
+        parentPort.postMessage({ id: msg.id, error: String(err && err.message || err) });
+      }
+    });
+  `;
+
+  private ensureWorker(): Worker | null {
+    if (this.worker) return this.worker;
+    if (!fs.existsSync(this.dbPath)) return null;
+
+    try {
+      // Resolve better-sqlite3 from the main process context (works in both
+      // dev and packaged app). The eval'd worker can't resolve modules from
+      // cwd(), so we pass the absolute path.
+      let sqliteModulePath: string;
+      try {
+        sqliteModulePath = require.resolve('better-sqlite3');
+      } catch {
+        console.warn('[copilot-session-db] better-sqlite3 not found, worker disabled');
+        return null;
+      }
+
+      this.worker = new Worker(CopilotSessionDB.WORKER_SOURCE, {
+        eval: true,
+        workerData: { dbPath: this.dbPath, sqliteModulePath },
+      });
+      this.worker.on('message', (msg: { id: number; result?: any; error?: string }) => {
+        const cb = this.workerCallbacks.get(msg.id);
+        if (!cb) return;
+        this.workerCallbacks.delete(msg.id);
+        clearTimeout(cb.timer);
+        if (msg.error) cb.reject(new Error(msg.error));
+        else cb.resolve(msg.result);
+      });
+      this.worker.on('error', (err) => {
+        console.error('[copilot-session-db] worker error:', err);
+        this.killWorker();
+      });
+      this.worker.on('exit', () => {
+        for (const [, cb] of this.workerCallbacks) {
+          clearTimeout(cb.timer);
+          cb.reject(new Error('worker exited'));
+        }
+        this.workerCallbacks.clear();
+        this.worker = null;
+      });
+      return this.worker;
+    } catch (err) {
+      console.error('[copilot-session-db] failed to spawn worker:', err);
+      return null;
+    }
+  }
+
+  private killWorker(): void {
+    if (this.worker) {
+      try { this.worker.terminate(); } catch { /* ignore */ }
+      this.worker = null;
+    }
+    for (const [, cb] of this.workerCallbacks) {
+      clearTimeout(cb.timer);
+      cb.reject(new Error('worker killed'));
+    }
+    this.workerCallbacks.clear();
+  }
+
+  private callWorker(method: string, args: any[], timeoutMs = 10_000): Promise<any> {
+    const w = this.ensureWorker();
+    if (!w) return Promise.resolve(null);
+
+    const id = ++this.workerReqId;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.workerCallbacks.delete(id);
+        console.warn(`[copilot-session-db] worker call '${method}' timed out after ${timeoutMs}ms`);
+        this.killWorker();
+        resolve(null);
+      }, timeoutMs);
+      this.workerCallbacks.set(id, { resolve, reject, timer });
+      w.postMessage({ id, method, args });
+    });
+  }
+
+  /** Async version of searchPrompts — runs in worker thread, never blocks main */
+  searchPromptsAsync(query: string, limit = 100): Promise<any[] | null> {
+    return this.callWorker('searchPrompts', [query, limit]);
+  }
+
+  /** Async version of getRecentPrompts — runs in worker thread, never blocks main */
+  getRecentPromptsAsync(limit = 300): Promise<any[] | null> {
+    return this.callWorker('getRecentPrompts', [limit]);
   }
 }
 

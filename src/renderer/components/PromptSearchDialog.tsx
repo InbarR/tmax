@@ -88,125 +88,131 @@ const PromptSearchDialog: React.FC = () => {
     requestAnimationFrame(() => inputRef.current?.focus());
 
     const api = window.terminalAPI as any;
-    // TASK-259: when SQLite is active, copilot prompts come from ONE indexed DB
-    // query (below), NOT by reading every session's events.jsonl. Reading ~1500
-    // files synchronously in the main process froze the app. Claude Code isn't
-    // in that DB, so it always uses the per-session file path.
     const sqliteOn = useTerminalStore.getState().copilotSqliteActive === true;
-    const allSessions: Array<{ sess: CopilotSessionSummary; provider: 'copilot' | 'claude-code' }> = [
-      ...claudeCodeSessions.map((s) => ({ sess: s, provider: 'claude-code' as const })),
-      ...(sqliteOn ? [] : copilotSessions.map((s) => ({ sess: s, provider: 'copilot' as const }))),
-    ];
-    if (allSessions.length === 0 && !sqliteOn) { setLoading(false); return; }
-
     let cancelled = false;
 
-    // Build search entries for one session's prompts.
-    const buildEntries = (
-      sess: CopilotSessionSummary,
-      provider: 'copilot' | 'claude-code',
-      prompts: string[] | undefined,
-    ): SearchEntry[] => {
-      const list = Array.isArray(prompts) ? prompts : [];
-      let terminalId: string | null = null;
-      let paneTitle = sess.summary || sess.id.slice(0, 8);
-      for (const [tid, t] of terminals) {
-        if (t.aiSessionId === sess.id) { terminalId = tid; paneTitle = t.title || paneTitle; break; }
-      }
-      const baseTime = sess.lastActivityTime || sess.latestPromptTime || Date.now();
-      const sessionFolder = shortPath(sess.cwd || '');
-      return list
-        .map((p, i) => ({
-          sessionId: sess.id,
-          provider,
-          promptIndex: i,
-          prompt: p,
-          terminalId,
-          paneTitle,
-          sessionFolder,
-          sessionCwd: sess.cwd || '',
-          ageMs: Math.max(0, Date.now() - baseTime) + (list.length - i - 1) * 1000,
-          haystack: `${p}\n${paneTitle}\n${sessionFolder}`.toLowerCase(),
-        }))
-        .filter((e) => !isTrivial(e.prompt));
-    };
+    // SAFE initial load: only fetch a small recent set, never fan out across
+    // all sessions. The heavy search happens on-demand when the user types.
+    (async () => {
+      const acc: SearchEntry[] = [];
 
-    // TASK-259: firing one prompt-file-read IPC per session for ALL (~1500)
-    // sessions at once floods the main process, and re-sorting the growing
-    // result array on every resolution is O(N^2) - together they froze the app.
-    // Load with a bounded worker pool and flush state on a throttle instead.
-    const acc: SearchEntry[] = [];
-    let flushTimer: ReturnType<typeof setTimeout> | null = null;
-    const flush = () => {
-      flushTimer = null;
-      if (cancelled) return;
-      setEntries(acc.slice().sort((a, b) => a.ageMs - b.ageMs));
-    };
-    const scheduleFlush = () => { if (!flushTimer && !cancelled) flushTimer = setTimeout(flush, 100); };
-
-    let nextIdx = 0;
-    const worker = async (): Promise<void> => {
-      while (!cancelled) {
-        const i = nextIdx++;
-        if (i >= allSessions.length) return;
-        const { sess, provider } = allSessions[i];
-        const fetcher = provider === 'claude-code' ? api.getClaudeCodePrompts : api.getCopilotPrompts;
+      // 1. SQLite recent prompts (fast, single indexed query)
+      if (sqliteOn) {
         try {
-          const prompts = await fetcher(sess.id);
-          if (cancelled) return;
-          const entries = buildEntries(sess, provider, prompts);
-          if (entries.length) { acc.push(...entries); scheduleFlush(); }
+          const rows = await api.getCopilotRecentPrompts(100);
+          if (cancelled || !Array.isArray(rows)) { if (!cancelled) setLoading(false); return; }
+          for (const r of rows) {
+            const prompt = (r.user_message || '').slice(0, 300);
+            if (isTrivial(prompt)) continue;
+            let terminalId: string | null = null;
+            let paneTitle = r.summary || r.session_id.slice(0, 8);
+            for (const [tid, t] of terminals) {
+              if (t.aiSessionId === r.session_id) { terminalId = tid; paneTitle = t.title || paneTitle; break; }
+            }
+            const folder = shortPath(r.cwd || '');
+            const time = Date.parse(r.timestamp) || Date.now();
+            acc.push({
+              sessionId: r.session_id,
+              provider: 'copilot' as const,
+              promptIndex: 0,
+              prompt,
+              terminalId,
+              paneTitle,
+              sessionFolder: folder,
+              sessionCwd: r.cwd || '',
+              ageMs: Math.max(0, Date.now() - time),
+              haystack: `${prompt}\n${paneTitle}\n${folder}`.toLowerCase(),
+            });
+          }
+        } catch { /* ignore */ }
+      }
+
+      // 2. Claude Code sessions — only load from LIVE panes (not all historical)
+      const liveClaude = claudeCodeSessions.filter((s) => {
+        for (const [, t] of terminals) { if (t.aiSessionId === s.id) return true; }
+        return false;
+      }).slice(0, 20); // cap to 20 live sessions max
+
+      for (const sess of liveClaude) {
+        if (cancelled) break;
+        try {
+          const prompts = await api.getClaudeCodePrompts(sess.id);
+          if (cancelled) break;
+          const list = Array.isArray(prompts) ? prompts : [];
+          let terminalId: string | null = null;
+          let paneTitle = sess.summary || sess.id.slice(0, 8);
+          for (const [tid, t] of terminals) {
+            if (t.aiSessionId === sess.id) { terminalId = tid; paneTitle = t.title || paneTitle; break; }
+          }
+          const baseTime = sess.lastActivityTime || sess.latestPromptTime || Date.now();
+          const sessionFolder = shortPath(sess.cwd || '');
+          for (let i = 0; i < list.length; i++) {
+            const p = list[i];
+            if (isTrivial(p)) continue;
+            acc.push({
+              sessionId: sess.id,
+              provider: 'claude-code' as const,
+              promptIndex: i,
+              prompt: p,
+              terminalId,
+              paneTitle,
+              sessionFolder,
+              sessionCwd: sess.cwd || '',
+              ageMs: Math.max(0, Date.now() - baseTime) + (list.length - i - 1) * 1000,
+              haystack: `${p}\n${paneTitle}\n${sessionFolder}`.toLowerCase(),
+            });
+          }
         } catch { /* ignore per-session failures */ }
       }
-    };
-    const CONCURRENCY = 8;
-    const poolDone = Promise.all(
-      Array.from({ length: Math.min(CONCURRENCY, allSessions.length) }, () => worker()),
-    );
 
-    // Copilot browse set straight from the DB (one indexed query) when SQLite
-    // is active - replaces ~1500 events.jsonl file reads (TASK-259).
-    const dbDone: Promise<unknown> = sqliteOn
-      ? (async () => {
+      // 3. Non-SQLite fallback: only load LIVE copilot sessions (not all historical)
+      if (!sqliteOn) {
+        const liveCopilot = copilotSessions.filter((s) => {
+          for (const [, t] of terminals) { if (t.aiSessionId === s.id) return true; }
+          return false;
+        }).slice(0, 20);
+
+        for (const sess of liveCopilot) {
+          if (cancelled) break;
           try {
-            const rows = await api.getCopilotRecentPrompts(300);
-            if (cancelled || !Array.isArray(rows)) return;
-            const dbEntries: SearchEntry[] = rows
-              .map((r: { session_id: string; user_message: string; timestamp: string; summary?: string; cwd?: string }) => {
-                let terminalId: string | null = null;
-                let paneTitle = r.summary || r.session_id.slice(0, 8);
-                for (const [tid, t] of terminals) {
-                  if (t.aiSessionId === r.session_id) { terminalId = tid; paneTitle = t.title || paneTitle; break; }
-                }
-                const folder = shortPath(r.cwd || '');
-                const time = Date.parse(r.timestamp) || Date.now();
-                return {
-                  sessionId: r.session_id,
-                  provider: 'copilot' as const,
-                  promptIndex: 0,
-                  prompt: r.user_message,
-                  terminalId,
-                  paneTitle,
-                  sessionFolder: folder,
-                  sessionCwd: r.cwd || '',
-                  ageMs: Math.max(0, Date.now() - time),
-                  haystack: `${r.user_message}\n${paneTitle}\n${folder}`.toLowerCase(),
-                };
-              })
-              .filter((e: SearchEntry) => !isTrivial(e.prompt));
-            if (dbEntries.length) { acc.push(...dbEntries); scheduleFlush(); }
-          } catch { /* ignore - browse set just stays file/empty */ }
-        })()
-      : Promise.resolve();
+            const prompts = await api.getCopilotPrompts(sess.id);
+            if (cancelled) break;
+            const list = Array.isArray(prompts) ? prompts : [];
+            let terminalId: string | null = null;
+            let paneTitle = sess.summary || sess.id.slice(0, 8);
+            for (const [tid, t] of terminals) {
+              if (t.aiSessionId === sess.id) { terminalId = tid; paneTitle = t.title || paneTitle; break; }
+            }
+            const baseTime = sess.lastActivityTime || sess.latestPromptTime || Date.now();
+            const sessionFolder = shortPath(sess.cwd || '');
+            for (let i = 0; i < list.length; i++) {
+              const p = list[i];
+              if (isTrivial(p)) continue;
+              acc.push({
+                sessionId: sess.id,
+                provider: 'copilot' as const,
+                promptIndex: i,
+                prompt: p,
+                terminalId,
+                paneTitle,
+                sessionFolder,
+                sessionCwd: sess.cwd || '',
+                ageMs: Math.max(0, Date.now() - baseTime) + (list.length - i - 1) * 1000,
+                haystack: `${p}\n${paneTitle}\n${sessionFolder}`.toLowerCase(),
+              });
+            }
+          } catch { /* ignore */ }
+        }
+      }
 
-    Promise.all([poolDone, dbDone]).finally(() => {
-      if (cancelled) return;
-      if (flushTimer) clearTimeout(flushTimer);
-      flush();
-      setLoading(false);
-    });
+      if (!cancelled) {
+        acc.sort((a, b) => a.ageMs - b.ageMs);
+        setEntries(acc);
+        setLoading(false);
+      }
+    })();
 
-    return () => { cancelled = true; if (flushTimer) clearTimeout(flushTimer); };
+    return () => { cancelled = true; };
   }, [show]);
 
   // Tokenize the query on whole-word case-insensitive 'AND' for client-side
@@ -231,6 +237,7 @@ const PromptSearchDialog: React.FC = () => {
   const sqliteActive = useTerminalStore((s) => s.copilotSqliteActive);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sqliteResults, setSqliteResults] = useState<SearchEntry[] | null>(null);
+  const [searchInFlight, setSearchInFlight] = useState(false);
   const searchVersionRef = useRef(0);
 
   useEffect(() => {
@@ -239,17 +246,20 @@ const PromptSearchDialog: React.FC = () => {
 
     // Clear stale results immediately so client-side filtering takes over while waiting
     setSqliteResults(null);
+    setSearchInFlight(false);
 
     // Need 4+ chars for SQLite search (LIKE is a full table scan, short queries are too broad)
     if (!filterQuery.trim() || filterQuery.trim().length < 4) {
       return;
     }
 
+    setSearchInFlight(true);
     const version = ++searchVersionRef.current;
     searchDebounceRef.current = setTimeout(() => {
       const api = window.terminalAPI as any;
       api.searchCopilotPrompts?.(filterQuery)?.then((rows: any[] | null) => {
         if (searchVersionRef.current !== version) return;
+        setSearchInFlight(false);
         if (!rows) { setSqliteResults(null); return; }
         const results: SearchEntry[] = [];
         for (const row of rows) {
@@ -282,7 +292,7 @@ const PromptSearchDialog: React.FC = () => {
         results.sort((a, b) => a.ageMs - b.ageMs);
         setSqliteResults(results);
       }).catch(() => {
-        if (searchVersionRef.current === version) setSqliteResults(null);
+        if (searchVersionRef.current === version) { setSqliteResults(null); setSearchInFlight(false); }
       });
     }, 600);
 
@@ -426,21 +436,25 @@ const PromptSearchDialog: React.FC = () => {
             onChange={(e) => { setQuery(e.target.value); setSelectedIndex(0); }}
             onKeyDown={handleKeyDown}
           />
-          {entries.length > 0 && (
+          {(entries.length > 0 || searchInFlight) && (
             <span className="prompt-search-count" aria-live="polite">
-              {allMatches.length === entries.length
-                ? `${entries.length}`
-                : `${allMatches.length} of ${entries.length}`}
-              {allMatches.length > filtered.length ? ` (showing ${filtered.length})` : ''}
+              {searchInFlight ? 'searching…' : (
+                <>
+                  {allMatches.length === entries.length
+                    ? `${entries.length}`
+                    : `${allMatches.length} of ${entries.length}`}
+                  {allMatches.length > filtered.length ? ` (showing ${filtered.length})` : ''}
+                </>
+              )}
             </span>
           )}
         </div>
         <div className="switcher-list">
           {loading && entries.length === 0 && (
-            <div className="switcher-empty">Loading prompts...</div>
+            <div className="switcher-empty">Loading recent prompts...</div>
           )}
           {!loading && entries.length === 0 && (
-            <div className="switcher-empty">No AI prompts found yet.</div>
+            <div className="switcher-empty">No recent prompts. Type to search all history.</div>
           )}
           {filtered.map((entry, index) => {
             const key = `${entry.sessionId}-${entry.promptIndex}`;

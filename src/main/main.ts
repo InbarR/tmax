@@ -1129,12 +1129,16 @@ function registerIpcHandlers(): void {
     return [...native, ...wsl];
   });
 
-  ipcMain.handle(IPC.COPILOT_SEARCH_PROMPTS, (_event, query: string) => {
-    return (copilotMonitor as any)?.db?.searchPrompts?.(query) ?? null;
+  ipcMain.handle(IPC.COPILOT_SEARCH_PROMPTS, async (_event, query: string) => {
+    try {
+      return await ((copilotMonitor as any)?.db?.searchPromptsAsync?.(query)) ?? null;
+    } catch { return null; }
   });
 
-  ipcMain.handle(IPC.COPILOT_GET_RECENT_PROMPTS, (_event, limit?: number) => {
-    return (copilotMonitor as any)?.db?.getRecentPrompts?.(limit ?? 300) ?? null;
+  ipcMain.handle(IPC.COPILOT_GET_RECENT_PROMPTS, async (_event, limit?: number) => {
+    try {
+      return await ((copilotMonitor as any)?.db?.getRecentPromptsAsync?.(limit ?? 300)) ?? null;
+    } catch { return null; }
   });
 
   ipcMain.handle(IPC.COPILOT_START_WATCHING, async () => {
