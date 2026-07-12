@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-12T17:02:49.166Z",
+  "generatedAt": "2026-07-12T19:01:55.450Z",
   "dau": 147,
   "wau": 202,
   "mau": 205,
@@ -97,22 +97,22 @@
   "byVersion": {
     "1.11.4": 181,
     "1.11.3": 52,
-    "1.12.0": 23,
+    "1.12.0": 25,
     "1.11.2": 1
   },
   "byTimezone": {
     "Asia/Jerusalem": 168,
     "America/Los_Angeles": 27,
-    "Europe/London": 2,
-    "Australia/Sydney": 2,
     "Asia/Calcutta": 2,
+    "Australia/Sydney": 2,
+    "Europe/London": 2,
     "Europe/Moscow": 2,
     "America/New_York": 1,
+    "Etc/GMT-2": 1,
     "Asia/Bangkok": 1,
     "America/Chicago": 1,
     "Asia/Baghdad": 1,
-    "Europe/Brussels": 1,
-    "Etc/GMT-2": 1,
-    "UTC": 1
+    "UTC": 1,
+    "Europe/Brussels": 1
   }
 }
