@@ -651,6 +651,13 @@ const StatusBar: React.FC = () => {
             &#x22EF;
           </button>
           <button
+            className="status-mode-btn status-report-btn"
+            onClick={() => setShowReportModal(true)}
+            title="Report an issue on GitHub"
+          >
+            🐛 Report
+          </button>
+          <button
             className="status-mode-btn"
             onClick={() => useTerminalStore.getState().toggleSettings()}
             title={formatKeyForPlatform("Settings (Ctrl+,)")}
@@ -787,16 +794,6 @@ const StatusBar: React.FC = () => {
               title="Copy the diagnostics log file path to clipboard"
             >
               📋 Copy diagnostics path
-            </button>
-            <button
-              className="context-menu-item"
-              onClick={() => {
-                setShowReportModal(true);
-                setOverflowOpen(false);
-              }}
-              title="File a GitHub issue with version + platform pre-filled"
-            >
-              ⚠️ Report an issue
             </button>
           </div>
         </>
