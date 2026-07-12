@@ -718,21 +718,7 @@ const CommandPalette: React.FC = () => {
                     setRebindMenu(null);
                     close();
                     requestAnimationFrame(() => {
-                      const store = useTerminalStore.getState();
-                      // Find terminal with this session and show its prompts
-                      for (const [tid, t] of store.terminals) {
-                        if (t.aiSessionId === sessionId) {
-                          store.showPromptsForTerminal(tid);
-                          return;
-                        }
-                      }
-                      // No live pane — open the session first, then prompts will be available
-                      const sess = store.copilotSessions.find((s) => s.id === sessionId)
-                        || store.claudeCodeSessions.find((s) => s.id === sessionId);
-                      if (sess) {
-                        if (sess.provider === 'copilot') store.openCopilotSession(sessionId);
-                        else store.openClaudeCodeSession(sessionId);
-                      }
+                      useTerminalStore.getState().showPromptsForSession(sessionId);
                     });
                   }}
                 >

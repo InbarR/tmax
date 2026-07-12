@@ -37,11 +37,11 @@ const Settings: React.FC = () => {
   };
 
   const TAB_ICONS: Record<Tab, string> = {
-    terminal: '>_',
+    terminal: '🖥️',
     shells: '⚡',
-    keybindings: '⌥',
-    theme: '◐',
-    appearance: '◈',
+    keybindings: '⌨️',
+    theme: '🎨',
+    appearance: '✨',
   };
 
   return (
