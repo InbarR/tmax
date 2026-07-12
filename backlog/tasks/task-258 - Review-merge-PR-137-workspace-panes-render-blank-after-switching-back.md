@@ -1,11 +1,11 @@
 ---
 id: TASK-258
 title: 'Review/merge PR #137 - workspace panes render blank after switching back'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-06-22 06:29'
-updated_date: '2026-06-22 06:29'
+updated_date: '2026-07-04 22:40'
 labels: []
 dependencies: []
 ---

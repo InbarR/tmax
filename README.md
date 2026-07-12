@@ -105,7 +105,7 @@ Built with Electron, React, TypeScript, xterm.js, and node-pty.
 - Both previews have an "Open externally" button if you'd rather route to the OS default viewer
 
 **Keyboard-Driven Workflow**
-- Command palette (`Ctrl+Shift+P`) with every action searchable (supports `foo AND bar` token filtering)
+- Command palette (`Ctrl+Shift+P`) — universal search across Commands, Panes, Sessions, and Prompts with section headers and category icons. Right-click results for context actions (Show prompts, Show transcript)
 - Jump to any terminal by name (`Ctrl+Shift+G`) - also supports the AND syntax
 - Pane hints for quick terminal switching (`Ctrl+Shift+J`)
 - Rename the focused pane in place with `Ctrl+Shift+R`

@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.12.0
+
+Raycast-style UI overhaul, universal search palette, and critical performance & stability fixes.
+
+### New Features
+
+- **Universal search in Command Palette** — `Ctrl+Shift+P` now searches across Commands, Panes, Sessions, and Prompts in labeled sections. Async prompt search with debounced SQLite FTS for deep history.
+- **Raycast-style UI** — all dialogs (palette, switcher, settings, shortcuts, prompt search, AI prompts) redesigned with glass backdrop, blur, slide-in animations, and consistent rounded styling.
+- **Right-click context menu on search results** — session/prompt results in the palette offer "Show prompts" and "Show transcript" without leaving the palette.
+- **Report Issue button in footer** — `🐛 Report` is now a visible button in the status bar instead of buried in the overflow menu.
+
+### Bug Fixes
+
+- **Prompt search freeze** — SQLite queries now run in a dedicated Worker thread with 10s timeout, so they never block the main process. Removed live search-as-you-type; dialog loads recent prompts on open and filters client-side.
+- **Multi-monitor restore** — minimizing on one monitor and restoring no longer jumps the window to the primary display. tmax continuously tracks the display and corrects placement on restore.
+- **Scroll in TUI panes** — bulletproof 3-path wheel handler bypasses xterm's broken row-height calculation. Scroll now works reliably in Copilot CLI, Claude Code, less, vim, and normal buffers.
+- **Reverted copy-on-select** — removed the problematic auto-copy-on-selection feature that interfered with mouse interactions.
+
+### Improvements
+
+- **Settings panel** — merged Theme and Appearance into a single tab with emoji sidebar icons. Color presets moved to the bottom.
+- **Prompt dialog numbers** — flat subtle numbers instead of circled badges.
+- **Prompt count display** — fixed "100 of 96" nonsensical counts.
+
 ## v1.11.4
 
 macOS self-update and native database fixes.
