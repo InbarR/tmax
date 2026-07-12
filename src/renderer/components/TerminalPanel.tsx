@@ -6,7 +6,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { SerializeAddon } from '@xterm/addon-serialize';
 import { useTerminalStore, TAB_COLORS, computeTabTint, findSessionById, getSessionProvider } from '../state/terminal-store';
 import { registerTerminal, unregisterTerminal, getTerminalEntry } from '../terminal-registry';
-import { MOUSE_RESET_SEQUENCE } from '../utils/terminal-recover';
+
 import { saveTerminalBuffer, popTerminalBuffer } from '../terminal-buffer-cache';
 import { isMac, formatKeyForPlatform, isLetterShortcut } from '../utils/platform';
 import { runJumpToPromptSearch } from '../utils/jump-to-prompt';
@@ -67,21 +67,6 @@ function detectAiInChildren(names: string[]): { title: string; kind: 'copilot' |
     if (hit) return hit;
   }
   return null;
-}
-
-// Inverse of detectAiInChildren: true when the descendant list still
-// contains a process matching the given kind. Used by the auto-reset
-// path (GH #117) to decide whether a previously-detected AI CLI child
-// has disappeared from the pane's process tree.
-function aiKindStillRunning(
-  names: string[],
-  kind: 'copilot' | 'claude-code',
-): boolean {
-  for (const n of names) {
-    const hit = AI_PROCESS_NAMES[n];
-    if (hit && hit.kind === kind) return true;
-  }
-  return false;
 }
 
 // TASK-172: format a dropped file path for typing into the PTY.
@@ -2061,6 +2046,31 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           // stops forwarding mouse events to the (now-dead) child process
           // and drag-select starts working again.
           if (mouseTrackingOn) mouseResetPending = true;
+          // TASK-275: AI CLI exit detection via PTY output instead of wmic
+          // polling. When an AI TUI leaves alt-screen, the CLI has exited.
+          // Clear the process stamp and reset the scan counters so a fresh
+          // round of bounded scans can detect a new agent if the user
+          // launches one in the same pane.
+          const tForAltExit = useTerminalStore.getState().terminals.get(terminalId);
+          if (tForAltExit?.aiProcessKind) {
+            window.terminalAPI.diagLog?.('renderer:ai-exit-alt-screen', {
+              terminalId, kind: tForAltExit.aiProcessKind,
+            });
+            useTerminalStore.setState((s) => {
+              const cur = s.terminals.get(terminalId);
+              if (!cur?.aiProcessKind) return {};
+              const next = new Map(s.terminals);
+              next.set(terminalId, {
+                ...cur,
+                aiProcessKind: undefined,
+                aiProcessDetectedAt: undefined,
+              });
+              return { terminals: next };
+            });
+            // Reset scan counters so the pane can detect a new AI agent
+            aiProcessGiveUpRef.current = false;
+            aiProcessScanCountRef.current = 0;
+          }
         }
         // Mouse tracking mode toggles - any of ?1000/?1002/?1003/?1006/?1015
         // (X10, button-event, any-event, SGR, urxvt). Track on/off so the
@@ -3046,147 +3056,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     return () => clearInterval(id);
   }, [latestPromptTime]);
 
-  // GH #117: auto-reset mouse mode when a detected AI CLI child exits.
-  // Once TerminalPanel's process-tree scan (TASK-171) stamps the pane with
-  // aiProcessKind, we poll the descendant list on a slow cadence. When the
-  // matching process name is no longer present but the pane's shell is
-  // still alive, the AI CLI almost certainly died without sending the
-  // matching ?1000l/?1006l reset - so we write the reset ourselves so the
-  // recovered shell prompt gets working wheel + drag-select back without
-  // the user having to invoke the Command Palette manually.
-  //
-  // Two consecutive empty/missing scans gate the reset to absorb a one-off
-  // wmic/pgrep hiccup that returns an empty list mid-burst.
-  const aiProcessKindForPoll = useTerminalStore(
-    (s) => s.terminals.get(terminalId)?.aiProcessKind,
-  );
-  useEffect(() => {
-    if (!aiProcessKindForPoll) return;
-    const POLL_INTERVAL_MS = 5000;
-    const MISSING_THRESHOLD = 2;
-    let missingScans = 0;
-    let cancelled = false;
-    const tick = async () => {
-      if (cancelled) return;
-      // Pane closed or stamp already cleared by the auto-link path - stop.
-      const current = useTerminalStore.getState().terminals.get(terminalId);
-      if (!current || current.aiProcessKind !== aiProcessKindForPoll) {
-        return;
-      }
-      let names: string[] | undefined;
-      try {
-        names = await (window.terminalAPI as any).getPtyChildProcesses?.(
-          terminalId,
-        ) as string[] | undefined;
-      } catch {
-        names = undefined;
-      }
-      if (cancelled) return;
-      const stillRunning = !!names && aiKindStillRunning(names, aiProcessKindForPoll);
-      if (stillRunning) {
-        missingScans = 0;
-        return;
-      }
-      missingScans += 1;
-      if (missingScans < MISSING_THRESHOLD) return;
-      // AI child has been absent for two consecutive scans. Write only the
-      // MOUSE reset here - NOT the full recovery. This detection can
-      // false-fire (getPtyChildProcesses returns empty on a Windows wmic
-      // hiccup, twice in a row), and the destructive parts of full recovery
-      // (alt-screen exit + SGR reset) would corrupt a still-LIVE TUI's
-      // display. Mouse reset is non-destructive, so it's safe to fire
-      // speculatively; the alt-screen exit lives only in the user-invoked
-      // "Reset Terminal" command (TASK-162/163).
-      const entry = getTerminalEntry(terminalId);
-      if (entry) {
-        try {
-          entry.terminal.write(MOUSE_RESET_SEQUENCE);
-          window.terminalAPI.diagLog?.('renderer:mouse-mode-reset-ai-gone', {
-            terminalId,
-            kind: aiProcessKindForPoll,
-          });
-        } catch {
-          // Terminal already disposed - nothing to reset, just stop.
-        }
-      }
-      useTerminalStore.setState((s) => {
-        const cur = s.terminals.get(terminalId);
-        if (!cur || cur.aiProcessKind !== aiProcessKindForPoll) return {};
-        const next = new Map(s.terminals);
-        next.set(terminalId, {
-          ...cur,
-          aiProcessKind: undefined,
-          aiProcessDetectedAt: undefined,
-        });
-        return { terminals: next };
-      });
-      cancelled = true;
-    };
-    const intervalId = setInterval(() => { void tick(); }, POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(intervalId);
-    };
-  }, [terminalId, aiProcessKindForPoll]);
-
-  // Re-detect when the AI agent in an *already-linked* pane changes - e.g. the
-  // user exits Copilot and starts Claude Code in the same pane. The first-run
-  // process scan (TASK-171) bails once a pane has an aiSessionId, and after a
-  // link the process stamp is cleared, so without this poll the pane keeps
-  // pointing at the now-dead session: the transcript, last-prompt bar, ping
-  // button and status dot all show stale data. We poll the descendant list on
-  // a slow cadence; when a *different* AI kind is running than the linked
-  // session's provider, we drop the stale link and re-stamp the pane so the
-  // auto-link path attaches the new session.
-  const linkedProviderForReverify = useTerminalStore((s) => {
-    const t = s.terminals.get(terminalId);
-    if (!t?.aiSessionId) return undefined;
-    return getSessionProvider(s.copilotSessions, s.claudeCodeSessions, t.aiSessionId);
-  });
-  useEffect(() => {
-    if (!linkedProviderForReverify) return;
-    const POLL_INTERVAL_MS = 5000;
-    let cancelled = false;
-    const tick = async () => {
-      if (cancelled) return;
-      const cur = useTerminalStore.getState().terminals.get(terminalId);
-      // Pane closed or unlinked elsewhere (auto-link moved it) - stop.
-      if (!cur || !cur.aiSessionId) return;
-      let names: string[] | undefined;
-      try {
-        names = await (window.terminalAPI as any).getPtyChildProcesses?.(terminalId) as string[] | undefined;
-      } catch {
-        names = undefined;
-      }
-      if (cancelled || !names || names.length === 0) return;
-      const match = detectAiInChildren(names);
-      // No AI process running (just a shell), or the same agent is still
-      // running: leave the link untouched. We only act on a positive
-      // *different-agent* signal to avoid clearing the link during the brief
-      // gap between an agent exiting and the user starting another.
-      if (!match || match.kind === linkedProviderForReverify) return;
-      window.terminalAPI.diagLog?.('renderer:ai-agent-changed-relink', {
-        terminalId, was: linkedProviderForReverify, now: match.kind, names,
-      });
-      useTerminalStore.setState((s) => {
-        const c = s.terminals.get(terminalId);
-        if (!c) return {};
-        const next = new Map(s.terminals);
-        next.set(terminalId, {
-          ...c,
-          aiSessionId: undefined,
-          aiProcessKind: match.kind,
-          aiProcessDetectedAt: Date.now(),
-          aiAutoTitle: true,
-          aiPromptTitleLatched: false,
-        });
-        return { terminals: next };
-      });
-      cancelled = true;
-    };
-    const intervalId = setInterval(() => { void tick(); }, POLL_INTERVAL_MS);
-    return () => { cancelled = true; clearInterval(intervalId); };
-  }, [terminalId, linkedProviderForReverify]);
+  // TASK-275: AI exit detection and mouse-mode reset are now handled inline
+  // in the PTY data stream (alt-screen exit detection in syncCursorVisibility
+  // above), eliminating the need for wmic/pgrep polling. When the AI TUI
+  // leaves alt-screen (?1049l/?1047l), the handler clears aiProcessKind,
+  // resets mouse tracking if needed, and resets the scan counters so a new
+  // agent can be detected via the bounded initial scan (Enter/output burst).
+  // Agent-switch detection (user exits copilot, starts claude in same pane)
+  // also works via the reset scan path — no polling required.
 
   const handleSearch = useCallback((query: string, backward?: boolean) => {
     if (!searchAddonRef.current || !query) return;
