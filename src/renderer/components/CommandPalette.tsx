@@ -716,7 +716,8 @@ const CommandPalette: React.FC = () => {
                   onClick={() => {
                     const sessionId = rebindMenu.action.replace('__session__', '');
                     setRebindMenu(null);
-                    close();
+                    // Don't close palette — prompts dialog opens on top,
+                    // ESC from it returns to the palette
                     requestAnimationFrame(() => {
                       useTerminalStore.getState().showPromptsForSession(sessionId);
                     });
@@ -729,17 +730,8 @@ const CommandPalette: React.FC = () => {
                   onClick={() => {
                     const sessionId = rebindMenu.action.replace('__session__', '');
                     setRebindMenu(null);
-                    close();
-                    requestAnimationFrame(() => {
-                      const store = useTerminalStore.getState();
-                      for (const [tid, t] of store.terminals) {
-                        if (t.aiSessionId === sessionId) {
-                          store.toggleTranscript();
-                          store.setFocus(tid);
-                          return;
-                        }
-                      }
-                    });
+                    // Don't close palette — transcript opens alongside
+                    useTerminalStore.getState().openTranscriptForSession(sessionId);
                   }}
                 >
                   Show transcript
