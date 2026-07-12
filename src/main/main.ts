@@ -254,12 +254,18 @@ function loadSavedWindowState(): SavedWindowState | null {
 function persistWindowState(win: BrowserWindow): void {
   if (NO_RESTORE) return;
   if (win.isDestroyed()) return;
+  // TASK-271: Windows reports bounds at (-32000, -32000) for minimized windows.
+  // Persisting those corrupts the saved state and causes restore to land on
+  // the wrong monitor. Skip saving entirely when minimized.
+  if (win.isMinimized()) return;
   try {
     // Use the *normal* (un-maximized) bounds so a restore-from-maximize
     // doesn't snap the user back to a primary-display 1200x800. On Windows
     // getNormalBounds returns the pre-maximize rect; on other platforms it
     // falls back to getBounds when the window isn't maximized.
     const bounds = win.getNormalBounds();
+    // Additional sanity check: skip if bounds look like minimized garbage
+    if (bounds.x <= -30000 || bounds.y <= -30000) return;
     const state: SavedWindowState = {
       x: bounds.x,
       y: bounds.y,
