@@ -3223,38 +3223,46 @@ body.broadcast-on .terminal-panel {
   position: fixed;
   inset: 0;
   z-index: 500;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   justify-content: center;
-  padding-top: 80px;
+  padding-top: 15vh;
+  animation: palette-backdrop-in 0.15s ease-out;
 }
 
 .switcher {
-  width: 420px;
-  max-height: 350px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  width: 500px;
+  max-height: 420px;
+  background: color-mix(in srgb, var(--bg-secondary) 94%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(24px) saturate(1.3);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   align-self: flex-start;
+  animation: palette-slide-in 0.18s ease-out;
 }
 
 .switcher-input {
   width: 100%;
-  padding: 10px 14px;
-  background: var(--bg-primary);
+  padding: 14px 18px;
+  background: transparent;
   border: none;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
   outline: none;
+  letter-spacing: 0.01em;
 }
 
 .switcher-input::placeholder {
   color: var(--text-secondary);
+  opacity: 0.6;
 }
 
 .prompt-search-input-row {
@@ -3282,19 +3290,25 @@ body.broadcast-on .terminal-panel {
 .switcher-list {
   overflow-y: auto;
   flex: 1;
-  padding: 4px 0;
+  padding: 6px 8px 8px;
 }
 
 .switcher-item {
   display: flex;
   align-items: center;
-  padding: 8px 14px;
+  padding: 9px 14px;
   cursor: pointer;
-  gap: 8px;
+  gap: 10px;
+  border-radius: var(--radius-sm);
+  transition: background 0.08s ease;
 }
 
 .switcher-item.selected {
-  background: rgba(var(--rgb-accent), 0.15);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.switcher-item:active {
+  background: rgba(255, 255, 255, 0.10);
 }
 
 .switcher-item.current .switcher-title {
@@ -3304,20 +3318,22 @@ body.broadcast-on .terminal-panel {
 .switcher-title {
   flex: 1;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 13.5px;
 }
 
 .switcher-mode {
   color: var(--text-secondary);
   font-size: 11px;
   text-transform: uppercase;
+  opacity: 0.6;
 }
 
 .switcher-empty {
-  padding: 16px 14px;
+  padding: 24px 14px;
   color: var(--text-secondary);
   text-align: center;
   font-size: 13px;
+  opacity: 0.6;
 }
 
 /* Session timeline overlay - read-only list of a session's prompts with
@@ -3614,7 +3630,7 @@ body.broadcast-on .terminal-panel {
   align-items: stretch;
   gap: 4px;
   padding: 10px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 /* TASK-84: row layout puts a small jump-arrow glyph at the right edge of
    each result so the row visually signals it's clickable - previously the
@@ -5118,17 +5134,22 @@ select.settings-input {
 
 /* ===== Input Dialog ===== */
 .input-dialog {
-  width: 400px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--focus-border);
-  border-radius: 8px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  width: 460px;
+  background: color-mix(in srgb, var(--bg-secondary) 94%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(24px) saturate(1.3);
   overflow: hidden;
   align-self: flex-start;
+  animation: palette-slide-in 0.18s ease-out;
 }
 
 .input-dialog-title {
-  padding: 12px 16px 8px;
+  padding: 14px 20px 10px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
@@ -5139,42 +5160,47 @@ select.settings-input {
 }
 
 .input-dialog-options {
-  max-height: 150px;
+  max-height: 180px;
   overflow-y: auto;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 4px 6px;
 }
 
 .input-dialog-option {
-  padding: 8px 16px;
+  padding: 9px 14px;
   color: var(--text-primary);
   font-size: 13px;
   cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.08s ease;
 }
 
 .input-dialog-option:hover,
 .input-dialog-option.selected {
-  background: rgba(var(--rgb-accent), 0.15);
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .input-dialog-option.empty {
   color: var(--text-secondary);
   cursor: default;
+  opacity: 0.6;
 }
 
 .input-dialog-footer {
   display: flex;
   justify-content: flex-end;
-  padding: 8px 12px;
+  padding: 10px 16px;
   gap: 8px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .input-dialog-btn {
-  padding: 5px 16px;
+  padding: 6px 18px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   cursor: pointer;
+  transition: background 0.1s, opacity 0.1s;
 }
 
 .input-dialog-btn.cancel {
@@ -5201,83 +5227,109 @@ select.settings-input {
   position: fixed;
   inset: 0;
   z-index: 500;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   justify-content: center;
-  padding-top: 60px;
+  padding-top: 15vh;
+  animation: palette-backdrop-in 0.15s ease-out;
+}
+
+@keyframes palette-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes palette-slide-in {
+  from { opacity: 0; transform: translateY(-12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .palette {
-  width: 500px;
-  max-height: 420px;
-  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius-md);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(16px) saturate(1.2);
+  width: 640px;
+  max-height: 480px;
+  background: color-mix(in srgb, var(--bg-secondary) 94%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(24px) saturate(1.3);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   align-self: flex-start;
+  animation: palette-slide-in 0.18s ease-out;
 }
 
 .palette-input {
   width: 100%;
-  padding: 12px 16px;
-  background: var(--bg-primary);
+  padding: 16px 20px;
+  background: transparent;
   border: none;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: 400;
   outline: none;
+  letter-spacing: 0.01em;
 }
 
 .palette-input::placeholder {
   color: var(--text-secondary);
+  opacity: 0.6;
 }
 
 .palette-count {
-  padding: 4px 16px;
+  padding: 4px 20px 4px;
   color: var(--text-secondary);
   font-size: 11px;
   text-align: right;
-  border-bottom: 1px solid var(--border-color);
+  opacity: 0.5;
 }
 
 .palette-list {
   overflow-y: auto;
   flex: 1;
-  padding: 6px;
+  padding: 6px 8px 8px;
 }
 
 .palette-item {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 9px 14px;
   cursor: pointer;
   gap: 10px;
   border-radius: var(--radius-sm);
+  transition: background 0.08s ease;
 }
 
 .palette-item.selected {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.palette-item:active {
+  background: rgba(255, 255, 255, 0.10);
 }
 
 .palette-label {
   flex: 1;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .palette-shortcut {
   font-family: 'Cascadia Code', 'Consolas', monospace;
   font-size: 11px;
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.06);
-  padding: 2px 7px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 3px 8px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
 }
 
 /* TASK-193: right-click "Change shortcut" recording state on a palette row. */
@@ -5288,10 +5340,55 @@ select.settings-input {
 }
 
 .palette-empty {
-  padding: 16px;
+  padding: 24px 16px;
   color: var(--text-secondary);
   text-align: center;
   font-size: 13px;
+  opacity: 0.6;
+}
+
+/* Section headers for grouped results (Commands, Panes, Sessions) */
+.palette-section-header {
+  padding: 8px 14px 5px;
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  user-select: none;
+  opacity: 0.55;
+}
+
+.palette-section-header:not(:first-child) {
+  margin-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  padding-top: 10px;
+}
+
+/* Category icon badge in each result row */
+.palette-category-icon {
+  font-size: 12px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+  opacity: 0.35;
+}
+
+.palette-cat-command { opacity: 0.3; }
+.palette-cat-pane { color: var(--accent-blue, #89b4fa); opacity: 0.65; }
+.palette-cat-session { color: var(--accent-success); opacity: 0.65; font-size: 11px; }
+.palette-cat-prompt { color: var(--accent-warning); opacity: 0.65; font-size: 11px; }
+
+/* Detail text (cwd folder, session provider) */
+.palette-detail {
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  flex-shrink: 0;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ===== Shortcuts Help ===== */
@@ -5299,22 +5396,28 @@ select.settings-input {
   position: fixed;
   inset: 0;
   z-index: 600;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   justify-content: center;
   align-items: center;
+  animation: palette-backdrop-in 0.15s ease-out;
 }
 
 .shortcuts-dialog {
-  width: 480px;
+  width: 520px;
   max-height: 80vh;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  background: color-mix(in srgb, var(--bg-secondary) 94%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(24px) saturate(1.3);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: palette-slide-in 0.18s ease-out;
 }
 
 .shortcuts-header {
@@ -5405,30 +5508,30 @@ select.settings-input {
 .ai-session-tabs {
   display: flex;
   gap: 2px;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border-color);
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .ai-session-tab {
   font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.12s, color 0.12s;
 }
 
 .ai-session-tab:hover {
-  background: rgba(var(--rgb-accent), 0.08);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text-primary);
 }
 
 .ai-session-tab.active {
-  background: rgba(var(--rgb-accent), 0.15);
-  color: var(--focus-border);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -5436,8 +5539,8 @@ select.settings-input {
 .ai-session-sort-header {
   display: flex;
   align-items: stretch;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-secondary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  background: transparent;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -5484,22 +5587,24 @@ select.settings-input {
 .ai-session-item {
   display: flex;
   align-items: flex-start;
-  padding: 8px 10px;
+  padding: 10px 12px;
   cursor: pointer;
   gap: 8px;
   border-left: 2px solid transparent;
   transition: background 0.1s;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin: 1px 4px 1px 0;
 }
 
 .ai-session-group-header {
-  padding: 6px 10px 4px;
-  font-size: 11px;
+  padding: 8px 12px 5px;
+  font-size: 10.5px;
   font-weight: 600;
   color: var(--dim-text, #a6adc8);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  background: rgba(var(--rgb-accent), 0.04);
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  letter-spacing: 0.6px;
+  background: transparent;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -5671,7 +5776,7 @@ select.settings-input {
 }
 
 .ai-session-name {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -5806,16 +5911,21 @@ select.settings-input {
 
 /* AI Prompts Dialog */
 .ai-prompts-dialog {
-  width: 500px;
+  width: 540px;
   max-height: 60vh;
-  background: var(--bg-secondary);
-  border: 1px solid var(--focus-border);
-  border-radius: 8px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  background: color-mix(in srgb, var(--bg-secondary) 94%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(24px) saturate(1.3);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   align-self: flex-start;
+  animation: palette-slide-in 0.18s ease-out;
 }
 
 .ai-prompts-header {

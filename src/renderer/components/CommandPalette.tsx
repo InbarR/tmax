@@ -19,6 +19,25 @@ interface Command {
   action: () => void;
 }
 
+type ResultCategory = 'command' | 'pane' | 'session' | 'prompt';
+
+interface SearchResult {
+  category: ResultCategory;
+  id: string;
+  label: string;
+  /** Secondary text shown dimmed to the right of the label */
+  detail?: string;
+  shortcut?: string;
+  action: () => void;
+}
+
+const CATEGORY_LABELS: Record<ResultCategory, string> = {
+  command: 'Commands',
+  pane: 'Panes',
+  session: 'Sessions',
+  prompt: 'Prompts',
+};
+
 // Palette command id -> keybinding action (useKeybindings.ts). Most palette
 // ids match the binding action name 1:1, but several diverge (the palette id
 // describes the menu entry, the action drives dispatchAction). Only ids that
@@ -76,9 +95,20 @@ const CommandPalette: React.FC = () => {
     const id = s.focusedTerminalId;
     return id ? s.terminals.get(id)?.aiSessionId ?? null : null;
   });
+  // Subscribe to open panes (for Panes search results)
+  const terminals = useTerminalStore((s) => s.terminals);
+  const activeWorkspaceId = useTerminalStore((s) => s.activeWorkspaceId);
+  // Subscribe to AI sessions (for Sessions search results)
+  const copilotSessions = useTerminalStore((s) => s.copilotSessions);
+  const claudeCodeSessions = useTerminalStore((s) => s.claudeCodeSessions);
+
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [dialog, setDialog] = useState<{ title: string; placeholder?: string; options?: string[]; onSubmit: (value: string) => void } | null>(null);
+  // TASK-267 AC#4: async prompt search results from the prompt DB
+  const [promptResults, setPromptResults] = useState<SearchResult[]>([]);
+  const [promptsLoading, setPromptsLoading] = useState(false);
+  const promptSearchVersion = useRef(0);
   // TASK-193: action currently being re-recorded via right-click "Change
   // shortcut". null = not recording.
   const [rebindingAction, setRebindingAction] = useState<string | null>(null);
@@ -335,33 +365,150 @@ const CommandPalette: React.FC = () => {
     return cmd.shortcut;
   }, [effectiveKeyByAction]);
 
-  const filtered = useMemo(() => {
+  const filtered = useMemo((): SearchResult[] => {
     const tokens = tokenizeAnd(query);
-    if (tokens.length === 0) return commands;
-    return commands.filter((c) => {
+
+    // ── Commands ──
+    const commandResults: SearchResult[] = (tokens.length === 0 ? commands : commands.filter((c) => {
       const haystack = `${c.label}\n${c.shortcut || ''}`.toLowerCase();
       return matchesAllTokens(haystack, tokens);
-    });
-  }, [commands, query]);
+    })).map((c) => ({
+      category: 'command' as const,
+      id: `cmd:${c.id}`,
+      label: c.label,
+      shortcut: shortcutFor(c),
+      action: c.action,
+    }));
+
+    // Empty query: show commands only (AC #6)
+    if (tokens.length === 0) return commandResults;
+
+    // ── Panes ──
+    const paneResults: SearchResult[] = [];
+    const store = useTerminalStore.getState();
+    for (const [id, inst] of terminals) {
+      const haystack = `${inst.title}\n${inst.cwd || ''}\n${inst.lastProcess || ''}`.toLowerCase();
+      if (!matchesAllTokens(haystack, tokens)) continue;
+      paneResults.push({
+        category: 'pane',
+        id: `pane:${id}`,
+        label: inst.title,
+        detail: inst.cwd ? inst.cwd.replace(/^.*[\\/]/, '') : undefined,
+        action: () => { store.setFocus(id); },
+      });
+    }
+
+    // ── Sessions ──
+    const sessionResults: SearchResult[] = [];
+    const allSessions = [...copilotSessions, ...claudeCodeSessions];
+    // Track which session IDs are already open in a pane (to show status)
+    const openSessionIds = new Set<string>();
+    for (const [, inst] of terminals) {
+      if (inst.aiSessionId) openSessionIds.add(inst.aiSessionId);
+    }
+    for (const sess of allSessions) {
+      const haystack = `${sess.summary}\n${sess.slug || ''}\n${sess.firstPrompt || ''}\n${sess.repository || ''}`.toLowerCase();
+      if (!matchesAllTokens(haystack, tokens)) continue;
+      const isOpen = openSessionIds.has(sess.id);
+      // Pick the best short label: slug > firstPrompt (truncated) > summary (truncated)
+      const rawLabel = sess.slug || sess.firstPrompt || sess.summary || 'Untitled session';
+      const label = rawLabel.length > 80 ? rawLabel.slice(0, 77) + '…' : rawLabel;
+      sessionResults.push({
+        category: 'session',
+        id: `session:${sess.id}`,
+        label,
+        detail: isOpen ? '● open' : (sess.provider === 'copilot' ? 'Copilot' : 'Claude'),
+        action: () => {
+          if (sess.provider === 'copilot') store.openCopilotSession(sess.id);
+          else store.openClaudeCodeSession(sess.id);
+        },
+      });
+    }
+
+    return [...commandResults, ...paneResults, ...sessionResults];
+  }, [commands, query, shortcutFor, terminals, copilotSessions, claudeCodeSessions]);
+
+  // Merge async prompt results into the filtered list
+  const allResults = useMemo(() => {
+    if (promptResults.length === 0) return filtered;
+    return [...filtered, ...promptResults];
+  }, [filtered, promptResults]);
 
   useEffect(() => {
     if (show) {
       setQuery('');
       setSelectedIndex(0);
+      setPromptResults([]);
+      setPromptsLoading(false);
+      promptSearchVersion.current = 0;
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [show]);
 
+  // TASK-267 AC#4: debounced async prompt search (needs 4+ chars to avoid
+  // broad scans). Results arrive async and merge into the filtered list.
   useEffect(() => {
-    if (selectedIndex >= filtered.length) {
-      setSelectedIndex(Math.max(0, filtered.length - 1));
+    if (!show || query.trim().length < 4) {
+      setPromptResults([]);
+      setPromptsLoading(false);
+      return;
     }
-  }, [filtered.length, selectedIndex]);
+    setPromptsLoading(true);
+    const version = ++promptSearchVersion.current;
+    const timer = setTimeout(async () => {
+      try {
+        const api = window.terminalAPI as any;
+        const rows: any[] | null = await api.searchCopilotPrompts?.(query);
+        if (promptSearchVersion.current !== version) return;
+        if (!rows || !Array.isArray(rows)) { setPromptResults([]); setPromptsLoading(false); return; }
+        const store = useTerminalStore.getState();
+        const results: SearchResult[] = rows.slice(0, 8).map((row) => {
+          const promptText = (row.user_message || '').slice(0, 120);
+          const label = promptText.length >= 117 ? promptText + '…' : promptText;
+          // Find if this session has a live pane
+          let terminalId: string | null = null;
+          for (const [tid, t] of store.terminals) {
+            if (t.aiSessionId === row.session_id) { terminalId = tid; break; }
+          }
+          return {
+            category: 'prompt' as ResultCategory,
+            id: `prompt:${row.session_id}:${row.rowid || Math.random()}`,
+            label,
+            detail: row.summary?.slice(0, 30) || undefined,
+            action: () => {
+              if (terminalId) {
+                const targetTerm = store.terminals.get(terminalId);
+                if (targetTerm?.workspaceId && targetTerm.workspaceId !== store.activeWorkspaceId) {
+                  store.setActiveWorkspace(targetTerm.workspaceId);
+                }
+                store.setFocus(terminalId);
+              } else {
+                store.openCopilotSession(row.session_id);
+              }
+            },
+          };
+        });
+        setPromptResults(results);
+      } catch {
+        setPromptResults([]);
+      } finally {
+        if (promptSearchVersion.current === version) setPromptsLoading(false);
+      }
+    }, 200);
+    return () => { clearTimeout(timer); };
+  }, [show, query]);
+
+  useEffect(() => {
+    if (selectedIndex >= allResults.length) {
+      setSelectedIndex(Math.max(0, allResults.length - 1));
+    }
+  }, [allResults.length, selectedIndex]);
 
   // Scroll selected item into view
   useEffect(() => {
     if (listRef.current) {
-      const item = listRef.current.children[selectedIndex] as HTMLElement | undefined;
+      const items = listRef.current.querySelectorAll('.palette-item');
+      const item = items[selectedIndex] as HTMLElement | undefined;
       item?.scrollIntoView({ block: 'nearest' });
     }
   }, [selectedIndex]);
@@ -370,10 +517,9 @@ const CommandPalette: React.FC = () => {
     useTerminalStore.getState().toggleCommandPalette();
   }, []);
 
-  const runCommand = useCallback((cmd: Command) => {
+  const runCommand = useCallback((result: SearchResult) => {
     close();
-    // Delay action slightly so palette closes first
-    requestAnimationFrame(() => cmd.action());
+    requestAnimationFrame(() => result.action());
   }, [close]);
 
   // TASK-193: persist a new key combo for an action, mirroring the rebind
@@ -443,18 +589,20 @@ const CommandPalette: React.FC = () => {
 
   // Right-click opens a small menu (Reassign / Reset), rather than jumping
   // straight into capture - so a stray right-click can't silently rebind.
-  const handleContextMenu = useCallback((e: React.MouseEvent, cmd: Command) => {
-    const action = actionForCommandId(cmd.id);
-    if (!action) return; // not rebindable - let the native menu through
+  const handleContextMenu = useCallback((e: React.MouseEvent, result: SearchResult) => {
+    if (result.category !== 'command') return; // only commands are rebindable
+    const cmdId = result.id.replace('cmd:', '');
+    const action = actionForCommandId(cmdId);
+    if (!action) return;
     e.preventDefault();
-    setRebindMenu({ x: e.clientX, y: e.clientY, cmd, action });
+    setRebindMenu({ x: e.clientX, y: e.clientY, cmd: { id: cmdId, label: result.label, shortcut: result.shortcut, action: result.action }, action });
   }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedIndex((i) => Math.min(i + 1, filtered.length - 1));
+        setSelectedIndex((i) => Math.min(i + 1, allResults.length - 1));
         break;
       case 'ArrowUp':
         e.preventDefault();
@@ -462,7 +610,7 @@ const CommandPalette: React.FC = () => {
         break;
       case 'Enter':
         e.preventDefault();
-        if (filtered[selectedIndex]) runCommand(filtered[selectedIndex]);
+        if (allResults[selectedIndex]) runCommand(allResults[selectedIndex]);
         break;
       case 'Escape':
         e.preventDefault();
@@ -470,7 +618,7 @@ const CommandPalette: React.FC = () => {
         break;
     }
     e.stopPropagation();
-  }, [filtered, selectedIndex, runCommand, close]);
+  }, [allResults, selectedIndex, runCommand, close]);
 
   if (!show && !dialog) return null;
 
@@ -493,38 +641,51 @@ const CommandPalette: React.FC = () => {
           ref={inputRef}
           className="palette-input"
           type="text"
-          placeholder="Type a command..."
+          placeholder="Search commands, panes, sessions..."
           value={query}
           onChange={(e) => { setQuery(e.target.value); setSelectedIndex(0); }}
           onKeyDown={handleKeyDown}
         />
         <div className="palette-count" aria-live="polite">
-          {filtered.length} {filtered.length === 1 ? 'result' : 'results'}
+          {allResults.length} {allResults.length === 1 ? 'result' : 'results'}{promptsLoading ? ' · searching prompts…' : ''}
         </div>
         <div className="palette-list" ref={listRef}>
-          {filtered.map((cmd, index) => {
-            const rebindable = actionForCommandId(cmd.id) !== null;
-            const recording = rebindable && rebindingAction === actionForCommandId(cmd.id);
+          {allResults.map((result, index) => {
+            // Show section header when the category changes
+            const prevCategory = index > 0 ? allResults[index - 1].category : null;
+            const showHeader = result.category !== prevCategory && (query.length > 0 || index === 0);
+            const isCommand = result.category === 'command';
+            const cmdId = isCommand ? result.id.replace('cmd:', '') : '';
+            const rebindable = isCommand && actionForCommandId(cmdId) !== null;
+            const recording = rebindable && rebindingAction === actionForCommandId(cmdId);
             return (
-              <div
-                key={cmd.id}
-                className={`palette-item${index === selectedIndex ? ' selected' : ''}`}
-                onClick={() => { if (recording) { setRebindingAction(null); return; } runCommand(cmd); }}
-                onMouseEnter={() => setSelectedIndex(index)}
-                onContextMenu={(e) => handleContextMenu(e, cmd)}
-                title={rebindable ? 'Right-click to change shortcut' : undefined}
-              >
-                <span className="palette-label">{cmd.label}</span>
-                {recording ? (
-                  <kbd className="palette-shortcut recording">Press keys... (Esc)</kbd>
-                ) : (
-                  (() => { const sc = shortcutFor(cmd); return sc ? <kbd className="palette-shortcut">{formatKeyForPlatform(sc)}</kbd> : null; })()
+              <React.Fragment key={result.id}>
+                {showHeader && (
+                  <div className="palette-section-header">{CATEGORY_LABELS[result.category]}</div>
                 )}
-              </div>
+                <div
+                  className={`palette-item${index === selectedIndex ? ' selected' : ''}`}
+                  onClick={() => { if (recording) { setRebindingAction(null); return; } runCommand(result); }}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                  onContextMenu={(e) => handleContextMenu(e, result)}
+                  title={rebindable ? 'Right-click to change shortcut' : undefined}
+                >
+                  <span className={`palette-category-icon palette-cat-${result.category}`}>
+                    {result.category === 'command' ? '⌘' : result.category === 'pane' ? '⊞' : result.category === 'session' ? '✦' : '⟡'}
+                  </span>
+                  <span className="palette-label">{result.label}</span>
+                  {result.detail && <span className="palette-detail">{result.detail}</span>}
+                  {recording ? (
+                    <kbd className="palette-shortcut recording">Press keys... (Esc)</kbd>
+                  ) : (
+                    result.shortcut ? <kbd className="palette-shortcut">{formatKeyForPlatform(result.shortcut)}</kbd> : null
+                  )}
+                </div>
+              </React.Fragment>
             );
           })}
-          {filtered.length === 0 && (
-            <div className="palette-empty">No matching commands</div>
+          {allResults.length === 0 && (
+            <div className="palette-empty">No results found</div>
           )}
         </div>
       </div>
