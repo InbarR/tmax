@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-12T23:51:28.155Z",
-  "dau": 148,
-  "wau": 202,
-  "mau": 205,
-  "total": 205,
+  "generatedAt": "2026-07-13T06:14:58.271Z",
+  "dau": 106,
+  "wau": 203,
+  "mau": 206,
+  "total": 206,
   "daily": [
     {
       "date": "2026-07-04",
@@ -40,6 +40,10 @@
     {
       "date": "2026-07-12",
       "users": 148
+    },
+    {
+      "date": "2026-07-13",
+      "users": 106
     }
   ],
   "cumulative": [
@@ -87,31 +91,36 @@
       "date": "2026-07-12",
       "newUsers": 17,
       "total": 205
+    },
+    {
+      "date": "2026-07-13",
+      "newUsers": 1,
+      "total": 206
     }
   ],
   "byOs": {
-    "win32": 163,
+    "win32": 164,
     "darwin": 40,
     "linux": 2
   },
   "byVersion": {
     "1.11.4": 181,
     "1.11.3": 52,
-    "1.12.0": 28,
+    "1.12.0": 37,
     "1.11.2": 1
   },
   "byTimezone": {
     "Asia/Jerusalem": 168,
-    "America/Los_Angeles": 27,
+    "America/Los_Angeles": 28,
     "Europe/London": 2,
     "Australia/Sydney": 2,
     "Asia/Calcutta": 2,
     "Europe/Moscow": 2,
-    "America/New_York": 1,
-    "America/Chicago": 1,
-    "Etc/GMT-2": 1,
     "Asia/Baghdad": 1,
+    "America/New_York": 1,
     "Europe/Brussels": 1,
+    "Etc/GMT-2": 1,
+    "America/Chicago": 1,
     "Asia/Bangkok": 1,
     "UTC": 1
   }
