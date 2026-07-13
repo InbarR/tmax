@@ -897,6 +897,10 @@ interface TerminalStore {
   tabBarPosition: 'top' | 'bottom' | 'left' | 'right';
   hideTabTitles: boolean;
   hideTabCloseButtons: boolean;
+  // When true, closing a tab/pane asks for confirmation first so an
+  // accidental X-click or middle-click doesn't kill a live session. Bulk
+  // closes collapse to a single aggregate confirm. Opt-in; default off.
+  confirmOnCloseSession: boolean;
   renamingTerminalId: TerminalId | null;
   viewMode: 'split' | 'focus' | 'grid';
   broadcastMode: boolean; // when true, typing in any pane is sent to all tiled panes
@@ -988,7 +992,10 @@ interface TerminalStore {
   // Actions
   loadConfig: () => Promise<void>;
   createTerminal: (shellProfileId?: string, cwdOverride?: string) => Promise<void>;
-  closeTerminal: (id: TerminalId) => Promise<void>;
+  closeTerminal: (id: TerminalId, opts?: { skipConfirm?: boolean }) => Promise<void>;
+  // Close many tabs at once with a single aggregate confirm (instead of
+  // one dialog per tab). Used by Close All / Close Others / close group.
+  closeTerminals: (ids: TerminalId[]) => Promise<void>;
   replaceTerminal: (id: TerminalId, shellProfileId?: string) => Promise<void>;
   /**
    * Browser-style undo close (TASK-112). Pops the most recent entry off
@@ -1034,6 +1041,7 @@ interface TerminalStore {
   toggleTabBarPosition: () => void;
   toggleHideTabTitles: () => void;
   toggleHideTabCloseButtons: () => void;
+  toggleConfirmOnCloseSession: () => void;
   setTerminalOpacity: (opacity: number) => void;
   startRenaming: (id: TerminalId | null) => void;
   toggleViewMode: () => void;
@@ -1376,6 +1384,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   tabBarPosition: 'top' as 'top' | 'bottom' | 'left' | 'right',
   hideTabTitles: false,
   hideTabCloseButtons: false,
+  confirmOnCloseSession: false,
   renamingTerminalId: null,
   viewMode: 'grid' as 'split' | 'focus' | 'grid',
   broadcastMode: false,
@@ -1399,6 +1408,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     if (config?.tabBarPosition) updates.tabBarPosition = config.tabBarPosition;
     if (typeof (config as any)?.hideTabTitles === 'boolean') updates.hideTabTitles = (config as any).hideTabTitles;
     if (typeof (config as any)?.hideTabCloseButtons === 'boolean') updates.hideTabCloseButtons = (config as any).hideTabCloseButtons;
+    if (typeof (config as any)?.confirmOnCloseSession === 'boolean') updates.confirmOnCloseSession = (config as any).confirmOnCloseSession;
     if ((config as any)?.terminalOpacity != null) {
       updates.terminalOpacity = (config as any).terminalOpacity;
       document.documentElement.style.setProperty('--terminal-opacity', String((config as any).terminalOpacity));
@@ -1613,11 +1623,25 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     get().saveSession();
   },
 
-  closeTerminal: async (id: TerminalId) => {
+  closeTerminal: async (id: TerminalId, opts?: { skipConfirm?: boolean }) => {
     const t0 = performance.now();
     const { terminals, layout, focusedTerminalId, closedTerminals, copilotSessions, claudeCodeSessions } = get();
     const instance = terminals.get(id);
     if (!instance) return;
+
+    // Guard against an accidental X-click / middle-click killing a live
+    // session. skipConfirm lets bulk closers show one aggregate confirm
+    // instead of one dialog per pane (see closeTerminals).
+    if (get().confirmOnCloseSession && !opts?.skipConfirm) {
+      const label = instance.title?.trim() || 'this session';
+      const ok = await confirmDialog({
+        title: 'Close session?',
+        message: `Close "${label}"? This ends the terminal session.`,
+        confirmText: 'Close',
+        danger: true,
+      });
+      if (!ok) return;
+    }
 
     // Snapshot pane identity for browser-style undo close (TASK-112).
     // Capture BEFORE the PTY is killed so the metadata is intact even if
@@ -1720,6 +1744,26 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       id,
       remaining: newTerminals.size,
     });
+  },
+
+  closeTerminals: async (ids: TerminalId[]) => {
+    if (ids.length === 0) return;
+    // A single tab still names itself; let closeTerminal own that confirm.
+    if (ids.length === 1) {
+      await get().closeTerminal(ids[0]);
+      return;
+    }
+    // Many tabs: one aggregate confirm, then close each without re-asking.
+    if (get().confirmOnCloseSession) {
+      const ok = await confirmDialog({
+        title: 'Close sessions?',
+        message: `Close ${ids.length} sessions? This ends all of them.`,
+        confirmText: `Close ${ids.length}`,
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    for (const id of ids) await get().closeTerminal(id, { skipConfirm: true });
   },
 
   restoreClosedTerminal: async () => {
@@ -2644,6 +2688,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const val = !get().hideTabCloseButtons;
     set({ hideTabCloseButtons: val });
     get().updateConfig({ hideTabCloseButtons: val } as any);
+  },
+
+  toggleConfirmOnCloseSession: () => {
+    const val = !get().confirmOnCloseSession;
+    set({ confirmOnCloseSession: val });
+    get().updateConfig({ confirmOnCloseSession: val } as any);
   },
 
   setTerminalOpacity: (opacity: number) => {

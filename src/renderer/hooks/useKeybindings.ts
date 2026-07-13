@@ -238,7 +238,7 @@ function dispatchAction(action: string): void {
         : (focusedId ? [focusedId] : []);
       if (ids.length === 0) break;
       if (sel.length > 0) store.clearSelection();
-      (async () => { for (const id of ids) await store.closeTerminal(id); })();
+      store.closeTerminals(ids);
       break;
     }
     case 'restoreClosedTerminal':

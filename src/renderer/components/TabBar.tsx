@@ -432,7 +432,7 @@ const TabBar: React.FC<{ vertical?: boolean; side?: 'left' | 'right' }> = ({ ver
               .filter(([, t]) => t.groupId === groupMenu.groupId)
               .map(([id]) => id);
             store.deleteTabGroup(groupMenu.groupId);
-            (async () => { for (const id of ids) await store.closeTerminal(id); })();
+            store.closeTerminals(ids);
             setGroupMenu(null);
           }}>
             Close All
