@@ -447,21 +447,21 @@ const TabContextMenu: React.FC<TabContextMenuProps> = ({ position, selectedAtOpe
               : [position.terminalId];
             onClose();
             useTerminalStore.getState().clearSelection();
-            (async () => { for (const id of ids) await useTerminalStore.getState().closeTerminal(id); })();
+            useTerminalStore.getState().closeTerminals(ids);
           }}>
             Close{targetIds.length > 1 ? ` (${targetIds.length})` : ''} <span className="shortcut">{formatKeyForPlatform('Ctrl+Shift+W')}</span>
           </button>
           <button className="context-menu-item danger" onClick={() => {
             onClose();
             const ids = Array.from(store().terminals.keys()).filter((id) => id !== position.terminalId);
-            (async () => { for (const id of ids) await store().closeTerminal(id); })();
+            store().closeTerminals(ids);
           }}>
             Close Others
           </button>
           <button className="context-menu-item danger" onClick={() => {
             onClose();
             const ids = Array.from(store().terminals.keys());
-            (async () => { for (const id of ids) await store().closeTerminal(id); })();
+            store().closeTerminals(ids);
           }}>
             Close All
           </button>

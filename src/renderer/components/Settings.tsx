@@ -775,6 +775,13 @@ const AppearanceSettings: React.FC = () => {
             <span className="toggle-track" />
           </label>
         </SettingRow>
+        <SettingRow label="Confirm before closing" description="Ask for confirmation before closing a tab or pane, so an accidental ✕-click or middle-click doesn't end a live session">
+          <label className="toggle-switch">
+            <input type="checkbox" checked={(config as any).confirmOnCloseSession === true}
+              onChange={() => useTerminalStore.getState().toggleConfirmOnCloseSession()} />
+            <span className="toggle-track" />
+          </label>
+        </SettingRow>
         <SettingRow label="Default tab color" description="Background tint for all terminals without a custom color">
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <input type="color" className="theme-color-picker"
