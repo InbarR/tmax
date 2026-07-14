@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-14T20:08:23.960Z",
+  "generatedAt": "2026-07-14T21:55:12.289Z",
   "dau": 176,
   "wau": 232,
   "mau": 242,
@@ -123,21 +123,21 @@
     "America/Los_Angeles": 33,
     "Asia/Calcutta": 4,
     "Europe/London": 3,
-    "Australia/Sydney": 2,
     "Europe/Moscow": 2,
-    "Europe/Berlin": 2,
+    "Australia/Sydney": 2,
     "America/New_York": 2,
-    "Europe/Lisbon": 1,
+    "Europe/Berlin": 2,
     "America/Chicago": 1,
-    "Europe/Oslo": 1,
-    "America/Santiago": 1,
     "Etc/GMT-2": 1,
+    "Europe/Oslo": 1,
+    "Asia/Amman": 1,
+    "Europe/Lisbon": 1,
     "UTC": 1,
-    "America/Vancouver": 1,
-    "Asia/Bangkok": 1,
+    "America/Santiago": 1,
+    "America/Lima": 1,
     "Europe/Brussels": 1,
     "Asia/Baghdad": 1,
-    "America/Lima": 1,
-    "Asia/Amman": 1
+    "Asia/Bangkok": 1,
+    "America/Vancouver": 1
   }
 }
