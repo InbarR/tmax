@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-07-17T02:48:55.792Z",
-  "dau": 92,
+  "generatedAt": "2026-07-17T05:40:55.192Z",
+  "dau": 98,
   "wau": 254,
   "mau": 273,
   "total": 273,
@@ -59,7 +59,7 @@
     },
     {
       "date": "2026-07-17",
-      "users": 92
+      "users": 98
     }
   ],
   "cumulative": [
@@ -156,19 +156,19 @@
     "Europe/Moscow": 2,
     "America/New_York": 2,
     "Europe/Lisbon": 2,
+    "America/Chicago": 1,
     "Etc/GMT-2": 1,
     "Europe/Oslo": 1,
-    "America/Chicago": 1,
-    "America/Santiago": 1,
+    "America/Lima": 1,
+    "America/Montevideo": 1,
     "Asia/Dhaka": 1,
     "Asia/Baghdad": 1,
-    "America/Lima": 1,
+    "America/Santiago": 1,
     "America/Vancouver": 1,
-    "America/Hermosillo": 1,
     "Europe/Brussels": 1,
     "Europe/Chisinau": 1,
     "UTC": 1,
-    "America/Montevideo": 1,
+    "America/Hermosillo": 1,
     "Asia/Bangkok": 1
   }
 }
