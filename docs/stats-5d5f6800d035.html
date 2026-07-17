@@ -1154,6 +1154,19 @@ function osLabel(k) {
   return { win32: 'Windows', darwin: 'macOS', linux: 'Linux' }[k] || k || 'unknown';
 }
 
+// Collapse America/* and Europe/* timezones to their continent; keep Asia/* (and
+// everything else) at city-level granularity.
+function groupTimezones(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    let key = k;
+    if (k.startsWith('America/')) key = 'America';
+    else if (k.startsWith('Europe/')) key = 'Europe';
+    out[key] = (out[key] || 0) + (Number(v) || 0);
+  }
+  return out;
+}
+
 (async function loadTelemetry() {
   try {
     const res = await fetch('telemetry-summary.json', { cache: 'no-store' });
@@ -1171,7 +1184,7 @@ function osLabel(k) {
     if (summary.byOs || summary.byVersion || summary.byTimezone) {
       renderTelemBreakdown('telem-os', summary.byOs, osLabel);
       renderTelemBreakdown('telem-version', summary.byVersion);
-      renderTelemBreakdown('telem-timezone', summary.byTimezone);
+      renderTelemBreakdown('telem-timezone', groupTimezones(summary.byTimezone));
       document.getElementById('telemBreakdownSection').style.display = '';
       if (summary.generatedAt) {
         const gen = new Date(summary.generatedAt);
