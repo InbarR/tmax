@@ -51269,10 +51269,10 @@
       }
     },
     {
-      "t": "2026-07-17T01:49:44.107Z",
+      "t": "2026-07-17T07:52:35.885Z",
       "releases": {
         "v1.12.0": {
-          "RELEASES": 5079,
+          "RELEASES": 5135,
           "RELEASES-arm64": 1,
           "RELEASES-x64": 1,
           "tmax-1.12.0-1.x86_64.rpm": 11,
@@ -51281,10 +51281,10 @@
           "tmax-1.12.0-arm64.dmg": 50,
           "tmax-1.12.0-full.nupkg": 177,
           "tmax-1.12.0-x64-full.nupkg": 1,
-          "tmax-1.12.0-x64-Setup.exe": 67,
+          "tmax-1.12.0-x64-Setup.exe": 69,
           "tmax-1.12.0-x64.dmg": 0,
           "tmax-1.12.0.Setup.exe": 0,
-          "tmax-darwin-arm64-portable.zip": 6147,
+          "tmax-darwin-arm64-portable.zip": 6436,
           "tmax-darwin-x64-portable.zip": 1,
           "tmax-linux-x64-portable.zip": 6,
           "tmax-win32-arm64-portable.zip": 1,
@@ -51424,7 +51424,7 @@
           "tmax_1.10.0_amd64.deb": 6
         },
         "v1.9.3": {
-          "RELEASES-arm64": 108,
+          "RELEASES-arm64": 109,
           "RELEASES-x64": 4543,
           "tmax-1.9.3-1.x86_64.rpm": 8,
           "tmax-1.9.3-arm64-full.nupkg": 4,
@@ -51438,7 +51438,7 @@
           "tmax_1.9.3_amd64.deb": 7
         },
         "v1.9.2": {
-          "RELEASES-arm64": 22,
+          "RELEASES-arm64": 23,
           "RELEASES-x64": 1212,
           "tmax-1.9.2-1.x86_64.rpm": 9,
           "tmax-1.9.2-arm64-full.nupkg": 2,
@@ -51541,7 +51541,7 @@
           "RELEASES": 54,
           "RELEASES-arm64": 1,
           "RELEASES-x64": 2,
-          "tmax-1.7.1-1.x86_64.rpm": 1,
+          "tmax-1.7.1-1.x86_64.rpm": 2,
           "tmax-1.7.1-arm64-full.nupkg": 1,
           "tmax-1.7.1-arm64-Setup.exe": 1,
           "tmax-1.7.1-arm64.dmg": 3,
@@ -51943,7 +51943,7 @@
           "tmax_1.3.3_amd64.deb": 4
         },
         "v1.3.2": {
-          "tmax-1.3.2-1.x86_64.rpm": 1,
+          "tmax-1.3.2-1.x86_64.rpm": 2,
           "tmax-1.3.2-arm64.dmg": 3,
           "tmax-1.3.2-x64.dmg": 3,
           "tmax-1.3.2.Setup.exe": 2,
@@ -51961,13 +51961,13 @@
           "tmax-1.3.1.Setup.exe": 4,
           "tmax-darwin-arm64-1.3.1.zip": 2,
           "tmax-darwin-x64-1.3.1.zip": 2,
-          "tmax-linux-x64-1.3.1.zip": 2,
+          "tmax-linux-x64-1.3.1.zip": 3,
           "tmax-win32-x64-1.3.1.zip": 2,
           "tmax-win32-x64-portable.zip": 2,
           "tmax_1.3.1_amd64.deb": 2
         },
         "v1.3.0": {
-          "tmax-1.3.0-1.x86_64.rpm": 1,
+          "tmax-1.3.0-1.x86_64.rpm": 2,
           "tmax-1.3.0-arm64.dmg": 4,
           "tmax-1.3.0-x64.dmg": 2,
           "tmax-1.3.0.Setup.exe": 4,
