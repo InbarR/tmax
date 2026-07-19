@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-07-19T15:55:33.163Z",
+  "generatedAt": "2026-07-19T16:56:47.727Z",
   "dau": 159,
-  "wau": 267,
+  "wau": 266,
   "mau": 300,
   "total": 300,
   "daily": [
@@ -161,7 +161,7 @@
     "1.12.0": 214,
     "1.11.4": 192,
     "1.11.3": 53,
-    "1.12.1": 31,
+    "1.12.1": 32,
     "1.11.2": 1
   },
   "byTimezone": {
@@ -169,8 +169,8 @@
     "America/Los_Angeles": 37,
     "Asia/Calcutta": 5,
     "Asia/Amman": 4,
-    "Europe/Moscow": 3,
     "Europe/London": 3,
+    "Europe/Moscow": 3,
     "Australia/Sydney": 3,
     "Europe/Berlin": 3,
     "America/New_York": 2,
@@ -181,15 +181,15 @@
     "Etc/GMT-2": 1,
     "America/Hermosillo": 1,
     "Asia/Tokyo": 1,
-    "Europe/Brussels": 1,
-    "Asia/Dhaka": 1,
     "UTC": 1,
-    "America/Santiago": 1,
-    "Europe/Budapest": 1,
-    "America/Vancouver": 1,
+    "Asia/Dhaka": 1,
     "Europe/Chisinau": 1,
-    "Asia/Bangkok": 1,
+    "Europe/Budapest": 1,
+    "America/Santiago": 1,
+    "America/Vancouver": 1,
+    "Europe/Brussels": 1,
     "America/Montevideo": 1,
+    "Asia/Bangkok": 1,
     "America/Lima": 1
   }
 }
