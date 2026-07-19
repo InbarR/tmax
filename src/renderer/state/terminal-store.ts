@@ -1134,7 +1134,7 @@ interface TerminalStore {
    * was active, switches to the next remaining workspace (or creates a
    * fresh default if it was the last one).
    */
-  closeWorkspace: (id: WorkspaceId) => void;
+  closeWorkspace: (id: WorkspaceId) => Promise<void>;
   /**
    * TASK-78: Move an existing pane from its current workspace to `destWorkspaceId`
    * without restarting its PTY. The pane is removed from the source workspace's
@@ -3862,7 +3862,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     get().saveSession();
   },
 
-  closeWorkspace: (id: WorkspaceId) => {
+  closeWorkspace: async (id: WorkspaceId) => {
     const { workspaces, activeWorkspaceId, terminals, layout, closedTerminals, copilotSessions, claudeCodeSessions } = get();
     if (!workspaces.has(id)) return;
     const closingWs = workspaces.get(id)!;
@@ -3874,6 +3874,19 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         terminalIdsToClose.push(tid);
         paneSnapshots.push(snapshotPaneForRestore(inst, copilotSessions, claudeCodeSessions));
       }
+    }
+    // TASK-275: confirm before closing a workspace when the setting is on.
+    // Single aggregate confirm for the whole workspace (like closeTerminals).
+    if (get().confirmOnCloseSession && terminalIdsToClose.length > 0) {
+      const label = closingWs.name || 'this workspace';
+      const count = terminalIdsToClose.length;
+      const ok = await confirmDialog({
+        title: 'Close workspace?',
+        message: `Close workspace "${label}"? This ends ${count} terminal session${count > 1 ? 's' : ''}.`,
+        confirmText: 'Close',
+        danger: true,
+      });
+      if (!ok) return;
     }
     // TASK-112: push the whole workspace as a single restore entry, but
     // only if it had panes - restoring an empty workspace shell is
