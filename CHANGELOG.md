@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.12.1
+
+Bug fixes and stability improvements.
+
+### Bug Fixes
+
+- **Fixed high CPU from repeated wmic.exe process-tree polls** — Replaced two 5-second-interval `wmic.exe` polling loops with zero-cost PTY-based AI exit detection. AI CLI exit is now detected inline from the terminal output stream (alt-screen exit), eliminating continuous process spawning that caused 19–23% CPU on Windows with multiple AI panes.
+
+### Improvements
+
+- **Confirm before closing a workspace** — The "Warn before closing" setting now also applies to workspace close, showing a confirm dialog with the workspace name and pane count.
+
 ## v1.12.0
 
 Raycast-style UI overhaul, universal search palette, and critical performance & stability fixes.
