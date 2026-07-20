@@ -2156,6 +2156,27 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           const detectedDir = detectCwdFromChunk(data, isWsl);
 
           if (detectedDir) {
+            // TASK-275: shell prompt appeared while mouse tracking is still
+            // on — the AI TUI was killed (Ctrl+C) without leaving alt-screen
+            // or sending ?1000l. Force a mouse-mode reset so the plain shell
+            // gets working scroll/select back. This is the safety net for
+            // abrupt TUI deaths that our alt-screen exit detection can't
+            // catch (because ?1049l was never sent).
+            if (mouseTrackingOn) {
+              mouseTrackingOn = false;
+              term.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l');
+              window.terminalAPI.diagLog?.('renderer:mouse-reset-on-prompt', { terminalId });
+              // Also clear the AI process stamp
+              useTerminalStore.setState((s) => {
+                const cur = s.terminals.get(terminalId);
+                if (!cur?.aiProcessKind) return {};
+                const next = new Map(s.terminals);
+                next.set(terminalId, { ...cur, aiProcessKind: undefined, aiProcessDetectedAt: undefined });
+                return { terminals: next };
+              });
+              aiProcessGiveUpRef.current = false;
+              aiProcessScanCountRef.current = 0;
+            }
             const store = useTerminalStore.getState();
             const terminal = store.terminals.get(terminalId);
             if (terminal && terminal.cwd !== detectedDir) {
