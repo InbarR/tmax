@@ -189,6 +189,18 @@ describe('smartUnwrapForCopy', () => {
     );
   });
 
+  test('ASCII pipe borders stripped even with trailing whitespace (xterm pad)', () => {
+    // xterm buffers pad lines with spaces to fill the column width, so the
+    // pipe at the right edge has trailing spaces after it.
+    const input = [
+      'Shell Build tmax into out-next 40 lines...                    |   ',
+      '  cd C:\\projects\\tmax; npx electron-forge package 2>&1        |   ',
+      '                                                              |   ',
+    ].join('\n');
+    const out = smartUnwrapForCopy(input);
+    expect(out).not.toContain('|');
+  });
+
   test('code fence content inside TUI borders preserved', () => {
     const input = [
       '│ Here is some code:                       │',

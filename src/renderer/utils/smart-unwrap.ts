@@ -100,13 +100,13 @@ function stripTuiBorders(lines: string[]): void {
       lines[i] = lines[i].replace(/^[│┃║]\s?/u, '');
     }
     if (stripBoxRight) {
-      lines[i] = lines[i].replace(/\s*[│┃║]$/u, '');
+      lines[i] = lines[i].replace(/\s*[│┃║]\s*$/u, '');
     }
     if (stripPipeLeft) {
       lines[i] = lines[i].replace(/^\|\s?/, '');
     }
     if (stripPipeRight) {
-      lines[i] = lines[i].replace(/\s*\|$/, '');
+      lines[i] = lines[i].replace(/\s*\|\s*$/, '');
     }
   }
 }
