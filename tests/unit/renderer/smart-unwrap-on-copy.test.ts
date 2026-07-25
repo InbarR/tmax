@@ -114,4 +114,93 @@ describe('smartUnwrapForCopy', () => {
     const newlines = (out.match(/\n/g) || []).length;
     expect(newlines).toBe(0);
   });
+
+  // ── TASK-277 / GH #143: TUI box-drawing border stripping ─────────
+
+  test('box-drawing borders stripped from TUI-bordered content', () => {
+    const input = [
+      '│ Hello world                              │',
+      '│ More text here                           │',
+      '│ And a third line                         │',
+    ].join('\n');
+    const out = smartUnwrapForCopy(input);
+    expect(out).toBe(['Hello world', 'More text here', 'And a third line'].join('\n'));
+  });
+
+  test('box-drawing top/bottom borders become empty lines', () => {
+    const input = [
+      '┌──────────────────────────────────────────┐',
+      '│ Content inside the box                   │',
+      '│ Second line                              │',
+      '└──────────────────────────────────────────┘',
+    ].join('\n');
+    const out = smartUnwrapForCopy(input);
+    expect(out).toBe(['', 'Content inside the box', 'Second line', ''].join('\n'));
+  });
+
+  test('box-drawing borders NOT stripped when less than half of lines have them', () => {
+    const input = [
+      'Regular line one',
+      'Regular line two',
+      '│ One bordered line │',
+      'Regular line three',
+    ].join('\n');
+    const out = smartUnwrapForCopy(input);
+    // The bordered line survives because only 1/4 lines have borders.
+    expect(out).toContain('│');
+  });
+
+  test('ASCII pipe borders stripped when no mid-content pipes', () => {
+    const input = [
+      '| Hello from a TUI panel                   |',
+      '| Second line of output                     |',
+      '| Third line                                |',
+    ].join('\n');
+    const out = smartUnwrapForCopy(input);
+    expect(out).toBe([
+      'Hello from a TUI panel',
+      'Second line of output',
+      'Third line',
+    ].join('\n'));
+  });
+
+  test('ASCII pipes NOT stripped from markdown tables (mid-content pipes)', () => {
+    const input = [
+      '| Name  | Age |',
+      '|-------|-----|',
+      '| Alice | 30  |',
+    ].join('\n');
+    const out = smartUnwrapForCopy(input);
+    // Markdown tables have interior pipes — should not be stripped.
+    expect(out).toBe(input);
+  });
+
+  test('box-drawing borders stripped, then continuation join still works', () => {
+    // TUI renders a wrapped paragraph inside borders: after stripping
+    // borders the continuation heuristic should join the lines. The CLI
+    // indents continuation rows with 1-2 spaces after the border char.
+    const input = [
+      '│ This is a long paragraph that was wrapped by the │',
+      '│  CLI and should be joined back together.         │',
+    ].join('\n');
+    const out = smartUnwrapForCopy(input);
+    expect(out).toBe(
+      'This is a long paragraph that was wrapped by the CLI and should be joined back together.',
+    );
+  });
+
+  test('code fence content inside TUI borders preserved', () => {
+    const input = [
+      '│ Here is some code:                       │',
+      '│ ```                                      │',
+      '│   const x = 1;                           │',
+      '│ ```                                      │',
+      '│ After code.                              │',
+    ].join('\n');
+    const out = smartUnwrapForCopy(input);
+    expect(out).toContain('```');
+    expect(out).toContain('const x = 1;');
+    // Borders should be stripped from all lines
+    expect(out).not.toContain('│');
+  });
 });
