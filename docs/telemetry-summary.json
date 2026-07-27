@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-27T20:20:03.284Z",
-  "dau": 190,
-  "wau": 252,
-  "mau": 354,
-  "total": 354,
+  "generatedAt": "2026-07-27T22:04:28.952Z",
+  "dau": 192,
+  "wau": 253,
+  "mau": 355,
+  "total": 355,
   "daily": [
     {
       "date": "2026-07-04",
@@ -99,7 +99,7 @@
     },
     {
       "date": "2026-07-27",
-      "users": 190
+      "users": 192
     }
   ],
   "cumulative": [
@@ -220,55 +220,55 @@
     },
     {
       "date": "2026-07-27",
-      "newUsers": 7,
-      "total": 354
+      "newUsers": 8,
+      "total": 355
     }
   ],
   "byOs": {
     "win32": 269,
-    "darwin": 78,
+    "darwin": 79,
     "linux": 7
   },
   "byVersion": {
     "1.12.0": 227,
     "1.11.4": 194,
-    "1.12.1": 167,
+    "1.12.1": 168,
     "1.11.3": 53,
     "1.11.2": 1
   },
   "byTimezone": {
-    "Asia/Jerusalem": 270,
+    "Asia/Jerusalem": 271,
     "America/Los_Angeles": 44,
     "Asia/Calcutta": 6,
-    "Asia/Amman": 4,
     "Europe/Moscow": 4,
-    "Australia/Sydney": 3,
-    "Asia/Hebron": 3,
-    "America/New_York": 3,
-    "Europe/London": 3,
+    "Asia/Amman": 4,
     "Europe/Berlin": 3,
+    "Europe/London": 3,
+    "Asia/Hebron": 3,
+    "Australia/Sydney": 3,
+    "America/New_York": 3,
+    "America/Santiago": 2,
     "Europe/Madrid": 2,
     "Europe/Lisbon": 2,
-    "America/Santiago": 2,
-    "America/Vancouver": 1,
-    "UTC": 1,
-    "Europe/Chisinau": 1,
-    "Europe/Zagreb": 1,
     "Asia/Baghdad": 1,
-    "Etc/GMT-2": 1,
-    "America/Chicago": 1,
-    "Europe/Oslo": 1,
-    "Europe/Dublin": 1,
-    "America/Montevideo": 1,
-    "Europe/Brussels": 1,
     "America/Hermosillo": 1,
+    "America/Chicago": 1,
+    "Etc/GMT-2": 1,
+    "Europe/Zagreb": 1,
     "Asia/Tokyo": 1,
+    "Europe/Chisinau": 1,
+    "Europe/Brussels": 1,
+    "Europe/Dublin": 1,
     "Asia/Shanghai": 1,
     "Europe/Budapest": 1,
-    "America/Buenos_Aires": 1,
+    "Europe/Kiev": 1,
+    "America/Montevideo": 1,
     "Asia/Bangkok": 1,
-    "Asia/Dhaka": 1,
     "America/Lima": 1,
-    "Europe/Kiev": 1
+    "UTC": 1,
+    "America/Buenos_Aires": 1,
+    "Asia/Dhaka": 1,
+    "America/Vancouver": 1,
+    "Europe/Oslo": 1
   }
 }
