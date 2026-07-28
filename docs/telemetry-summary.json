@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-28T00:00:07.932Z",
-  "dau": 0,
-  "wau": 253,
-  "mau": 355,
-  "total": 355,
+  "generatedAt": "2026-07-28T03:26:19.548Z",
+  "dau": 99,
+  "wau": 254,
+  "mau": 356,
+  "total": 356,
   "daily": [
     {
       "date": "2026-07-04",
@@ -100,6 +100,10 @@
     {
       "date": "2026-07-27",
       "users": 192
+    },
+    {
+      "date": "2026-07-28",
+      "users": 99
     }
   ],
   "cumulative": [
@@ -222,17 +226,22 @@
       "date": "2026-07-27",
       "newUsers": 8,
       "total": 355
+    },
+    {
+      "date": "2026-07-28",
+      "newUsers": 1,
+      "total": 356
     }
   ],
   "byOs": {
-    "win32": 269,
+    "win32": 270,
     "darwin": 79,
     "linux": 7
   },
   "byVersion": {
     "1.12.0": 227,
     "1.11.4": 194,
-    "1.12.1": 168,
+    "1.12.1": 169,
     "1.11.3": 53,
     "1.11.2": 1
   },
@@ -240,35 +249,35 @@
     "Asia/Jerusalem": 271,
     "America/Los_Angeles": 44,
     "Asia/Calcutta": 6,
-    "Europe/Moscow": 4,
     "Asia/Amman": 4,
-    "America/New_York": 3,
+    "Europe/Moscow": 4,
     "Europe/London": 3,
-    "Asia/Hebron": 3,
     "Europe/Berlin": 3,
+    "Asia/Hebron": 3,
     "Australia/Sydney": 3,
-    "Europe/Madrid": 2,
-    "America/Santiago": 2,
+    "America/New_York": 3,
     "Europe/Lisbon": 2,
-    "Europe/Oslo": 1,
+    "Europe/Madrid": 2,
+    "Asia/Shanghai": 2,
+    "America/Santiago": 2,
+    "America/Chicago": 1,
     "Asia/Tokyo": 1,
-    "Asia/Baghdad": 1,
-    "Etc/GMT-2": 1,
+    "Europe/Oslo": 1,
     "America/Hermosillo": 1,
-    "Europe/Zagreb": 1,
+    "Europe/Brussels": 1,
+    "Asia/Bangkok": 1,
+    "America/Lima": 1,
     "Europe/Kiev": 1,
-    "UTC": 1,
     "America/Vancouver": 1,
-    "America/Montevideo": 1,
-    "Asia/Dhaka": 1,
-    "America/Buenos_Aires": 1,
+    "UTC": 1,
+    "Europe/Zagreb": 1,
     "Europe/Dublin": 1,
     "Europe/Budapest": 1,
-    "America/Lima": 1,
-    "Asia/Bangkok": 1,
-    "Asia/Shanghai": 1,
     "Europe/Chisinau": 1,
-    "Europe/Brussels": 1,
-    "America/Chicago": 1
+    "America/Montevideo": 1,
+    "America/Buenos_Aires": 1,
+    "Asia/Dhaka": 1,
+    "Etc/GMT-2": 1,
+    "Asia/Baghdad": 1
   }
 }
