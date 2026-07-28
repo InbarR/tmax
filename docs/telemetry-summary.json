@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-28T09:35:05.619Z",
-  "dau": 182,
-  "wau": 259,
-  "mau": 358,
-  "total": 358,
+  "generatedAt": "2026-07-28T11:56:01.014Z",
+  "dau": 189,
+  "wau": 257,
+  "mau": 359,
+  "total": 359,
   "daily": [
     {
       "date": "2026-07-04",
@@ -103,7 +103,7 @@
     },
     {
       "date": "2026-07-28",
-      "users": 182
+      "users": 189
     }
   ],
   "cumulative": [
@@ -229,55 +229,55 @@
     },
     {
       "date": "2026-07-28",
-      "newUsers": 3,
-      "total": 358
+      "newUsers": 4,
+      "total": 359
     }
   ],
   "byOs": {
-    "win32": 271,
+    "win32": 272,
     "darwin": 80,
     "linux": 7
   },
   "byVersion": {
-    "1.12.0": 229,
+    "1.12.0": 230,
     "1.11.4": 194,
-    "1.12.1": 172,
+    "1.12.1": 174,
     "1.11.3": 53,
     "1.11.2": 1
   },
   "byTimezone": {
-    "Asia/Jerusalem": 273,
+    "Asia/Jerusalem": 274,
     "America/Los_Angeles": 44,
     "Asia/Calcutta": 6,
-    "Asia/Amman": 4,
     "Europe/Moscow": 4,
-    "Asia/Hebron": 3,
+    "Asia/Amman": 4,
     "Europe/Berlin": 3,
-    "Europe/London": 3,
-    "America/New_York": 3,
+    "Asia/Hebron": 3,
     "Australia/Sydney": 3,
+    "Europe/London": 3,
     "Europe/Budapest": 3,
+    "America/New_York": 3,
     "Europe/Madrid": 2,
-    "Asia/Shanghai": 2,
-    "America/Santiago": 2,
     "Europe/Lisbon": 2,
-    "Europe/Oslo": 1,
+    "America/Santiago": 2,
+    "Asia/Shanghai": 2,
     "Etc/GMT-2": 1,
     "Asia/Baghdad": 1,
-    "Europe/Brussels": 1,
-    "America/Montevideo": 1,
     "America/Hermosillo": 1,
-    "America/Vancouver": 1,
-    "America/Lima": 1,
-    "UTC": 1,
-    "Europe/Kiev": 1,
     "Europe/Dublin": 1,
+    "America/Chicago": 1,
+    "UTC": 1,
     "Europe/Chisinau": 1,
     "Europe/Zagreb": 1,
+    "Europe/Brussels": 1,
+    "America/Montevideo": 1,
+    "America/Vancouver": 1,
+    "America/Lima": 1,
     "Asia/Bangkok": 1,
     "America/Buenos_Aires": 1,
+    "Europe/Kiev": 1,
     "Asia/Dhaka": 1,
     "Asia/Tokyo": 1,
-    "America/Chicago": 1
+    "Europe/Oslo": 1
   }
 }
