@@ -1413,6 +1413,16 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       updates.terminalOpacity = (config as any).terminalOpacity;
       document.documentElement.style.setProperty('--terminal-opacity', String((config as any).terminalOpacity));
     }
+    // Seed the live zoom size from the configured baseline. Without this the
+    // store keeps its hardcoded initial 14 and TerminalPanel's fontSize effect
+    // writes that back over the xterm instance on mount, so a configured size
+    // only ever took effect via updateConfig (Settings) or zoomReset (Ctrl+0)
+    // - never on startup. It also left the status-bar zoom badge showing
+    // 14 / configured instead of 100%.
+    const baseFontSize = config?.terminal?.fontSize;
+    if (typeof baseFontSize === 'number' && baseFontSize > 0) {
+      updates.fontSize = baseFontSize;
+    }
     // Seed AI session load limits from config so subsequent
     // loadCopilotSessions / loadClaudeCodeSessions calls in App.init
     // honor the user's preference (0 = no scan).
