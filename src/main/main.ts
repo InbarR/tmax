@@ -1694,8 +1694,10 @@ app.whenReady().then(() => {
       try { app.setAppUserModelId('com.squirrel.tmax.tmax'); } catch { /* noop */ }
     }
 
-    // Purge leftover clipboard temp dirs from crashed/killed sessions
-    sweepStaleClipboardDirs();
+    // ── Critical path: get the window on screen as fast as possible ──
+    // Only nativeTheme, Menu, and configStore are needed before createWindow
+    // (configStore provides background material + theme for the window chrome).
+    // Everything else runs while the renderer HTML/JS loads asynchronously.
 
     // Force dark title bar/frame regardless of Windows system theme
     nativeTheme.themeSource = 'dark';
@@ -1729,9 +1731,20 @@ app.whenReady().then(() => {
     } else {
       Menu.setApplicationMenu(null);
     }
-    initDiagLogger();
     setupConfigStore();
     console.log('Config store ready');
+
+    // Create the window early — the renderer loads asynchronously (HTML parse
+    // → JS bundle → React mount → useEffect fires loadConfig). We use that
+    // time to finish the remaining setup before the first IPC call arrives.
+    createWindow();
+    console.log('Window created');
+
+    // ── Deferred setup: runs while the renderer JS bundle loads ──────
+    initDiagLogger();
+    setupKeybindingsFile();
+    setupPtyManager();
+    console.log('PTY manager ready');
     seedSessionNameOverridesFromDisk();
     setupSessionFileWatcher();
     if (process.env.TMAX_E2E === '1') {
@@ -1753,15 +1766,14 @@ app.whenReady().then(() => {
         return await m.scanSessions();
       };
     }
-    setupKeybindingsFile();
-    setupPtyManager();
-    console.log('PTY manager ready');
     setupCopilotMonitor();
     console.log('Copilot monitor ready');
     setupClaudeCodeMonitor();
     console.log('Claude Code monitor ready');
-    createWindow();
-    console.log('Window created');
+
+    // Purge leftover clipboard temp dirs from crashed/killed sessions.
+    // Deferred — pure cleanup that doesn't affect window appearance.
+    sweepStaleClipboardDirs();
     // Anonymous usage ping: once ~5s after startup, then hourly while running
     // (deduped to at most one event per clock hour per machine). Guarded so
     // telemetry can never affect app startup.
