@@ -106,20 +106,12 @@ const App: React.FC = () => {
     async function init() {
       try {
         await loadConfig();
-        // TASK-117: previously called loadDirs() here, but it issued a
-        // separate loadSession() disk read that restoreSession then
-        // immediately repeated. Hydration of favoriteDirs/recentDirs now
-        // happens inside restoreSession from the same payload.
-        // AI session lists must finish before restore so getStartupCommand()
-        // can determine the correct agent (copilot vs claude) for each
-        // terminal - but they're independent of each other so run in parallel.
-        await Promise.all([
-          useTerminalStore.getState().loadCopilotSessions(),
-          useTerminalStore.getState().loadClaudeCodeSessions(),
-        ]);
         if (cancelled) return;
-        // Restore FIRST so checkStaleActiveSessions sees persisted overrides
-        // and its update gets merged on top rather than being overwritten.
+        // Restore session FIRST — terminal panes use the serialized
+        // startupCommand directly and don't need the AI session lists.
+        // Loading AI sessions (which scans hundreds of JSONL files) is
+        // deferred to run in parallel so the window appears with its
+        // terminals immediately instead of blocking on disk I/O.
         if (useTerminalStore.getState().terminals.size === 0) {
           await useTerminalStore.getState().restoreSession();
           if (cancelled) return;
@@ -130,6 +122,14 @@ const App: React.FC = () => {
         if (useTerminalStore.getState().terminals.size === 0) {
           await createTerminal();
         }
+        // Load AI session lists after terminals are visible. These populate
+        // the CopilotPanel sidebar and enable checkStaleActiveSessions but
+        // are not needed for the initial terminal restore.
+        await Promise.all([
+          useTerminalStore.getState().loadCopilotSessions(),
+          useTerminalStore.getState().loadClaudeCodeSessions(),
+        ]);
+        if (cancelled) return;
         // Check for stale active sessions (>30 days) after hydration
         useTerminalStore.getState().checkStaleActiveSessions();
       } catch (err) {
