@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-08-03T13:39:02.831Z",
-  "dau": 159,
-  "wau": 252,
+  "generatedAt": "2026-08-03T16:22:06.540Z",
+  "dau": 163,
+  "wau": 248,
   "mau": 379,
   "total": 379,
   "daily": [
@@ -127,7 +127,7 @@
     },
     {
       "date": "2026-08-03",
-      "users": 159
+      "users": 163
     }
   ],
   "cumulative": [
@@ -307,35 +307,35 @@
     "Europe/Moscow": 5,
     "Europe/Budapest": 4,
     "America/New_York": 4,
-    "Europe/Berlin": 3,
     "Europe/London": 3,
+    "Europe/Berlin": 3,
     "Australia/Sydney": 3,
     "Asia/Hebron": 3,
     "Europe/Bucharest": 3,
-    "Asia/Shanghai": 2,
+    "Europe/Madrid": 2,
     "America/Santiago": 2,
     "Europe/Lisbon": 2,
-    "Europe/Madrid": 2,
     "Asia/Beirut": 2,
+    "Asia/Shanghai": 2,
     "Europe/Chisinau": 1,
+    "America/Hermosillo": 1,
+    "Etc/GMT-2": 1,
     "Europe/Oslo": 1,
     "America/Chicago": 1,
     "Asia/Baghdad": 1,
-    "Etc/GMT-2": 1,
-    "America/Lima": 1,
+    "Europe/Zagreb": 1,
     "Asia/Tokyo": 1,
     "America/Buenos_Aires": 1,
-    "UTC": 1,
     "Europe/Brussels": 1,
-    "Europe/Zagreb": 1,
-    "America/Vancouver": 1,
+    "Europe/Dublin": 1,
+    "UTC": 1,
     "America/Montevideo": 1,
     "Asia/Dhaka": 1,
+    "America/Lima": 1,
+    "America/Vancouver": 1,
     "Asia/Taipei": 1,
     "Asia/Bangkok": 1,
-    "Europe/Dublin": 1,
     "Europe/Helsinki": 1,
-    "America/Hermosillo": 1,
     "Europe/Kiev": 1
   }
 }
