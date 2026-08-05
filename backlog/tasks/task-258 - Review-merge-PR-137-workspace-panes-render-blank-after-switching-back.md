@@ -1,11 +1,11 @@
 ---
 id: TASK-258
 title: 'Review/merge PR #137 - workspace panes render blank after switching back'
-status: Done
+status: To Do
 assignee:
   - '@claude'
 created_date: '2026-06-22 06:29'
-updated_date: '2026-07-04 22:40'
+updated_date: '2026-08-05 06:37'
 labels: []
 dependencies: []
 ---
@@ -22,3 +22,9 @@ External contributor PR (mpmisha). Switching workspaces unmounted the previous w
 - [ ] #2 workspaces.spec.ts regression test passes locally on our build
 - [ ] #3 PR #137 merged/closed on GitHub
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Backlog audit (2026-08-05): PR #137 was closed without merge, its commit is absent from main, and all acceptance criteria remain incomplete. Reopened for triage or implementation.
+<!-- SECTION:NOTES:END -->

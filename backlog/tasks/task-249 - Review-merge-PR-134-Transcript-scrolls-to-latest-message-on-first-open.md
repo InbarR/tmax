@@ -1,11 +1,11 @@
 ---
 id: TASK-249
 title: 'Review/merge PR #134 - Transcript scrolls to latest message on first open'
-status: Done
+status: To Do
 assignee:
   - '@claude'
 created_date: '2026-06-20 16:01'
-updated_date: '2026-06-20 16:18'
+updated_date: '2026-08-05 06:37'
 labels: []
 dependencies: []
 ---
@@ -27,4 +27,6 @@ External contributor PR (mpmisha). Opening Transcript on a long conversation dum
 
 <!-- SECTION:NOTES:BEGIN -->
 Re-ran Playwright (Windows): identical 36 failed / 222 passed, ZERO transcript specs among failures - confirms the failures are a stable pre-existing CI-baseline problem, not caused by this PR. Squash-merged to origin/main (ea68034), author mpmisha. AC #2 left unchecked: the original land-at-top bug was not reproducible locally (a 1000-prompt transcript already landed at bottom), so the fix is verified sound by code review (post-commit useLayoutEffect, strictly safer than single-rAF) but not by observing a fixed repro.
+
+Backlog audit (2026-08-05): reopened because AC #2 remains explicitly unverified; the merged fix still needs confirmation on a reproducible long transcript.
 <!-- SECTION:NOTES:END -->

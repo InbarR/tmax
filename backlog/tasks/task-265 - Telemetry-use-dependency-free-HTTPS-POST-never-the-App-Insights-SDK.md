@@ -4,6 +4,7 @@ title: 'Telemetry: use dependency-free HTTPS POST, never the App Insights SDK'
 status: Done
 assignee: []
 created_date: '2026-07-04 16:02'
+updated_date: '2026-08-05 06:37'
 labels: []
 dependencies: []
 ---
@@ -16,5 +17,11 @@ The applicationinsights SDK v3.x (OpenTelemetry-based) must NOT be used in tmax.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 applicationinsights removed from deps;telemetry.ts uses node:https POST only;daily-ping dedup preserved;telemetry unit tests pass
+- [x] #1 applicationinsights removed from deps;telemetry.ts uses node:https POST only;daily-ping dedup preserved;telemetry unit tests pass
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Replaced the App Insights SDK with a dependency-free node:https telemetry POST, preserving anonymous daily deduplication and removing the process-spawning dependency. Telemetry unit coverage passes.
+<!-- SECTION:FINAL_SUMMARY:END -->
