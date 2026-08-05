@@ -66,6 +66,7 @@ const PromptSearchDialog: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [entries, setEntries] = useState<SearchEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; entry: SearchEntry } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Pull the session lists and terminals up front so we can build entries
@@ -83,7 +84,6 @@ const PromptSearchDialog: React.FC = () => {
     setFilterQuery('');
     setSelectedIndex(0);
     setEntries([]);
-    setSqliteResults(null);
     setLoading(true);
     requestAnimationFrame(() => inputRef.current?.focus());
 
@@ -324,6 +324,18 @@ const PromptSearchDialog: React.FC = () => {
     e.stopPropagation();
   }, [filtered, selectedIndex, jumpTo, close]);
 
+  const handleContextMenu = useCallback((e: React.MouseEvent, entry: SearchEntry) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY, entry });
+  }, []);
+
+  const handleShowSessionPrompts = useCallback((entry: SearchEntry) => {
+    useTerminalStore.getState().showPromptsForSession(entry.sessionId);
+    setCtxMenu(null);
+    close();
+  }, [close]);
+
   if (!show) return null;
 
   // Highlight each AND-separated token independently so the user can see
@@ -361,6 +373,24 @@ const PromptSearchDialog: React.FC = () => {
     });
     if (cursor < text.length) out.push(text.slice(cursor));
     return <>{out}</>;
+  };
+
+  // When the match is deep inside the prompt (past what CSS truncation shows),
+  // return a "…context around match…" snippet so the user can see WHY it matched.
+  const promptSnippet = (text: string): string => {
+    if (tokens.length === 0) return text;
+    const lower = text.toLowerCase();
+    for (const { term, negate } of tokens) {
+      if (negate) continue;
+      const idx = lower.indexOf(term);
+      // If match is within the first ~70 visible chars, the default display is fine
+      if (idx >= 0 && idx > 70) {
+        const start = Math.max(0, idx - 30);
+        const end = Math.min(text.length, idx + term.length + 50);
+        return (start > 0 ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '');
+      }
+    }
+    return text;
   };
 
   return (
@@ -403,12 +433,13 @@ const PromptSearchDialog: React.FC = () => {
                 key={key}
                 className={`switcher-item prompt-search-item${index === selectedIndex ? ' selected' : ''}${entry.terminalId ? '' : ' prompt-search-orphan'}`}
                 onClick={() => jumpTo(entry)}
+                onContextMenu={(e) => handleContextMenu(e, entry)}
                 onMouseEnter={() => setSelectedIndex(index)}
                 title={`${jumpHint} (Enter)`}
               >
                 <div className="prompt-search-row">
                   <div className="prompt-search-body">
-                    <div className="prompt-search-prompt">{hl(entry.prompt)}</div>
+                    <div className="prompt-search-prompt">{hl(promptSnippet(entry.prompt))}</div>
                     <div className="prompt-search-meta">
                       <span className="prompt-search-pane">
                         <span className="prompt-search-meta-label">title:</span> {hl(entry.paneTitle)}
@@ -417,6 +448,10 @@ const PromptSearchDialog: React.FC = () => {
                         <span className="prompt-search-folder">
                           <span className="prompt-search-meta-label">folder:</span> {hl(entry.sessionFolder)}
                         </span>
+                      )}
+                      {tokens.length > 0 && tokens.some(({ term, negate }) => !negate && entry.prompt.toLowerCase().includes(term)) &&
+                        !tokens.some(({ term, negate }) => !negate && (entry.paneTitle.toLowerCase().includes(term) || entry.sessionFolder.toLowerCase().includes(term))) && (
+                        <span className="prompt-search-body-badge">matched in prompt</span>
                       )}
                       <span className="prompt-search-age">{relativePhrase(entry.ageMs)}</span>
                     </div>
@@ -431,6 +466,17 @@ const PromptSearchDialog: React.FC = () => {
           )}
         </div>
       </div>
+      {ctxMenu && (
+        <div className="context-menu" style={{ position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 10000 }}
+          onMouseLeave={() => setCtxMenu(null)}>
+          <button className="context-menu-item" onClick={() => handleShowSessionPrompts(ctxMenu.entry)}>
+            💬 Show prompts
+          </button>
+          <button className="context-menu-item" onClick={() => { jumpTo(ctxMenu.entry); setCtxMenu(null); }}>
+            ▶ Jump to pane
+          </button>
+        </div>
+      )}
     </div>
   );
 };

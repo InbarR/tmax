@@ -3706,6 +3706,16 @@ body.broadcast-on .terminal-panel {
   padding: 0 1px;
 }
 
+.prompt-search-body-badge {
+  font-size: 10px;
+  background: rgba(var(--rgb-accent-warning), 0.2);
+  color: var(--text-secondary);
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
 /* ===== Pane Hint Overlay ===== */
 .pane-hint-backdrop {
   position: fixed;

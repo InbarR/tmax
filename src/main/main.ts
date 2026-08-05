@@ -1274,8 +1274,8 @@ function registerIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle(IPC.COPILOT_GET_PROMPTS, (_event, id: string) => {
-    const native = copilotMonitor?.getPrompts(id) ?? [];
+  ipcMain.handle(IPC.COPILOT_GET_PROMPTS, async (_event, id: string) => {
+    const native = await (copilotMonitor?.getPromptsAsync(id) ?? Promise.resolve([]));
     if (native.length > 0) return native;
     return wslSessionManager?.getCopilotPrompts(id) ?? [];
   });
@@ -1325,8 +1325,8 @@ function registerIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle(IPC.CLAUDE_CODE_GET_PROMPTS, (_event, id: string) => {
-    const native = claudeCodeMonitor?.getPrompts(id) ?? [];
+  ipcMain.handle(IPC.CLAUDE_CODE_GET_PROMPTS, async (_event, id: string) => {
+    const native = await (claudeCodeMonitor?.getPromptsAsync(id) ?? Promise.resolve([]));
     if (native.length > 0) return native;
     return wslSessionManager?.getClaudeCodePrompts(id) ?? [];
   });

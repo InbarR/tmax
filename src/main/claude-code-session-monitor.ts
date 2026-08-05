@@ -5,6 +5,7 @@ import {
   parseClaudeCodeSession,
   clearClaudeCodeCache,
   extractClaudeCodePrompts,
+  extractClaudeCodePromptsAsync,
   extractClaudeCodePromptsWithTime,
   extractClaudeCodeTranscript,
 } from './claude-code-events-parser';
@@ -220,6 +221,12 @@ export class ClaudeCodeSessionMonitor {
     const filePath = this.filePaths.get(sessionId);
     if (!filePath) return [];
     return extractClaudeCodePrompts(filePath, limit);
+  }
+
+  async getPromptsAsync(sessionId: string, limit = 10): Promise<string[]> {
+    const filePath = this.filePaths.get(sessionId);
+    if (!filePath) return [];
+    return extractClaudeCodePromptsAsync(filePath, limit);
   }
 
   getPromptsWithTime(sessionId: string, limit = 500): { text: string; time: number }[] {

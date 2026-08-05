@@ -1361,6 +1361,25 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
 
     term.open(containerRef.current);
 
+    // GH #145: recover from GPU context loss (AMD/Win11 blank-canvas glitch).
+    // When the WebGL/canvas context is lost, the terminal goes white while
+    // data keeps flowing. Detect it and force a full remount via refreshTerminal.
+    const canvasEl = containerRef.current.querySelector('canvas');
+    const handleContextLost = (e: Event) => {
+      e.preventDefault(); // allow context restore
+      console.warn('[tmax] GPU context lost for terminal', terminalId, '— scheduling repaint');
+      // Give the GPU a moment to recover, then force a full terminal refresh
+      setTimeout(() => {
+        try {
+          if (terminalRef.current) {
+            terminalRef.current.refresh(0, terminalRef.current.rows - 1);
+          }
+        } catch { /* disposed */ }
+      }, 500);
+    };
+    canvasEl?.addEventListener('webglcontextlost', handleContextLost);
+    canvasEl?.addEventListener('contextlost', handleContextLost);
+
     // TASK-160: track scroll-away state for the floating jump-to-bottom
     // arrow. xterm's onScroll alone proved unreliable in some build paths
     // (scrollbar drag didn't fire it on this user's machine), so we also
@@ -2745,6 +2764,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       containerEl.removeEventListener('dragover', handleDragOver);
       containerEl.removeEventListener('drop', handleFileDrop);
       containerEl.removeEventListener('copy', handleCopyEvent, true);
+      canvasEl?.removeEventListener('webglcontextlost', handleContextLost);
+      canvasEl?.removeEventListener('contextlost', handleContextLost);
       selectionDisposable.dispose();
       containerEl.removeEventListener('mousedown', handleRightMouseButton, true);
       containerEl.removeEventListener('mouseup', handleRightMouseButton, true);
@@ -2912,12 +2933,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
       try {
         if (terminalRef.current) {
           terminalRef.current.focus();
+          // Also resize to wake ConPTY in case it stalled during inactivity
+          // (GH #147). Without this, the pane appears focused but input is
+          // silently dropped until the user manually resizes.
+          if (fitAddonRef.current) {
+            fitAddonRef.current.fit();
+            const { cols, rows } = terminalRef.current;
+            window.terminalAPI.resizePty(terminalId, cols, rows);
+          }
         }
       } catch { /* terminal may be disposed */ }
     };
     window.addEventListener('focus', handleWindowFocus);
     return () => window.removeEventListener('focus', handleWindowFocus);
-  }, [isFocused]);
+  }, [isFocused, terminalId]);
 
   // Re-fit terminals and re-focus when returning from sleep/lock/idle
   // This wakes up stalled ConPTY processes via the resize signal
@@ -2937,12 +2966,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         clearStaleSelection();
         return;
       }
+      // Always fit+resize on return from hidden — this wakes ConPTY which
+      // can stall after prolonged inactivity (GH #147). The resize signal
+      // is what unblocks the stalled pipe, not focus alone.
       try {
         if (fitAddonRef.current && terminalRef.current) {
           fitAddonRef.current.fit();
           syncViewportScrollArea(terminalRef.current);
           const { cols, rows } = terminalRef.current;
           window.terminalAPI.resizePty(terminalId, cols, rows);
+          // Force a full repaint to recover from any stale canvas state
+          terminalRef.current.refresh(0, terminalRef.current.rows - 1);
         }
         if (isFocused && terminalRef.current) {
           terminalRef.current.focus();

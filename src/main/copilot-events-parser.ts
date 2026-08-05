@@ -253,6 +253,35 @@ export function extractCopilotPrompts(eventsFilePath: string, limit = 20): strin
 }
 
 /**
+ * Async version of extractCopilotPrompts — uses fs.promises.readFile to avoid
+ * blocking the main process event loop (GH #144).
+ */
+export async function extractCopilotPromptsAsync(eventsFilePath: string, limit = 20): Promise<string[]> {
+  // Use cached prompts from the parser if available (avoids re-reading the file)
+  const cached = cache.get(eventsFilePath);
+  if (cached && cached.recentPrompts.length > 0) {
+    return cached.recentPrompts.slice(-limit);
+  }
+  try {
+    const content = await fs.promises.readFile(eventsFilePath, 'utf-8');
+    const prompts: string[] = [];
+    for (const line of content.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const o = JSON.parse(line);
+        if (o.type === 'user.message') {
+          const text = String(o.data?.content || o.data?.transformedContent || '').trim();
+          if (text) prompts.push(text.slice(0, 300));
+        }
+      } catch { /* skip */ }
+    }
+    return prompts.slice(-limit);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Like extractCopilotPrompts, but returns each user prompt paired with its
  * timestamp (epoch ms) for the session-timeline view. Reads the file directly
  * (timeline is opened on demand, not polled).

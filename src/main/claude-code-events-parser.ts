@@ -383,6 +383,44 @@ export function extractClaudeCodePrompts(filePath: string, limit = 10): string[]
 }
 
 /**
+ * Async version of extractClaudeCodePrompts — uses fs.promises.readFile to
+ * avoid blocking the main process event loop (GH #144).
+ */
+export async function extractClaudeCodePromptsAsync(filePath: string, limit = 10): Promise<string[]> {
+  try {
+    const stat = fs.statSync(filePath);
+    const cached = promptsCache.get(filePath);
+    if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size && cached.limit === limit) {
+      return cached.prompts;
+    }
+    const content = await fs.promises.readFile(filePath, 'utf-8');
+    const prompts: string[] = [];
+    for (const line of content.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const o = JSON.parse(line);
+        if (o.type !== 'user' || !o.message?.content) continue;
+        const text = extractText(o.message.content);
+        if (!text) continue;
+        if (text.startsWith('[Request interrupted')) continue;
+        const stripped = stripCommandXml(text).trim();
+        if (!stripped) continue;
+        const nameMatch = text.match(/<command-name>([^<]+)<\/command-name>/);
+        const display = nameMatch
+          ? `/${nameMatch[1].replace(/^\/+/, '')}${stripped ? ` — ${stripped}` : ''}`
+          : stripped;
+        prompts.push(display.slice(0, 300).replace(/\n/g, ' '));
+      } catch { /* skip */ }
+    }
+    const result = prompts.slice(-limit);
+    promptsCache.set(filePath, { mtimeMs: stat.mtimeMs, size: stat.size, limit, prompts: result });
+    return result;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Like extractClaudeCodePrompts, but returns each user prompt paired with its
  * timestamp (epoch ms) for the session-timeline view. Not cached - the
  * timeline is opened on demand, not polled.
