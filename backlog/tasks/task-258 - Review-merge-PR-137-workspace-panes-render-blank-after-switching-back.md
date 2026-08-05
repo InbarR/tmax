@@ -1,11 +1,11 @@
 ---
 id: TASK-258
 title: 'Review/merge PR #137 - workspace panes render blank after switching back'
-status: To Do
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-06-22 06:29'
-updated_date: '2026-08-05 06:37'
+updated_date: '2026-08-05 06:56'
 labels: []
 dependencies: []
 ---
@@ -18,13 +18,17 @@ External contributor PR (mpmisha). Switching workspaces unmounted the previous w
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Code cherry-picked to main WITHOUT the colliding task-240/241 .md files
-- [ ] #2 workspaces.spec.ts regression test passes locally on our build
-- [ ] #3 PR #137 merged/closed on GitHub
+- [x] #1 PR #137 merged/closed on GitHub
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Backlog audit (2026-08-05): PR #137 was closed without merge, its commit is absent from main, and all acceptance criteria remain incomplete. Reopened for triage or implementation.
+PR #137 was reviewed and intentionally closed without merge because its task files collided with existing IDs and the proposed always-mounted workspace approach carried unnecessary resource/listener tradeoffs. User confirmed on 2026-08-05 that this review task is closed/superseded; implementation-specific criteria were removed rather than marked as shipped.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Reviewed PR #137 and closed it without merge. The proposed workspace mounting change was not shipped; the review task is complete as an intentional close/supersede decision.
+<!-- SECTION:FINAL_SUMMARY:END -->
