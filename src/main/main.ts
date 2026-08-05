@@ -194,6 +194,7 @@ function sweepStaleClipboardDirs(): void {
 }
 const sessionStore = new Store({ name: 'tmax-session' });
 const detachedWindows = new Map<string, BrowserWindow>();
+let backlogWindow: BrowserWindow | null = null;
 
 // Fresh-launch mode: when set, SESSION_LOAD returns null and SESSION_SAVE
 // no-ops, so a second tmax launched for live testing never restores the
@@ -1148,6 +1149,75 @@ function registerIpcHandlers(): void {
     if (win && !win.isDestroyed()) {
       win.focus();
     }
+  });
+
+  ipcMain.handle(IPC.BACKLOG_WINDOW_OPEN, async () => {
+    if (backlogWindow && !backlogWindow.isDestroyed()) {
+      if (backlogWindow.isMinimized()) backlogWindow.restore();
+      backlogWindow.focus();
+      return;
+    }
+
+    const { backgroundMaterial: _backlogMat, ...backlogConstructorOpts } = getWindowMaterialOpts();
+    backlogWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      show: false,
+      title: 'tmax - Backlog',
+      icon: path.join(__dirname, '../../assets/icon.png'),
+      autoHideMenuBar: true,
+      ...backlogConstructorOpts,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+        preload: path.join(__dirname, 'preload.js'),
+        additionalArguments: [`--tmax-is-dev=${!app.isPackaged}`],
+      },
+    });
+
+    const win = backlogWindow;
+    win.setMenuBarVisibility(false);
+    win.once('ready-to-show', () => {
+      win.show();
+      applyMaterialToWindow(win);
+    });
+    win.on('maximize', () => applyMaterialToWindow(win));
+    win.on('unmaximize', () => applyMaterialToWindow(win));
+    win.webContents.setWindowOpenHandler(({ url }) => {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        void shell.openExternal(url);
+      }
+      return { action: 'deny' };
+    });
+    win.webContents.on('will-navigate', (event, url) => {
+      const currentURL = win.webContents.getURL();
+      if (url !== currentURL && (url.startsWith('http://') || url.startsWith('https://'))) {
+        event.preventDefault();
+        void shell.openExternal(url);
+      }
+    });
+    win.on('closed', () => {
+      if (backlogWindow === win) backlogWindow = null;
+      mainWindow?.webContents.send(IPC.BACKLOG_WINDOW_CLOSED);
+    });
+
+    try {
+      if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+        await win.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}?detachedBacklog=1`);
+      } else {
+        const filePath = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
+        await win.loadFile(filePath, { query: { detachedBacklog: '1' } });
+      }
+    } catch (err) {
+      if (!win.isDestroyed()) win.destroy();
+      if (backlogWindow === win) backlogWindow = null;
+      throw err;
+    }
+  });
+
+  ipcMain.handle(IPC.BACKLOG_WINDOW_CLOSE, () => {
+    if (backlogWindow && !backlogWindow.isDestroyed()) backlogWindow.close();
   });
 
   // ── Copilot IPC handlers ────────────────────────────────────────────

@@ -85,6 +85,13 @@ const IconClose = ({ size = 15 }: { size?: number }) => (
     <line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
+const IconExternalWindow = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} {...svgBase}>
+    <rect x="3" y="7" width="14" height="14" rx="2" />
+    <polyline points="14 3 21 3 21 10" />
+    <line x1="21" y1="3" x2="11" y2="13" />
+  </svg>
+);
 
 // Canonical column order; any other status found in tasks is appended.
 const BASE_COLUMNS = ['To Do', 'In Progress', 'Done'];
@@ -186,7 +193,11 @@ function taskFilePath(t: BacklogTask): string {
   return `${t.project.path.replace(/\\/g, '/')}/backlog/${t.sub}/${t.file}`;
 }
 
-const BacklogBoard: React.FC = () => {
+interface BacklogBoardProps {
+  detached?: boolean;
+}
+
+const BacklogBoard: React.FC<BacklogBoardProps> = ({ detached = false }) => {
   const show = useTerminalStore((s) => s.showBacklog);
   const config = useTerminalStore((s) => s.config);
   const updateConfig = useTerminalStore((s) => s.updateConfig);
@@ -237,6 +248,24 @@ const BacklogBoard: React.FC = () => {
   // Show archived tasks (scans backlog/archive/tasks). Off by default so the
   // board stays focused on active work; toggled from the header.
   const [showArchived, setShowArchived] = useState(false);
+  const [detachedWindowOpen, setDetachedWindowOpen] = useState(false);
+
+  useEffect(() => {
+    if (detached) return;
+    return window.terminalAPI.onBacklogWindowClosed(() => {
+      setDetachedWindowOpen(false);
+      useTerminalStore.setState({ showBacklog: true });
+    });
+  }, [detached]);
+
+  useEffect(() => {
+    if (detached || !detachedWindowOpen || !show) return;
+    void window.terminalAPI.openBacklogWindow()
+      .then(() => useTerminalStore.getState().closeBacklog())
+      .catch((err) => {
+        useTerminalStore.getState().addToast(`Backlog: could not focus window (${String(err)})`);
+      });
+  }, [detached, detachedWindowOpen, show]);
 
   const refresh = useCallback(async () => {
     if (!projects.length) {
@@ -292,16 +321,30 @@ const BacklogBoard: React.FC = () => {
         if (promptEditorOpen) return; // the Prompt Editor, layered on top, owns Esc
         e.stopPropagation();
         if (selected) setSelected(null);
+        else if (detached) void window.terminalAPI.closeBacklogWindow();
         else useTerminalStore.getState().closeBacklog();
       }
     };
     document.addEventListener('keydown', handleKey, true);
     return () => document.removeEventListener('keydown', handleKey, true);
-  }, [show, selected, menu, promptEditorOpen]);
+  }, [show, selected, menu, promptEditorOpen, detached]);
 
-  if (!show) return null;
+  if (!show || (!detached && detachedWindowOpen)) return null;
 
-  const close = () => useTerminalStore.getState().closeBacklog();
+  const close = () => {
+    if (detached) void window.terminalAPI.closeBacklogWindow();
+    else useTerminalStore.getState().closeBacklog();
+  };
+
+  const detach = async () => {
+    try {
+      await window.terminalAPI.openBacklogWindow();
+      setDetachedWindowOpen(true);
+      useTerminalStore.getState().closeBacklog();
+    } catch (err) {
+      useTerminalStore.getState().addToast(`Backlog: could not open window (${String(err)})`);
+    }
+  };
 
   const visible = tasks.filter((t) => {
     if (projectFilter && t.project.path !== projectFilter) return false;
@@ -531,7 +574,17 @@ const BacklogBoard: React.FC = () => {
         >
           <IconArchive />
         </button>
-        {displayMode === 'panel' && (
+        {!detached && (
+          <button
+            className="backlog-refresh"
+            onClick={() => void detach()}
+            title="Open Backlog in a separate window"
+            aria-label="Open Backlog in a separate window"
+          >
+            <IconExternalWindow />
+          </button>
+        )}
+        {!detached && displayMode === 'panel' && (
           <button
             className="backlog-refresh"
             onClick={toggleSide}
@@ -541,7 +594,7 @@ const BacklogBoard: React.FC = () => {
             {panelSide === 'right' ? <IconArrowLeft /> : <IconArrowRight />}
           </button>
         )}
-        {displayMode === 'panel' && (
+        {!detached && displayMode === 'panel' && (
           <button
             className="backlog-refresh"
             onClick={() => setPanelCollapsed(true)}
@@ -551,14 +604,16 @@ const BacklogBoard: React.FC = () => {
             {panelSide === 'right' ? <IconChevronsRight /> : <IconChevronsLeft />}
           </button>
         )}
-        <button
-          className="backlog-refresh"
-          onClick={() => setMode(displayMode === 'panel' ? 'overlay' : 'panel')}
-          title={displayMode === 'panel' ? 'Expand to full window' : 'Restore to panel'}
-          aria-label={displayMode === 'panel' ? 'Expand to full window' : 'Restore to panel'}
-        >
-          {displayMode === 'panel' ? <IconExpand /> : <IconShrink />}
-        </button>
+        {!detached && (
+          <button
+            className="backlog-refresh"
+            onClick={() => setMode(displayMode === 'panel' ? 'overlay' : 'panel')}
+            title={displayMode === 'panel' ? 'Expand to full window' : 'Restore to panel'}
+            aria-label={displayMode === 'panel' ? 'Expand to full window' : 'Restore to panel'}
+          >
+            {displayMode === 'panel' ? <IconExpand /> : <IconShrink />}
+          </button>
+        )}
         <button className="shortcuts-close" onClick={close} title="Close (Esc)" aria-label="Close">
           <IconClose />
         </button>
@@ -693,6 +748,15 @@ const BacklogBoard: React.FC = () => {
       )}
     </>
   );
+
+  if (detached) {
+    return (
+      <div className="backlog-window">
+        {inner}
+        {overlays}
+      </div>
+    );
+  }
 
   if (displayMode === 'panel') {
     if (panelCollapsed) {

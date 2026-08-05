@@ -78,6 +78,9 @@ export interface TerminalAPI {
   syncSessionNameOverrides(overrides: Record<string, string>): void;
   // ── Cross-window session-file change broadcast (TASK-163) ─────────
   onSessionFileChanged(cb: () => void): () => void;
+  openBacklogWindow(): Promise<void>;
+  closeBacklogWindow(): Promise<void>;
+  onBacklogWindowClosed(cb: () => void): () => void;
   // ── Child process tree query (TASK-171) ────────────────────────────
   getPtyChildProcesses(ptyId: string): Promise<string[]>;
 
@@ -221,6 +224,20 @@ const terminalAPI: TerminalAPI = {
     return () => {
       ipcRenderer.removeListener(IPC.DETACH_CLOSED, listener);
     };
+  },
+
+  openBacklogWindow() {
+    return ipcRenderer.invoke(IPC.BACKLOG_WINDOW_OPEN);
+  },
+
+  closeBacklogWindow() {
+    return ipcRenderer.invoke(IPC.BACKLOG_WINDOW_CLOSE);
+  },
+
+  onBacklogWindowClosed(cb: () => void): () => void {
+    const listener = () => cb();
+    ipcRenderer.on(IPC.BACKLOG_WINDOW_CLOSED, listener);
+    return () => ipcRenderer.removeListener(IPC.BACKLOG_WINDOW_CLOSED, listener);
   },
 
   // ── Copilot session APIs ──────────────────────────────────────────
