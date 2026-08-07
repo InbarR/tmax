@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-08-07T06:07:25.013Z",
-  "dau": 119,
+  "generatedAt": "2026-08-07T08:11:04.128Z",
+  "dau": 129,
   "wau": 239,
-  "mau": 392,
+  "mau": 391,
   "total": 400,
   "daily": [
     {
@@ -143,7 +143,7 @@
     },
     {
       "date": "2026-08-07",
-      "users": 119
+      "users": 129
     }
   ],
   "cumulative": [
@@ -319,7 +319,7 @@
     }
   ],
   "byOs": {
-    "win32": 292,
+    "win32": 291,
     "darwin": 93,
     "linux": 7
   },
@@ -327,45 +327,45 @@
     "1.12.1": 243,
     "1.12.0": 234,
     "1.11.4": 191,
-    "1.11.3": 21
+    "1.11.3": 19
   },
   "byTimezone": {
-    "Asia/Jerusalem": 299,
+    "Asia/Jerusalem": 298,
     "America/Los_Angeles": 44,
     "Asia/Calcutta": 6,
     "Europe/Berlin": 6,
-    "Europe/Moscow": 5,
     "Asia/Amman": 5,
+    "Europe/Moscow": 5,
+    "Europe/Budapest": 4,
     "America/New_York": 4,
     "Asia/Hebron": 4,
-    "Europe/Budapest": 4,
-    "Europe/Bucharest": 3,
-    "Australia/Sydney": 3,
     "Europe/London": 3,
+    "Australia/Sydney": 3,
+    "Europe/Bucharest": 3,
     "Europe/Lisbon": 2,
-    "America/Santiago": 2,
-    "Europe/Madrid": 2,
-    "Asia/Shanghai": 2,
     "Europe/Chisinau": 2,
-    "Asia/Beirut": 2,
+    "America/Santiago": 2,
     "Asia/Taipei": 2,
-    "America/Buenos_Aires": 1,
-    "Etc/GMT-2": 1,
-    "America/Hermosillo": 1,
-    "Asia/Dhaka": 1,
+    "Europe/Madrid": 2,
+    "Asia/Beirut": 2,
+    "Asia/Shanghai": 2,
     "Asia/Tokyo": 1,
+    "Asia/Dhaka": 1,
     "Asia/Baghdad": 1,
-    "Europe/Dublin": 1,
-    "Europe/Kiev": 1,
-    "Europe/Zagreb": 1,
-    "America/Lima": 1,
-    "America/Vancouver": 1,
+    "America/Buenos_Aires": 1,
     "America/Chicago": 1,
-    "Europe/Brussels": 1,
     "UTC": 1,
-    "America/Montevideo": 1,
-    "Asia/Bangkok": 1,
+    "Europe/Brussels": 1,
+    "America/Vancouver": 1,
+    "America/Hermosillo": 1,
+    "Europe/Zagreb": 1,
     "Europe/Oslo": 1,
+    "Europe/Dublin": 1,
+    "America/Lima": 1,
+    "Europe/Kiev": 1,
+    "Asia/Bangkok": 1,
+    "America/Montevideo": 1,
+    "Etc/GMT-2": 1,
     "Europe/Helsinki": 1
   }
 }
