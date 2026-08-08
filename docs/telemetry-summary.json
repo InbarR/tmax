@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-08-08T20:25:51.528Z",
-  "dau": 104,
-  "wau": 234,
-  "mau": 391,
-  "total": 402,
+  "generatedAt": "2026-08-08T21:27:15.564Z",
+  "dau": 107,
+  "wau": 236,
+  "mau": 392,
+  "total": 403,
   "daily": [
     {
       "date": "2026-07-04",
@@ -147,7 +147,7 @@
     },
     {
       "date": "2026-08-08",
-      "users": 104
+      "users": 107
     }
   ],
   "cumulative": [
@@ -323,60 +323,60 @@
     },
     {
       "date": "2026-08-08",
-      "newUsers": 2,
-      "total": 402
+      "newUsers": 3,
+      "total": 403
     }
   ],
   "byOs": {
-    "win32": 289,
+    "win32": 290,
     "darwin": 95,
     "linux": 7
   },
   "byVersion": {
     "1.12.1": 246,
-    "1.12.0": 235,
+    "1.12.0": 236,
     "1.11.4": 186,
     "1.11.3": 15,
-    "1.12.2": 2
+    "1.12.2": 3
   },
   "byTimezone": {
     "Asia/Jerusalem": 296,
-    "America/Los_Angeles": 44,
+    "America/Los_Angeles": 45,
     "Asia/Calcutta": 6,
     "Europe/Berlin": 6,
-    "Asia/Amman": 5,
     "Europe/Moscow": 5,
-    "America/New_York": 4,
+    "Asia/Amman": 5,
     "Asia/Hebron": 4,
+    "America/New_York": 4,
     "Europe/Budapest": 4,
     "Europe/Bucharest": 3,
-    "Europe/London": 3,
     "Australia/Sydney": 3,
-    "Europe/Lisbon": 2,
-    "Europe/Chisinau": 2,
-    "Europe/Kiev": 2,
-    "Europe/Madrid": 2,
-    "Asia/Shanghai": 2,
+    "Europe/London": 3,
     "Asia/Beirut": 2,
     "Asia/Taipei": 2,
+    "Europe/Kiev": 2,
+    "Europe/Madrid": 2,
+    "Europe/Lisbon": 2,
+    "Asia/Shanghai": 2,
     "America/Santiago": 2,
+    "Europe/Chisinau": 2,
     "Europe/Oslo": 1,
-    "Etc/GMT-2": 1,
-    "Asia/Tokyo": 1,
     "America/Buenos_Aires": 1,
-    "America/Hermosillo": 1,
-    "Europe/Zagreb": 1,
-    "UTC": 1,
-    "Asia/Baghdad": 1,
-    "Asia/Dhaka": 1,
     "Africa/Nairobi": 1,
+    "Asia/Baghdad": 1,
+    "Etc/GMT-2": 1,
     "Europe/Dublin": 1,
+    "Asia/Tokyo": 1,
+    "UTC": 1,
+    "America/Hermosillo": 1,
+    "Asia/Dhaka": 1,
     "America/Lima": 1,
     "America/Vancouver": 1,
-    "Europe/Helsinki": 1,
-    "Asia/Bangkok": 1,
     "Europe/Brussels": 1,
+    "Asia/Bangkok": 1,
     "America/Montevideo": 1,
-    "America/Chicago": 1
+    "Europe/Zagreb": 1,
+    "America/Chicago": 1,
+    "Europe/Helsinki": 1
   }
 }
