@@ -296,7 +296,7 @@ const CopilotPanel: React.FC = () => {
   const [lifecycleTab, setLifecycleTab] = useState<LifecycleTab>('active');
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; session: CopilotSessionSummary } | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; provider: SessionProvider; value: string } | null>(null);
-  const [promptsDialog, setPromptsDialog] = useState<{ title: string; prompts: string[]; terminalId: string | null } | null>(null);
+  const [promptsDialog, setPromptsDialog] = useState<{ title: string; prompts: string[]; terminalId: string | null; scrollToIndex?: number } | null>(null);
   const [showRunningOnly, setShowRunningOnly] = useState(false);
   // Header overflow menu (⋯) + the cleanup-low-prompts modal it triggers
   // (TASK-37 follow-up: window.prompt is a no-op in Electron, plus the
@@ -894,7 +894,7 @@ const CopilotPanel: React.FC = () => {
   const promptsRequest = useTerminalStore((s) => s.promptsDialogRequest);
   useEffect(() => {
     if (!promptsRequest) return;
-    const { terminalId: tid, sessionId: sidExplicit } = promptsRequest;
+    const { terminalId: tid, sessionId: sidExplicit, scrollToPromptIndex } = promptsRequest;
     const store = useTerminalStore.getState();
     store.clearPromptsDialogRequest();
 
@@ -938,6 +938,7 @@ const CopilotPanel: React.FC = () => {
         title: summaryOverrides[sessionId] || session.summary || getTitle(session),
         prompts: prompts.length > 0 ? prompts : ['(no prompts found)'],
         terminalId: matchedTerminalId,
+        scrollToIndex: scrollToPromptIndex,
       });
     });
   }, [promptsRequest, summaryOverrides]);
@@ -948,6 +949,7 @@ const CopilotPanel: React.FC = () => {
       title={promptsDialog.title}
       prompts={promptsDialog.prompts}
       terminalId={promptsDialog.terminalId}
+      scrollToIndex={promptsDialog.scrollToIndex}
       onClose={() => setPromptsDialog(null)}
     />,
     document.body,
@@ -1611,8 +1613,9 @@ const PromptsDialog: React.FC<{
   title: string;
   prompts: string[];
   terminalId: string | null;
+  scrollToIndex?: number;
   onClose: () => void;
-}> = ({ title, prompts, terminalId, onClose }) => {
+}> = ({ title, prompts, terminalId, scrollToIndex, onClose }) => {
   const [search, setSearch] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [jumpWarning, setJumpWarning] = useState<string | null>(null);
@@ -1633,6 +1636,16 @@ const PromptsDialog: React.FC<{
 
   // Reset selection when filter changes
   useEffect(() => { setSelectedIndex(0); }, [filtered]);
+
+  // Scroll to the requested prompt index on open
+  useEffect(() => {
+    if (scrollToIndex == null || search) return;
+    // scrollToIndex is 0-based from oldest; reversed shows newest first
+    const reversedIdx = prompts.length - 1 - scrollToIndex;
+    if (reversedIdx >= 0 && reversedIdx < filtered.length) {
+      setSelectedIndex(reversedIdx);
+    }
+  }, [scrollToIndex, prompts.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll selected item into view
   useEffect(() => {

@@ -965,7 +965,7 @@ interface TerminalStore {
   selectedCopilotSessionId: string | null;
   // Prompts dialog state. Either terminalId (for the per-pane Ctrl+Shift+K
   // shortcut) or sessionId (for opening from the session summary popover).
-  promptsDialogRequest: { terminalId?: TerminalId; sessionId?: string } | null;
+  promptsDialogRequest: { terminalId?: TerminalId; sessionId?: string; scrollToPromptIndex?: number } | null;
   // AI session summary popover - holds the session ID that should be shown.
   sessionSummaryRequest: string | null;
   // Prompt composer dialog - notepad-style scratchpad opened from the per-pane
@@ -1220,7 +1220,7 @@ interface TerminalStore {
   resumeAllSessions: () => void;
   // Prompts dialog action
   showPromptsForTerminal: (terminalId: TerminalId) => void;
-  showPromptsForSession: (sessionId: string) => void;
+  showPromptsForSession: (sessionId: string, scrollToPromptIndex?: number) => void;
   clearPromptsDialogRequest: () => void;
   showSessionSummary: (sessionId: string) => void;
   clearSessionSummary: () => void;
@@ -3708,8 +3708,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   showPromptsForTerminal: (terminalId: TerminalId) => {
     set({ promptsDialogRequest: { terminalId } });
   },
-  showPromptsForSession: (sessionId: string) => {
-    set({ promptsDialogRequest: { sessionId } });
+  showPromptsForSession: (sessionId: string, scrollToPromptIndex?: number) => {
+    set({ promptsDialogRequest: { sessionId, scrollToPromptIndex } });
   },
   clearPromptsDialogRequest: () => {
     set({ promptsDialogRequest: null });

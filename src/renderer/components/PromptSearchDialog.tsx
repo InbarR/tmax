@@ -67,6 +67,7 @@ const PromptSearchDialog: React.FC = () => {
   const [entries, setEntries] = useState<SearchEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; entry: SearchEntry } | null>(null);
+  const [clickLocked, setClickLocked] = useState(false); // true after click, prevents mouseEnter override
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Pull the session lists and terminals up front so we can build entries
@@ -306,10 +307,12 @@ const PromptSearchDialog: React.FC = () => {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
+        setClickLocked(false);
         setSelectedIndex((i) => Math.min(i + 1, filtered.length - 1));
         break;
       case 'ArrowUp':
         e.preventDefault();
+        setClickLocked(false);
         setSelectedIndex((i) => Math.max(i - 1, 0));
         break;
       case 'Enter':
@@ -331,7 +334,7 @@ const PromptSearchDialog: React.FC = () => {
   }, []);
 
   const handleShowSessionPrompts = useCallback((entry: SearchEntry) => {
-    useTerminalStore.getState().showPromptsForSession(entry.sessionId);
+    useTerminalStore.getState().showPromptsForSession(entry.sessionId, entry.promptIndex);
     setCtxMenu(null);
     close();
   }, [close]);
@@ -383,8 +386,8 @@ const PromptSearchDialog: React.FC = () => {
     for (const { term, negate } of tokens) {
       if (negate) continue;
       const idx = lower.indexOf(term);
-      // If match is within the first ~70 visible chars, the default display is fine
-      if (idx >= 0 && idx > 70) {
+      // If match is within the first ~60 visible chars, the default display is fine
+      if (idx >= 0 && idx > 60) {
         const start = Math.max(0, idx - 30);
         const end = Math.min(text.length, idx + term.length + 50);
         return (start > 0 ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '');
@@ -432,10 +435,11 @@ const PromptSearchDialog: React.FC = () => {
               <div
                 key={key}
                 className={`switcher-item prompt-search-item${index === selectedIndex ? ' selected' : ''}${entry.terminalId ? '' : ' prompt-search-orphan'}`}
-                onClick={() => jumpTo(entry)}
+                onClick={() => { setSelectedIndex(index); setClickLocked(true); }}
+                onDoubleClick={() => jumpTo(entry)}
                 onContextMenu={(e) => handleContextMenu(e, entry)}
-                onMouseEnter={() => setSelectedIndex(index)}
-                title={`${jumpHint} (Enter)`}
+                onMouseEnter={() => { if (!clickLocked) setSelectedIndex(index); }}
+                title={`${jumpHint} (double-click)`}
               >
                 <div className="prompt-search-row">
                   <div className="prompt-search-body">
@@ -450,7 +454,7 @@ const PromptSearchDialog: React.FC = () => {
                         </span>
                       )}
                       {tokens.length > 0 && tokens.some(({ term, negate }) => !negate && entry.prompt.toLowerCase().includes(term)) &&
-                        !tokens.some(({ term, negate }) => !negate && (entry.paneTitle.toLowerCase().includes(term) || entry.sessionFolder.toLowerCase().includes(term))) && (
+                        !tokens.some(({ term, negate }) => !negate && entry.prompt.slice(0, 60).toLowerCase().includes(term)) && (
                         <span className="prompt-search-body-badge">matched in prompt</span>
                       )}
                       <span className="prompt-search-age">{relativePhrase(entry.ageMs)}</span>
@@ -469,11 +473,11 @@ const PromptSearchDialog: React.FC = () => {
       {ctxMenu && (
         <div className="context-menu" style={{ position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 10000 }}
           onMouseLeave={() => setCtxMenu(null)}>
+          <button className="context-menu-item" onClick={() => { jumpTo(ctxMenu.entry); setCtxMenu(null); }}>
+            ▶ Open
+          </button>
           <button className="context-menu-item" onClick={() => handleShowSessionPrompts(ctxMenu.entry)}>
             💬 Show prompts
-          </button>
-          <button className="context-menu-item" onClick={() => { jumpTo(ctxMenu.entry); setCtxMenu(null); }}>
-            ▶ Jump to pane
           </button>
         </div>
       )}
