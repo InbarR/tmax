@@ -10,12 +10,12 @@ Startup performance, stability fixes, and prompt search UX improvements.
 
 ### Bug Fixes
 
-- **Terminal unresponsive after inactivity (#147)** — ConPTY stalls are now broken by sending a resize signal on visibility/focus return.
-- **"Show all prompts" freezes app (#144)** — Prompt extraction moved to async I/O so multi-MB event files no longer block the main process.
+- **Terminal unresponsive after inactivity (#147)** — ConPTY stalls are now broken by sending a resize signal on visibility/focus return. *Thanks @YoniFraimorice for reporting!*
+- **"Show all prompts" freezes app (#144)** — Prompt extraction moved to async I/O so multi-MB event files no longer block the main process. *Thanks @nstylepro for reporting!*
 - **GPU blank white panes on AMD (#145)** — Added WebGL context loss detection with automatic terminal refresh and forced repaint on visibility change.
-- **Font size not applied on startup** — Configured font size now takes effect immediately when terminals spawn.
-- **Windows PowerShell shell integration** — Fixed escape sequence handling for legacy PowerShell (not just pwsh).
-- **Stray pipe characters in clipboard copy (#143)** — TUI box-drawing borders are now stripped from copied text.
+- **Font size not applied on startup** — Configured font size now takes effect immediately when terminals spawn. *Thanks @MaartenGoet for the contribution!*
+- **Windows PowerShell shell integration** — Fixed escape sequence handling for legacy PowerShell (not just pwsh). *Thanks @AdiKoren for reporting!*
+- **Stray pipe characters in clipboard copy (#143)** — TUI box-drawing borders are now stripped from copied text. *Thanks @yoniw for reporting!*
 - **Mouse tracking stuck after Ctrl+C kills AI TUI** — Mouse reporting mode is properly reset when an AI CLI exits.
 
 ### Improvements
