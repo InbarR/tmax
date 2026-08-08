@@ -35,7 +35,7 @@ interface ParserCache {
 }
 
 const cache = new Map<string, ParserCache>();
-const MAX_CACHED_PROMPTS = 20;
+const MAX_CACHED_PROMPTS = 500;
 
 export function parseSessionEvents(eventsFilePath: string): ParsedSessionEvents | null {
   let fileHandle: number | undefined;

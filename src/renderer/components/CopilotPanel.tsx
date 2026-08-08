@@ -1637,15 +1637,14 @@ const PromptsDialog: React.FC<{
   // Reset selection when filter changes
   useEffect(() => { setSelectedIndex(0); }, [filtered]);
 
-  // Scroll to the requested prompt index on open
+  // Scroll to the requested prompt index on open (use timeout to run after filter reset)
   useEffect(() => {
     if (scrollToIndex == null || search) return;
-    // scrollToIndex is 0-based from oldest; reversed shows newest first
     const reversedIdx = prompts.length - 1 - scrollToIndex;
     if (reversedIdx >= 0 && reversedIdx < filtered.length) {
-      setSelectedIndex(reversedIdx);
+      setTimeout(() => setSelectedIndex(reversedIdx), 0);
     }
-  }, [scrollToIndex, prompts.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll selected item into view
   useEffect(() => {

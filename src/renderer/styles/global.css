@@ -3632,6 +3632,11 @@ body.broadcast-on .terminal-panel {
   padding: 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
+.prompt-search-item.selected {
+  background: rgba(255, 255, 255, 0.10);
+  border-left: 3px solid var(--focus-border, var(--accent));
+  padding-left: 11px;
+}
 /* TASK-84: row layout puts a small jump-arrow glyph at the right edge of
    each result so the row visually signals it's clickable - previously the
    action was discoverable only via the cursor + tooltip. */

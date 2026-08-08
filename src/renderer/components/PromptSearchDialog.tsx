@@ -67,7 +67,7 @@ const PromptSearchDialog: React.FC = () => {
   const [entries, setEntries] = useState<SearchEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; entry: SearchEntry } | null>(null);
-  const [clickLocked, setClickLocked] = useState(false); // true after click, prevents mouseEnter override
+  const clickLockedRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Pull the session lists and terminals up front so we can build entries
@@ -307,12 +307,12 @@ const PromptSearchDialog: React.FC = () => {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setClickLocked(false);
+        clickLockedRef.current = false;
         setSelectedIndex((i) => Math.min(i + 1, filtered.length - 1));
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setClickLocked(false);
+        clickLockedRef.current = false;
         setSelectedIndex((i) => Math.max(i - 1, 0));
         break;
       case 'Enter':
@@ -425,7 +425,7 @@ const PromptSearchDialog: React.FC = () => {
             <div className="switcher-empty">No recent prompts. Type to search all history.</div>
           )}
           {filtered.map((entry, index) => {
-            const key = `${entry.sessionId}-${entry.promptIndex}`;
+            const key = `${entry.sessionId}-${entry.promptIndex}-${index}`;
             // Jump glyph telegraphs that the row is clickable. Live pane gets
             // a forward-arrow ('jump to pane'); inactive session gets an
             // upward arrow that hints at the summary popover (TASK-84).
@@ -435,10 +435,10 @@ const PromptSearchDialog: React.FC = () => {
               <div
                 key={key}
                 className={`switcher-item prompt-search-item${index === selectedIndex ? ' selected' : ''}${entry.terminalId ? '' : ' prompt-search-orphan'}`}
-                onClick={() => { setSelectedIndex(index); setClickLocked(true); }}
+                onMouseDown={(e) => { e.preventDefault(); setSelectedIndex(index); clickLockedRef.current = true; }}
                 onDoubleClick={() => jumpTo(entry)}
                 onContextMenu={(e) => handleContextMenu(e, entry)}
-                onMouseEnter={() => { if (!clickLocked) setSelectedIndex(index); }}
+                onMouseEnter={() => { if (!clickLockedRef.current) setSelectedIndex(index); }}
                 title={`${jumpHint} (double-click)`}
               >
                 <div className="prompt-search-row">
