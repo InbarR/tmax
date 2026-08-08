@@ -67861,10 +67861,10 @@
       }
     },
     {
-      "t": "2026-08-08T00:55:26.624Z",
+      "t": "2026-08-08T06:34:49.918Z",
       "releases": {
         "v1.12.1": {
-          "RELEASES": 13254,
+          "RELEASES": 13317,
           "RELEASES-arm64": 2,
           "RELEASES-x64": 2,
           "tmax-1.12.1-1.x86_64.rpm": 12,
@@ -67876,9 +67876,9 @@
           "tmax-1.12.1-x64-Setup.exe": 87,
           "tmax-1.12.1-x64.dmg": 8,
           "tmax-1.12.1.Setup.exe": 1,
-          "tmax-darwin-arm64-portable.zip": 19069,
+          "tmax-darwin-arm64-portable.zip": 19218,
           "tmax-darwin-x64-portable.zip": 0,
-          "tmax-linux-x64-portable.zip": 5,
+          "tmax-linux-x64-portable.zip": 6,
           "tmax-win32-arm64-portable.zip": 1,
           "tmax-win32-x64-portable.zip": 20,
           "tmax_1.12.1_amd64.deb": 7
@@ -67886,12 +67886,12 @@
         "v1.12.0": {
           "RELEASES": 5391,
           "RELEASES-arm64": 2,
-          "RELEASES-x64": 2,
+          "RELEASES-x64": 3,
           "tmax-1.12.0-1.x86_64.rpm": 11,
           "tmax-1.12.0-arm64-full.nupkg": 2,
           "tmax-1.12.0-arm64-Setup.exe": 5,
           "tmax-1.12.0-arm64.dmg": 56,
-          "tmax-1.12.0-full.nupkg": 183,
+          "tmax-1.12.0-full.nupkg": 184,
           "tmax-1.12.0-x64-full.nupkg": 2,
           "tmax-1.12.0-x64-Setup.exe": 80,
           "tmax-1.12.0-x64.dmg": 1,
@@ -67906,11 +67906,11 @@
         "v1.11.4": {
           "RELEASES": 6933,
           "RELEASES-arm64": 2,
-          "RELEASES-x64": 3,
+          "RELEASES-x64": 4,
           "tmax-1.11.4-1.x86_64.rpm": 11,
           "tmax-1.11.4-arm64-full.nupkg": 2,
           "tmax-1.11.4-arm64-Setup.exe": 9,
-          "tmax-1.11.4-arm64.dmg": 60,
+          "tmax-1.11.4-arm64.dmg": 61,
           "tmax-1.11.4-full.nupkg": 179,
           "tmax-1.11.4-x64-full.nupkg": 3,
           "tmax-1.11.4-x64-Setup.exe": 79,
@@ -67931,7 +67931,7 @@
         "v1.11.3": {
           "RELEASES": 697,
           "RELEASES-arm64": 2,
-          "RELEASES-x64": 4,
+          "RELEASES-x64": 5,
           "tmax-1.11.3-1.x86_64.rpm": 1,
           "tmax-1.11.3-arm64-full.nupkg": 2,
           "tmax-1.11.3-arm64-Setup.exe": 5,
