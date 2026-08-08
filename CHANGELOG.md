@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.12.2
+
+Startup performance, stability fixes, and prompt search UX improvements.
+
+### Performance
+
+- **Faster cold startup** — AI session loading (scanning 300+ sessions) now defers until after terminal restore. Window creation moved earlier in the main process startup sequence.
+
+### Bug Fixes
+
+- **Terminal unresponsive after inactivity (#147)** — ConPTY stalls are now broken by sending a resize signal on visibility/focus return.
+- **"Show all prompts" freezes app (#144)** — Prompt extraction moved to async I/O so multi-MB event files no longer block the main process.
+- **GPU blank white panes on AMD (#145)** — Added WebGL context loss detection with automatic terminal refresh and forced repaint on visibility change.
+- **Font size not applied on startup** — Configured font size now takes effect immediately when terminals spawn.
+- **Windows PowerShell shell integration** — Fixed escape sequence handling for legacy PowerShell (not just pwsh).
+- **Stray pipe characters in clipboard copy (#143)** — TUI box-drawing borders are now stripped from copied text.
+- **Mouse tracking stuck after Ctrl+C kills AI TUI** — Mouse reporting mode is properly reset when an AI CLI exits.
+
+### Improvements
+
+- **Prompt search: click-to-select** — Single click highlights a result, double-click opens it. Right-click context menu with "Open" and "Show prompts".
+- **"Matched in prompt" badge** — When a search match is in truncated prompt text, a badge and context snippet show where the match is.
+- **Prompt history limit raised** — "Show prompts" now returns up to 500 prompts per session (previously 10).
+- **Backlog board as floating window** — The Backlog kanban can now be detached into its own native window.
+
 ## v1.12.1
 
 Bug fixes and stability improvements.
