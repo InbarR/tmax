@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-08-12T14:54:12.837Z",
-  "dau": 164,
-  "wau": 238,
-  "mau": 397,
+  "generatedAt": "2026-08-12T15:56:53.125Z",
+  "dau": 166,
+  "wau": 239,
+  "mau": 396,
   "total": 426,
   "daily": [
     {
@@ -163,7 +163,7 @@
     },
     {
       "date": "2026-08-12",
-      "users": 164
+      "users": 166
     }
   ],
   "cumulative": [
@@ -364,15 +364,15 @@
     }
   ],
   "byOs": {
-    "win32": 292,
+    "win32": 291,
     "darwin": 99,
     "linux": 6
   },
   "byVersion": {
     "1.12.1": 251,
-    "1.12.0": 231,
-    "1.11.4": 122,
-    "1.12.2": 110,
+    "1.12.0": 230,
+    "1.11.4": 120,
+    "1.12.2": 111,
     "1.11.3": 8
   },
   "byTimezone": {
@@ -380,41 +380,41 @@
     "America/Los_Angeles": 43,
     "Europe/Berlin": 6,
     "Europe/Moscow": 5,
-    "Asia/Calcutta": 5,
     "Asia/Amman": 5,
+    "Asia/Calcutta": 5,
     "Europe/Budapest": 4,
-    "America/New_York": 4,
     "Asia/Hebron": 4,
-    "Europe/Bucharest": 3,
+    "America/New_York": 3,
     "Asia/Shanghai": 3,
+    "Europe/Bucharest": 3,
     "Europe/Kiev": 2,
-    "Europe/Chisinau": 2,
-    "Asia/Taipei": 2,
-    "Europe/Lisbon": 2,
-    "America/Santiago": 2,
     "Australia/Sydney": 2,
-    "Asia/Beirut": 2,
     "Europe/Madrid": 2,
+    "Europe/Chisinau": 2,
+    "America/Santiago": 2,
+    "Asia/Beirut": 2,
+    "Europe/Lisbon": 2,
+    "Asia/Taipei": 2,
     "America/Buenos_Aires": 1,
-    "Etc/GMT-2": 1,
-    "Asia/Tokyo": 1,
-    "Europe/Dublin": 1,
-    "America/Chicago": 1,
+    "Europe/Oslo": 1,
     "America/Hermosillo": 1,
-    "Europe/Helsinki": 1,
-    "UTC": 1,
-    "Europe/London": 1,
     "Asia/Baghdad": 1,
-    "America/Montevideo": 1,
-    "Africa/Nairobi": 1,
     "Atlantic/Azores": 1,
-    "America/Vancouver": 1,
-    "America/Lima": 1,
+    "Asia/Tokyo": 1,
+    "Africa/Nairobi": 1,
     "Europe/Paris": 1,
-    "Asia/Dhaka": 1,
+    "America/Chicago": 1,
     "Europe/Warsaw": 1,
+    "UTC": 1,
+    "Asia/Dhaka": 1,
+    "Europe/Dublin": 1,
+    "America/Lima": 1,
+    "America/Montevideo": 1,
+    "America/Vancouver": 1,
+    "Europe/London": 1,
+    "Europe/Helsinki": 1,
     "Europe/Zagreb": 1,
     "Europe/Brussels": 1,
-    "Europe/Oslo": 1
+    "Etc/GMT-2": 1
   }
 }
