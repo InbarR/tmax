@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-15T16:20:21.291Z",
-  "dau": 68,
+  "generatedAt": "2026-08-15T17:17:40.233Z",
+  "dau": 69,
   "wau": 225,
   "mau": 377,
   "total": 432,
@@ -175,7 +175,7 @@
     },
     {
       "date": "2026-08-15",
-      "users": 68
+      "users": 69
     }
   ],
   "cumulative": [
@@ -394,7 +394,7 @@
     "1.12.1": 252,
     "1.12.0": 210,
     "1.12.2": 139,
-    "1.11.4": 60,
+    "1.11.4": 58,
     "1.11.3": 3
   },
   "byTimezone": {
@@ -406,35 +406,35 @@
     "Europe/Budapest": 4,
     "Asia/Calcutta": 4,
     "Asia/Hebron": 4,
-    "Europe/Kiev": 3,
-    "America/New_York": 3,
     "Europe/Bucharest": 3,
     "Asia/Amman": 3,
+    "Europe/Kiev": 3,
+    "America/New_York": 3,
+    "Asia/Beirut": 2,
+    "America/Santiago": 2,
+    "Asia/Taipei": 2,
+    "Europe/Lisbon": 2,
     "Australia/Sydney": 2,
     "Europe/Madrid": 2,
-    "Asia/Taipei": 2,
-    "Asia/Beirut": 2,
-    "Europe/Lisbon": 2,
-    "America/Santiago": 2,
-    "Asia/Tokyo": 1,
-    "Europe/Oslo": 1,
-    "Etc/GMT-2": 1,
-    "Europe/Chisinau": 1,
-    "Asia/Baghdad": 1,
-    "Atlantic/Azores": 1,
+    "America/Chicago": 1,
     "America/Buenos_Aires": 1,
-    "Europe/Zagreb": 1,
-    "America/Hermosillo": 1,
+    "Europe/Chisinau": 1,
+    "Etc/GMT-2": 1,
     "Europe/Dublin": 1,
+    "Asia/Tokyo": 1,
+    "Asia/Baghdad": 1,
+    "Europe/Helsinki": 1,
+    "America/Hermosillo": 1,
+    "Europe/Paris": 1,
+    "Atlantic/Azores": 1,
     "Europe/Warsaw": 1,
     "Asia/Singapore": 1,
-    "Europe/Paris": 1,
     "Africa/Nairobi": 1,
+    "Europe/Zagreb": 1,
     "Europe/London": 1,
     "Asia/Dhaka": 1,
-    "America/Montevideo": 1,
     "UTC": 1,
-    "Europe/Helsinki": 1,
-    "America/Chicago": 1
+    "America/Montevideo": 1,
+    "Europe/Oslo": 1
   }
 }
