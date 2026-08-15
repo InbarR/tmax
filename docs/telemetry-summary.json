@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-08-15T22:18:06.676Z",
-  "dau": 74,
+  "generatedAt": "2026-08-15T23:17:16.903Z",
+  "dau": 76,
   "wau": 225,
-  "mau": 375,
+  "mau": 374,
   "total": 432,
   "daily": [
     {
@@ -175,7 +175,7 @@
     },
     {
       "date": "2026-08-15",
-      "users": 74
+      "users": 76
     }
   ],
   "cumulative": [
@@ -386,54 +386,54 @@
     }
   ],
   "byOs": {
-    "win32": 270,
+    "win32": 269,
     "darwin": 99,
     "linux": 6
   },
   "byVersion": {
     "1.12.1": 252,
-    "1.12.0": 208,
+    "1.12.0": 207,
     "1.12.2": 139,
     "1.11.4": 51,
     "1.11.3": 1
   },
   "byTimezone": {
-    "Asia/Jerusalem": 287,
+    "Asia/Jerusalem": 286,
     "America/Los_Angeles": 41,
     "Europe/Berlin": 6,
     "Europe/Moscow": 5,
-    "Asia/Hebron": 4,
     "Asia/Shanghai": 4,
-    "Europe/Budapest": 4,
     "Asia/Calcutta": 4,
-    "Asia/Amman": 3,
+    "Europe/Budapest": 4,
+    "Asia/Hebron": 4,
     "Europe/Kiev": 3,
-    "Europe/Bucharest": 3,
     "America/New_York": 3,
-    "Asia/Beirut": 2,
+    "Asia/Amman": 3,
+    "Europe/Bucharest": 3,
     "Australia/Sydney": 2,
     "Europe/Madrid": 2,
+    "Asia/Beirut": 2,
     "Asia/Taipei": 2,
-    "America/Santiago": 2,
     "Europe/Lisbon": 2,
-    "America/Chicago": 1,
-    "Europe/Chisinau": 1,
-    "America/Buenos_Aires": 1,
+    "America/Santiago": 2,
     "Asia/Tokyo": 1,
-    "Europe/Dublin": 1,
-    "Asia/Baghdad": 1,
-    "Asia/Dhaka": 1,
-    "Europe/Warsaw": 1,
-    "Atlantic/Azores": 1,
-    "Europe/Paris": 1,
-    "Africa/Nairobi": 1,
+    "America/Chicago": 1,
     "Etc/GMT-2": 1,
-    "America/Hermosillo": 1,
-    "Europe/Zagreb": 1,
-    "Europe/London": 1,
+    "Europe/Chisinau": 1,
+    "Asia/Baghdad": 1,
     "Asia/Singapore": 1,
-    "UTC": 1,
+    "America/Buenos_Aires": 1,
+    "Europe/Zagreb": 1,
+    "America/Hermosillo": 1,
+    "Europe/Dublin": 1,
+    "Europe/Paris": 1,
+    "Atlantic/Azores": 1,
+    "Europe/Warsaw": 1,
+    "Africa/Nairobi": 1,
+    "Europe/London": 1,
     "America/Montevideo": 1,
+    "Asia/Dhaka": 1,
+    "UTC": 1,
     "Europe/Helsinki": 1,
     "Europe/Oslo": 1
   }
