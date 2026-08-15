@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-08-15T17:17:40.233Z",
-  "dau": 69,
+  "generatedAt": "2026-08-15T18:23:56.563Z",
+  "dau": 70,
   "wau": 225,
-  "mau": 377,
+  "mau": 376,
   "total": 432,
   "daily": [
     {
@@ -175,7 +175,7 @@
     },
     {
       "date": "2026-08-15",
-      "users": 69
+      "users": 70
     }
   ],
   "cumulative": [
@@ -386,55 +386,55 @@
     }
   ],
   "byOs": {
-    "win32": 272,
+    "win32": 271,
     "darwin": 99,
     "linux": 6
   },
   "byVersion": {
     "1.12.1": 252,
-    "1.12.0": 210,
+    "1.12.0": 209,
     "1.12.2": 139,
-    "1.11.4": 58,
+    "1.11.4": 55,
     "1.11.3": 3
   },
   "byTimezone": {
-    "Asia/Jerusalem": 289,
+    "Asia/Jerusalem": 288,
     "America/Los_Angeles": 41,
     "Europe/Berlin": 6,
     "Europe/Moscow": 5,
-    "Asia/Shanghai": 4,
-    "Europe/Budapest": 4,
     "Asia/Calcutta": 4,
     "Asia/Hebron": 4,
+    "Europe/Budapest": 4,
+    "Asia/Shanghai": 4,
     "Europe/Bucharest": 3,
     "Asia/Amman": 3,
-    "Europe/Kiev": 3,
     "America/New_York": 3,
-    "Asia/Beirut": 2,
-    "America/Santiago": 2,
+    "Europe/Kiev": 3,
+    "Australia/Sydney": 2,
     "Asia/Taipei": 2,
     "Europe/Lisbon": 2,
-    "Australia/Sydney": 2,
     "Europe/Madrid": 2,
+    "America/Santiago": 2,
+    "Asia/Beirut": 2,
+    "Etc/GMT-2": 1,
     "America/Chicago": 1,
+    "Europe/Paris": 1,
+    "Europe/Zagreb": 1,
     "America/Buenos_Aires": 1,
     "Europe/Chisinau": 1,
-    "Etc/GMT-2": 1,
+    "UTC": 1,
+    "Asia/Baghdad": 1,
+    "America/Hermosillo": 1,
     "Europe/Dublin": 1,
     "Asia/Tokyo": 1,
-    "Asia/Baghdad": 1,
-    "Europe/Helsinki": 1,
-    "America/Hermosillo": 1,
-    "Europe/Paris": 1,
+    "Europe/London": 1,
+    "Africa/Nairobi": 1,
+    "America/Montevideo": 1,
     "Atlantic/Azores": 1,
     "Europe/Warsaw": 1,
-    "Asia/Singapore": 1,
-    "Africa/Nairobi": 1,
-    "Europe/Zagreb": 1,
-    "Europe/London": 1,
     "Asia/Dhaka": 1,
-    "UTC": 1,
-    "America/Montevideo": 1,
+    "Europe/Helsinki": 1,
+    "Asia/Singapore": 1,
     "Europe/Oslo": 1
   }
 }
