@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-08-18T12:39:32.697Z",
-  "dau": 138,
-  "wau": 213,
-  "mau": 371,
+  "generatedAt": "2026-08-18T13:39:44.650Z",
+  "dau": 142,
+  "wau": 216,
+  "mau": 370,
   "total": 437,
   "daily": [
     {
@@ -187,7 +187,7 @@
     },
     {
       "date": "2026-08-18",
-      "users": 138
+      "users": 142
     }
   ],
   "cumulative": [
@@ -413,54 +413,54 @@
     }
   ],
   "byOs": {
-    "win32": 269,
+    "win32": 268,
     "darwin": 97,
     "linux": 5
   },
   "byVersion": {
     "1.12.1": 253,
-    "1.12.0": 177,
-    "1.12.2": 175,
-    "1.11.4": 38,
+    "1.12.2": 176,
+    "1.12.0": 175,
+    "1.11.4": 36,
     "1.11.3": 1
   },
   "byTimezone": {
-    "Asia/Jerusalem": 288,
+    "Asia/Jerusalem": 287,
     "America/Los_Angeles": 41,
     "Europe/Berlin": 6,
+    "Asia/Shanghai": 4,
     "Europe/Moscow": 4,
     "Asia/Hebron": 4,
     "Europe/Budapest": 4,
-    "Asia/Shanghai": 4,
     "Asia/Amman": 3,
+    "Europe/Bucharest": 3,
     "America/New_York": 3,
     "Europe/Kiev": 3,
-    "Europe/Bucharest": 3,
-    "Europe/Lisbon": 2,
     "Europe/Chisinau": 2,
-    "Europe/Madrid": 2,
     "Australia/Sydney": 2,
-    "Asia/Beirut": 2,
-    "Europe/Paris": 2,
     "America/Santiago": 2,
     "Asia/Calcutta": 2,
     "Asia/Taipei": 2,
-    "Asia/Baghdad": 1,
-    "America/Chicago": 1,
+    "Europe/Madrid": 2,
+    "Europe/Lisbon": 2,
+    "Europe/Paris": 2,
+    "Asia/Beirut": 2,
     "America/Buenos_Aires": 1,
+    "Asia/Tokyo": 1,
     "Europe/Zagreb": 1,
     "America/Hermosillo": 1,
-    "Asia/Singapore": 1,
-    "Atlantic/Azores": 1,
-    "Europe/London": 1,
+    "UTC": 1,
+    "America/Chicago": 1,
+    "Asia/Baghdad": 1,
+    "Europe/Dublin": 1,
     "Europe/Helsinki": 1,
     "Asia/Dhaka": 1,
-    "UTC": 1,
-    "Europe/Dublin": 1,
+    "Asia/Singapore": 1,
     "Africa/Nairobi": 1,
-    "Asia/Tokyo": 1,
     "Europe/Warsaw": 1,
+    "Europe/Oslo": 1,
+    "Atlantic/Azores": 1,
     "Etc/GMT-2": 1,
-    "Europe/Oslo": 1
+    "Europe/London": 1
   }
 }
