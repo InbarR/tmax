@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-08-19T11:21:43.759Z",
-  "dau": 141,
-  "wau": 216,
-  "mau": 372,
-  "total": 441,
+  "generatedAt": "2026-08-19T12:39:58.811Z",
+  "dau": 145,
+  "wau": 219,
+  "mau": 373,
+  "total": 443,
   "daily": [
     {
       "date": "2026-07-04",
@@ -191,7 +191,7 @@
     },
     {
       "date": "2026-08-19",
-      "users": 141
+      "users": 145
     }
   ],
   "cumulative": [
@@ -417,59 +417,60 @@
     },
     {
       "date": "2026-08-19",
-      "newUsers": 2,
-      "total": 441
+      "newUsers": 4,
+      "total": 443
     }
   ],
   "byOs": {
-    "win32": 269,
+    "win32": 270,
     "darwin": 97,
     "linux": 6
   },
   "byVersion": {
-    "1.12.1": 255,
-    "1.12.2": 182,
-    "1.12.0": 150,
+    "1.12.1": 254,
+    "1.12.2": 184,
+    "1.12.0": 149,
     "1.11.4": 32
   },
   "byTimezone": {
-    "Asia/Jerusalem": 285,
+    "Asia/Jerusalem": 286,
     "America/Los_Angeles": 44,
     "Europe/Berlin": 8,
     "Asia/Shanghai": 4,
-    "Asia/Hebron": 4,
     "Europe/Moscow": 4,
+    "Asia/Hebron": 4,
     "Europe/Budapest": 4,
-    "Europe/Kiev": 3,
-    "America/New_York": 3,
     "Europe/Bucharest": 3,
+    "America/New_York": 3,
+    "Asia/Calcutta": 2,
+    "Europe/Chisinau": 2,
+    "America/Santiago": 2,
     "Europe/Lisbon": 2,
+    "Asia/Amman": 2,
     "Asia/Taipei": 2,
     "Europe/Madrid": 2,
-    "Australia/Sydney": 2,
-    "Europe/Chisinau": 2,
-    "Asia/Calcutta": 2,
-    "America/Santiago": 2,
-    "Asia/Amman": 2,
     "Asia/Beirut": 2,
+    "Australia/Sydney": 2,
+    "Europe/Kiev": 2,
     "Europe/Paris": 2,
-    "America/Chicago": 1,
+    "Europe/Oslo": 1,
+    "Africa/Casablanca": 1,
     "Asia/Baghdad": 1,
-    "UTC": 1,
     "America/Buenos_Aires": 1,
     "Asia/Tokyo": 1,
-    "America/Hermosillo": 1,
+    "Asia/Bangkok": 1,
     "Asia/Dhaka": 1,
-    "Europe/Oslo": 1,
-    "Europe/Warsaw": 1,
-    "Europe/Zagreb": 1,
-    "Atlantic/Azores": 1,
-    "Europe/London": 1,
-    "Europe/Dublin": 1,
-    "Asia/Singapore": 1,
     "Europe/Helsinki": 1,
-    "Etc/GMT-2": 1,
+    "Europe/Zagreb": 1,
     "Africa/Nairobi": 1,
-    "Asia/Bangkok": 1
+    "America/Hermosillo": 1,
+    "Etc/GMT-2": 1,
+    "Asia/Singapore": 1,
+    "UTC": 1,
+    "Europe/Dublin": 1,
+    "Atlantic/Azores": 1,
+    "Europe/Warsaw": 1,
+    "America/Chicago": 1,
+    "Europe/London": 1
   }
 }
