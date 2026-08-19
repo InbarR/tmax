@@ -76397,27 +76397,27 @@
       }
     },
     {
-      "t": "2026-08-19T06:26:15.603Z",
+      "t": "2026-08-19T12:24:39.408Z",
       "releases": {
         "v1.12.2": {
-          "RELEASES": 5910,
+          "RELEASES": 5946,
           "RELEASES-arm64": 3,
           "RELEASES-x64": 3,
           "tmax-1.12.2-1.x86_64.rpm": 10,
           "tmax-1.12.2-arm64-full.nupkg": 2,
           "tmax-1.12.2-arm64-Setup.exe": 7,
-          "tmax-1.12.2-arm64.dmg": 236,
-          "tmax-1.12.2-full.nupkg": 168,
+          "tmax-1.12.2-arm64.dmg": 239,
+          "tmax-1.12.2-full.nupkg": 169,
           "tmax-1.12.2-x64-full.nupkg": 2,
-          "tmax-1.12.2-x64-Setup.exe": 78,
+          "tmax-1.12.2-x64-Setup.exe": 79,
           "tmax-1.12.2-x64.dmg": 2,
           "tmax-1.12.2.Setup.exe": 0,
-          "tmax-darwin-arm64-portable.zip": 7411,
+          "tmax-darwin-arm64-portable.zip": 7592,
           "tmax-darwin-x64-portable.zip": 0,
           "tmax-linux-x64-portable.zip": 14,
           "tmax-win32-arm64-portable.zip": 1,
           "tmax-win32-x64-portable.zip": 3,
-          "tmax_1.12.2_amd64.deb": 2
+          "tmax_1.12.2_amd64.deb": 3
         },
         "v1.12.1": {
           "RELEASES": 13415,
