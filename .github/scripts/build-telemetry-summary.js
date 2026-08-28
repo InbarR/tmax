@@ -68,6 +68,16 @@ const QUERIES = {
 | where timestamp >= ago(30d)
 | summarize users = dcount(mid) by key = tostring(customDimensions.timezone)
 | order by users desc`,
+  // New unique machines per first-seen day, split by the timezone that machine
+  // reported on its very first ping. Attributing each machine to its first-seen
+  // timezone (rather than its latest) keeps the series additive: every machine
+  // is counted exactly once, in exactly one bucket, so the per-timezone running
+  // sums add back up to the overall cumulative-unique curve. The page does the
+  // running sum so quiet days can be carried forward client-side.
+  cumulativeByTimezone: `${BASE}
+| summarize (firstSeen, tz) = arg_min(timestamp, tostring(customDimensions.timezone)) by mid
+| summarize newUsers = count() by day = format_datetime(startofday(firstSeen), "yyyy-MM-dd"), tz
+| order by day asc`,
 };
 
 function runQuery(query) {
@@ -134,13 +144,14 @@ function toBreakdown(result) {
 
 (async function main() {
   try {
-    const [windows, daily, cumulative, byOs, byVersion, byTimezone] = await Promise.all([
+    const [windows, daily, cumulative, byOs, byVersion, byTimezone, cumulativeByTimezone] = await Promise.all([
       runQuery(QUERIES.windows),
       runQuery(QUERIES.daily),
       runQuery(QUERIES.cumulative),
       runQuery(QUERIES.byOs),
       runQuery(QUERIES.byVersion),
       runQuery(QUERIES.byTimezone),
+      runQuery(QUERIES.cumulativeByTimezone),
     ]);
 
     const w = rows(windows)[0] || {};
@@ -155,6 +166,11 @@ function toBreakdown(result) {
       byOs: toBreakdown(byOs),
       byVersion: toBreakdown(byVersion),
       byTimezone: toBreakdown(byTimezone),
+      cumulativeByTimezone: rows(cumulativeByTimezone).map((r) => ({
+        date: r.day,
+        tz: r.tz && String(r.tz).trim() ? String(r.tz) : 'unknown',
+        newUsers: Number(r.newUsers) || 0,
+      })),
     };
 
     fs.writeFileSync(OUT_PATH, JSON.stringify(summary, null, 2) + '\n');

@@ -83,7 +83,13 @@
 
 <div class="chart-section" id="telemCumSection" style="display:none;">
   <div class="chart-title">Cumulative unique users <span style="color:var(--dim);font-weight:normal;font-size:12px;">(total distinct machines over time)</span></div>
+  <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;flex-wrap:wrap;" id="telemCumModes">
+    <span style="color:var(--dim);font-size:12px;">Show:</span>
+    <button class="filter-btn active" id="telemCumMode-total">Total</button>
+    <button class="filter-btn" id="telemCumMode-timezone">By timezone</button>
+  </div>
   <div class="chart-container"><canvas id="telemCumChart"></canvas></div>
+  <div id="telemCumLegend" style="display:none;flex-wrap:wrap;gap:10px 16px;margin-top:8px;font-size:12px;color:var(--fg2);"></div>
 </div>
 
 <div class="chart-section" id="telemBreakdownSection" style="display:none;">
@@ -1190,12 +1196,17 @@ function osLabel(k) {
 
 // Collapse America/* and Europe/* timezones to their continent; keep Asia/* (and
 // everything else) at city-level granularity.
+function tzGroupKey(tz) {
+  const k = tz && String(tz).trim() ? String(tz) : 'unknown';
+  if (k.startsWith('America/')) return 'America';
+  if (k.startsWith('Europe/')) return 'Europe';
+  return k;
+}
+
 function groupTimezones(obj) {
   const out = {};
   for (const [k, v] of Object.entries(obj || {})) {
-    let key = k;
-    if (k.startsWith('America/')) key = 'America';
-    else if (k.startsWith('Europe/')) key = 'Europe';
+    const key = tzGroupKey(k);
     out[key] = (out[key] || 0) + (Number(v) || 0);
   }
   return out;
@@ -1324,20 +1335,76 @@ function groupTimezones(obj) {
         return { date: d.date, count: last };
       });
 
+      // Per-timezone cumulative series. summary.cumulativeByTimezone holds new
+      // machines per (first-seen day, timezone); running-sum each timezone so the
+      // bands stack up to the same total as the "Total" view.
+      const TZ_COLORS = ['#a6e3a1', '#89b4fa', '#f9e2af', '#f38ba8', '#cba6f7', '#94e2d5', '#fab387', '#a6adc8'];
+      const TZ_MAX_BANDS = 7; // everything past this collapses into "Other"
+      const buildTzBands = () => {
+        const raw = (summary.cumulativeByTimezone || []).filter((r) => r && r.date);
+        if (raw.length === 0) return null;
+        const byKey = new Map();
+        for (const r of raw) {
+          const key = tzGroupKey(r.tz);
+          if (!byKey.has(key)) byKey.set(key, new Map());
+          const perDay = byKey.get(key);
+          perDay.set(r.date, (perDay.get(r.date) || 0) + (Number(r.newUsers) || 0));
+        }
+        // Running sum across the same day axis the total curve uses.
+        const series = [...byKey.entries()].map(([key, perDay]) => {
+          let run = 0;
+          const values = days.map((d) => {
+            run += perDay.get(d.date) || 0;
+            return run;
+          });
+          return { label: key, values, total: values[values.length - 1] || 0 };
+        }).sort((a, b) => b.total - a.total);
+        if (series.length === 0) return null;
+        const kept = series.slice(0, TZ_MAX_BANDS);
+        const rest = series.slice(TZ_MAX_BANDS);
+        if (rest.length) {
+          kept.push({
+            label: `Other (${rest.length})`,
+            values: days.map((_, i) => rest.reduce((s, r) => s + r.values[i], 0)),
+            total: rest.reduce((s, r) => s + r.total, 0),
+          });
+        }
+        kept.forEach((b, i) => { b.color = TZ_COLORS[i % TZ_COLORS.length]; });
+        return kept;
+      };
+      const tzBands = buildTzBands();
+
       const cumSection = document.getElementById('telemCumSection');
       cumSection.style.display = '';
       const cc = document.getElementById('telemCumChart');
-      const cctx = cc.getContext('2d');
-      const crect = cc.parentElement.getBoundingClientRect();
-      if (crect.width >= 2 && crect.height >= 2) {
+      const legendEl = document.getElementById('telemCumLegend');
+      const btnTotal = document.getElementById('telemCumMode-total');
+      const btnTz = document.getElementById('telemCumMode-timezone');
+      // Older snapshots predate the per-timezone query; hide the toggle rather
+      // than offering a mode with nothing behind it.
+      if (!tzBands) document.getElementById('telemCumModes').style.display = 'none';
+      let cumMode = 'total';
+
+      const drawCumChart = () => {
+        const crect = cc.parentElement.getBoundingClientRect();
+        if (crect.width < 2 || crect.height < 2) return;
         cc.width = crect.width * dpr;
         cc.height = crect.height * dpr;
-        cctx.scale(dpr, dpr);
+        const cctx = cc.getContext('2d');
+        cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        cctx.clearRect(0, 0, crect.width, crect.height);
+
         const CW = crect.width, CH = crect.height;
         const cpad = { top: 20, right: 16, bottom: 40, left: 48 };
         const cChartW = CW - cpad.left - cpad.right;
         const cChartH = CH - cpad.top - cpad.bottom;
-        const cAxis = niceAxis(Math.max(...cum.map(d => d.count), 1), 4);
+
+        const bands = cumMode === 'timezone' && tzBands
+          ? tzBands
+          : [{ label: 'All', color: '#a6e3a1', values: cum.map((d) => d.count) }];
+        const totals = days.map((_, i) => bands.reduce((s, b) => s + b.values[i], 0));
+
+        const cAxis = niceAxis(Math.max(...totals, 1), 4);
         const cMax = cAxis.max;
         const cGridLines = cAxis.lines;
 
@@ -1353,55 +1420,84 @@ function groupTimezones(obj) {
           cctx.fillText(cAxis.step * i, cpad.left - 6, y + 4);
         }
 
-        const cgap = cChartW / cum.length;
+        const n = cum.length;
+        const cgap = cChartW / n;
         const px = (i) => cpad.left + cgap * i + cgap / 2;
         const py = (v) => cpad.top + cChartH - (v / cMax) * cChartH;
 
-        // Filled area under the curve
-        const grad = cctx.createLinearGradient(0, cpad.top, 0, cpad.top + cChartH);
-        grad.addColorStop(0, 'rgba(166,227,161,0.28)');
-        grad.addColorStop(1, 'rgba(166,227,161,0.0)');
-        cctx.beginPath();
-        cctx.moveTo(px(0), cpad.top + cChartH);
-        cum.forEach((d, i) => cctx.lineTo(px(i), py(d.count)));
-        cctx.lineTo(px(cum.length - 1), cpad.top + cChartH);
-        cctx.closePath();
-        cctx.fillStyle = grad;
-        cctx.fill();
+        // Stacked filled bands, bottom (largest) first
+        let lower = new Array(n).fill(0);
+        bands.forEach((band) => {
+          const upper = lower.map((v, i) => v + band.values[i]);
+          cctx.beginPath();
+          for (let i = 0; i < n; i++) { const X = px(i), Y = py(upper[i]); i === 0 ? cctx.moveTo(X, Y) : cctx.lineTo(X, Y); }
+          for (let i = n - 1; i >= 0; i--) cctx.lineTo(px(i), py(lower[i]));
+          cctx.closePath();
+          if (bands.length === 1) {
+            const grad = cctx.createLinearGradient(0, cpad.top, 0, cpad.top + cChartH);
+            grad.addColorStop(0, 'rgba(166,227,161,0.28)');
+            grad.addColorStop(1, 'rgba(166,227,161,0.0)');
+            cctx.fillStyle = grad;
+          } else {
+            cctx.globalAlpha = 0.55;
+            cctx.fillStyle = band.color;
+          }
+          cctx.fill();
+          cctx.globalAlpha = 1;
 
-        // Line
-        cctx.strokeStyle = '#a6e3a1';
-        cctx.lineWidth = 2;
-        cctx.beginPath();
-        cum.forEach((d, i) => { const X = px(i), Y = py(d.count); i === 0 ? cctx.moveTo(X, Y) : cctx.lineTo(X, Y); });
-        cctx.stroke();
+          // Band top edge
+          cctx.strokeStyle = band.color;
+          cctx.lineWidth = 2;
+          cctx.beginPath();
+          for (let i = 0; i < n; i++) { const X = px(i), Y = py(upper[i]); i === 0 ? cctx.moveTo(X, Y) : cctx.lineTo(X, Y); }
+          cctx.stroke();
+          lower = upper;
+        });
 
-        // Points + value labels
-        cctx.fillStyle = '#a6e3a1';
+        // Points + value labels ride the top of the stack (= the running total)
         cctx.font = '10px system-ui';
-        const cValueLabels = spacedLabels(cum.length, px, cctx.measureText(String(cMax)).width + 6);
+        const cValueLabels = spacedLabels(n, px, cctx.measureText(String(cMax)).width + 6);
         cctx.font = '9px system-ui';
-        const cDateLabels = spacedLabels(cum.length, px, cctx.measureText('00-00').width * Math.cos(0.4) + 8);
-        cum.forEach((d, i) => {
-          const X = px(i), Y = py(d.count);
+        const cDateLabels = spacedLabels(n, px, cctx.measureText('00-00').width * Math.cos(0.4) + 8);
+        const topColor = bands[bands.length - 1].color;
+        for (let i = 0; i < n; i++) {
+          const X = px(i), Y = py(totals[i]);
+          cctx.fillStyle = topColor;
           cctx.beginPath(); cctx.arc(X, Y, 2.5, 0, Math.PI * 2); cctx.fill();
           if (cValueLabels.has(i)) {
             cctx.fillStyle = '#cdd6f4'; cctx.font = '10px system-ui'; cctx.textAlign = 'center';
-            cctx.fillText(d.count, X, Y - 7);
-            cctx.fillStyle = '#a6e3a1';
+            cctx.fillText(totals[i], X, Y - 7);
           }
-          // Date label
           if (cDateLabels.has(i)) {
             cctx.save();
             cctx.translate(X, cpad.top + cChartH + 14);
             cctx.rotate(-0.4);
             cctx.fillStyle = '#a6adc8'; cctx.font = '9px system-ui'; cctx.textAlign = 'center';
-            cctx.fillText(d.date.slice(5), 0, 0);
+            cctx.fillText(cum[i].date.slice(5), 0, 0);
             cctx.restore();
-            cctx.fillStyle = '#a6e3a1';
           }
-        });
-      }
+        }
+
+        // Legend (timezone mode only)
+        if (cumMode === 'timezone' && tzBands) {
+          legendEl.style.display = 'flex';
+          legendEl.innerHTML = tzBands
+            .map((b) => `<span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:2px;background:${b.color};"></span>${b.label} <span style="color:var(--dim)">${b.total}</span></span>`)
+            .join('');
+        } else {
+          legendEl.style.display = 'none';
+        }
+      };
+
+      const setCumMode = (mode) => {
+        cumMode = mode;
+        btnTotal.classList.toggle('active', mode === 'total');
+        btnTz.classList.toggle('active', mode === 'timezone');
+        drawCumChart();
+      };
+      btnTotal.addEventListener('click', () => setCumMode('total'));
+      btnTz.addEventListener('click', () => setCumMode('timezone'));
+      drawCumChart();
     }
   } catch { /* telemetry chart is non-critical */ }
 })();
