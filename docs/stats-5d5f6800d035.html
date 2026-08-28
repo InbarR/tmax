@@ -169,6 +169,39 @@ function platformIcon(p) {
   return '\uD83D\uDCE6';
 }
 
+// Round a chart's axis top up to a "nice" multiple so gridline labels read
+// 0/100/200/... instead of arbitrary fractions of the data maximum. Tries a few
+// gridline counts and keeps the one that wastes the least headroom.
+function niceAxis(max, preferredLines) {
+  const target = Math.max(max, 1);
+  let best = null;
+  for (const lines of [preferredLines, preferredLines + 1, preferredLines + 2]) {
+    const rough = target / lines;
+    const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    const mults = mag >= 10 ? [1, 2, 2.5, 5, 10] : [1, 2, 5, 10];
+    const step = Math.max(1, mults.map((m) => m * mag).find((s) => s >= rough - 1e-9) || 10 * mag);
+    const cand = { step, max: step * lines, lines };
+    if (!best || cand.max < best.max) best = cand;
+  }
+  return best;
+}
+
+// Pick label positions left to right, dropping any that would overlap the
+// previously drawn one. The final point always keeps its slot.
+function spacedLabels(count, xOf, minGap) {
+  const keep = [];
+  let lastX = -Infinity;
+  for (let i = 0; i < count; i++) {
+    if (xOf(i) - lastX >= minGap) { keep.push(i); lastX = xOf(i); }
+  }
+  const lastI = count - 1;
+  if (lastI >= 0 && keep[keep.length - 1] !== lastI) {
+    if (keep.length && xOf(lastI) - xOf(keep[keep.length - 1]) < minGap) keep.pop();
+    keep.push(lastI);
+  }
+  return new Set(keep);
+}
+
 function relativeDate(d) {
   if (!d) return ''; // snapshot fallback has no publish dates
   const diff = (Date.now() - new Date(d).getTime()) / 1000;
@@ -207,7 +240,9 @@ function renderChart(releases) {
 
   if (data.length === 0) return;
 
-  const maxVal = Math.max(...data.map(d => d.total), 1);
+  const dlAxis = niceAxis(Math.max(...data.map(d => d.total), 1), 4);
+  const gridLines = dlAxis.lines;
+  const maxVal = dlAxis.max;
   const pad = { top: 20, right: 16, bottom: 56, left: 48 };
   const chartW = W - pad.left - pad.right;
   const chartH = H - pad.top - pad.bottom;
@@ -217,13 +252,12 @@ function renderChart(releases) {
   // Grid lines
   ctx.strokeStyle = '#45475a';
   ctx.lineWidth = 0.5;
-  const gridLines = 4;
   ctx.font = '11px system-ui';
   ctx.fillStyle = '#a6adc8';
   ctx.textAlign = 'right';
   for (let i = 0; i <= gridLines; i++) {
     const y = pad.top + chartH - (chartH * i / gridLines);
-    const val = Math.round(maxVal * i / gridLines);
+    const val = dlAxis.step * i;
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
     ctx.fillText(val, pad.left - 6, y + 4);
   }
@@ -555,7 +589,9 @@ function renderTimeline() {
     }
     return tot;
   });
-  const maxVal = Math.max(1, ...stackTotals);
+  const tlAxis = niceAxis(Math.max(1, ...stackTotals), 4);
+  const maxVal = tlAxis.max;
+  const gridLines = tlAxis.lines;
 
   // Bar geometry
   const n = allTs.length;
@@ -564,11 +600,10 @@ function renderTimeline() {
 
   // Gridlines
   ctx.strokeStyle = '#45475a'; ctx.lineWidth = 1; ctx.font = '10px system-ui'; ctx.fillStyle = '#a6adc8';
-  const gridLines = 4;
   for (let i = 0; i <= gridLines; i++) {
     const y = pad.top + (ch * i / gridLines);
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.globalAlpha = 0.3; ctx.stroke(); ctx.globalAlpha = 1;
-    const v = Math.round(maxVal * (1 - i / gridLines));
+    const v = tlAxis.step * (gridLines - i);
     ctx.textAlign = 'right'; ctx.fillText(String(v), pad.left - 6, y + 3);
   }
 
@@ -581,11 +616,15 @@ function renderTimeline() {
   // Draw stacked columns, one per timestamp. Record geometry for hit-testing.
   lastBarGeometry = [];
   // Only draw per-bar totals when each bar has enough horizontal room to fit
-  // the number without overlapping its neighbor (#stats-crowding). Otherwise
-  // thin out to every-Nth bar + always show the last one.
-  const MIN_LABEL_SLOT = 28; // px — rough width of a 4-digit number + breathing room
-  const allLabels = slot >= MIN_LABEL_SLOT;
-  const labelStride = allLabels ? 1 : Math.max(1, Math.ceil(MIN_LABEL_SLOT / Math.max(slot, 1)));
+  // the number without overlapping its neighbor (#stats-crowding). Label slots
+  // are measured against the widest possible number, and the last bar is kept
+  // by dropping its crowded predecessor rather than stacking on top of it.
+  ctx.font = '10px system-ui';
+  const totalLabelSlots = spacedLabels(
+    n,
+    (i) => pad.left + slot * (i + 0.5),
+    ctx.measureText(String(maxVal)).width + 8,
+  );
 
   allTs.forEach((t, i) => {
     const x = pad.left + slot * (i + 0.5) - barW / 2;
@@ -611,13 +650,8 @@ function renderTimeline() {
       ctx.lineWidth = 1;
     }
 
-    // Total label above the column - strided when bars are crowded
-    const showLabel = total > 0 && (
-      selectedBarIndices.includes(i) ||
-      i === n - 1 ||
-      i === 0 ||
-      (i % labelStride === 0)
-    );
+    // Total label above the column - spaced so numbers never collide
+    const showLabel = total > 0 && (selectedBarIndices.includes(i) || totalLabelSlots.has(i));
     if (showLabel) {
       ctx.fillStyle = selectedBarIndices.includes(i) ? '#f9e2af' : '#cdd6f4';
       ctx.textAlign = 'center';
@@ -654,10 +688,10 @@ function renderTimeline() {
       ctx.restore();
     });
   } else {
-    const labelStride = Math.max(1, Math.ceil(n / 10));
     ctx.textAlign = 'center';
+    const dateSlots = spacedLabels(n, (i) => pad.left + slot * (i + 0.5), ctx.measureText(fmtDate(allTs[0])).width + 10);
     allTs.forEach((t, i) => {
-      if (i % labelStride !== 0 && i !== n - 1) return;
+      if (!dateSlots.has(i)) return;
       const x = pad.left + slot * (i + 0.5);
       ctx.fillText(fmtDate(t), x, pad.top + ch + 14);
     });
@@ -1220,7 +1254,9 @@ function groupTimezones(obj) {
     const pad = { top: 20, right: 16, bottom: 40, left: 48 };
     const chartW = W - pad.left - pad.right;
     const chartH = H - pad.top - pad.bottom;
-    const maxVal = Math.max(...days.map(d => d.count), 1);
+    const dayAxis = niceAxis(Math.max(...days.map(d => d.count), 1), 4);
+    const gridLines = dayAxis.lines;
+    const maxVal = dayAxis.max;
 
     // Grid
     ctx.strokeStyle = '#45475a';
@@ -1228,10 +1264,9 @@ function groupTimezones(obj) {
     ctx.font = '11px system-ui';
     ctx.fillStyle = '#a6adc8';
     ctx.textAlign = 'right';
-    const gridLines = 4;
     for (let i = 0; i <= gridLines; i++) {
       const y = pad.top + chartH - (chartH * i / gridLines);
-      const val = Math.round(maxVal * i / gridLines);
+      const val = dayAxis.step * i;
       ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
       ctx.fillText(val, pad.left - 6, y + 4);
     }
@@ -1239,6 +1274,11 @@ function groupTimezones(obj) {
     // Bars
     const gap = chartW / days.length;
     const barW = Math.min(24, gap * 0.7);
+    const barCenter = (i) => pad.left + gap * i + gap / 2;
+    ctx.font = '10px system-ui';
+    const valueLabels = spacedLabels(days.length, barCenter, ctx.measureText(String(maxVal)).width + 6);
+    ctx.font = '9px system-ui';
+    const dateLabels = spacedLabels(days.length, barCenter, ctx.measureText('00-00').width * Math.cos(0.4) + 8);
     for (let i = 0; i < days.length; i++) {
       const d = days[i];
       const x = pad.left + gap * i + (gap - barW) / 2;
@@ -1250,16 +1290,15 @@ function groupTimezones(obj) {
       ctx.fill();
 
       // Value on top
-      if (d.count > 0) {
+      if (d.count > 0 && valueLabels.has(i)) {
         ctx.fillStyle = '#cdd6f4';
         ctx.font = '10px system-ui';
         ctx.textAlign = 'center';
         ctx.fillText(d.count, x + barW / 2, y - 4);
       }
 
-      // Date label (show every Nth to avoid overlap)
-      const showEvery = Math.max(1, Math.floor(days.length / 15));
-      if (i % showEvery === 0 || i === days.length - 1) {
+      // Date label (spaced so neighbours never overlap)
+      if (dateLabels.has(i)) {
         ctx.save();
         ctx.translate(x + barW / 2, pad.top + chartH + 14);
         ctx.rotate(-0.4);
@@ -1298,7 +1337,9 @@ function groupTimezones(obj) {
         const cpad = { top: 20, right: 16, bottom: 40, left: 48 };
         const cChartW = CW - cpad.left - cpad.right;
         const cChartH = CH - cpad.top - cpad.bottom;
-        const cMax = Math.max(...cum.map(d => d.count), 1);
+        const cAxis = niceAxis(Math.max(...cum.map(d => d.count), 1), 4);
+        const cMax = cAxis.max;
+        const cGridLines = cAxis.lines;
 
         // Grid + left axis
         cctx.strokeStyle = '#45475a';
@@ -1306,10 +1347,10 @@ function groupTimezones(obj) {
         cctx.font = '11px system-ui';
         cctx.fillStyle = '#a6adc8';
         cctx.textAlign = 'right';
-        for (let i = 0; i <= gridLines; i++) {
-          const y = cpad.top + cChartH - (cChartH * i / gridLines);
+        for (let i = 0; i <= cGridLines; i++) {
+          const y = cpad.top + cChartH - (cChartH * i / cGridLines);
           cctx.beginPath(); cctx.moveTo(cpad.left, y); cctx.lineTo(CW - cpad.right, y); cctx.stroke();
-          cctx.fillText(Math.round(cMax * i / gridLines), cpad.left - 6, y + 4);
+          cctx.fillText(cAxis.step * i, cpad.left - 6, y + 4);
         }
 
         const cgap = cChartW / cum.length;
@@ -1337,17 +1378,20 @@ function groupTimezones(obj) {
 
         // Points + value labels
         cctx.fillStyle = '#a6e3a1';
-        const cShowEvery = Math.max(1, Math.floor(cum.length / 15));
+        cctx.font = '10px system-ui';
+        const cValueLabels = spacedLabels(cum.length, px, cctx.measureText(String(cMax)).width + 6);
+        cctx.font = '9px system-ui';
+        const cDateLabels = spacedLabels(cum.length, px, cctx.measureText('00-00').width * Math.cos(0.4) + 8);
         cum.forEach((d, i) => {
           const X = px(i), Y = py(d.count);
           cctx.beginPath(); cctx.arc(X, Y, 2.5, 0, Math.PI * 2); cctx.fill();
-          if (i === cum.length - 1 || i % cShowEvery === 0) {
+          if (cValueLabels.has(i)) {
             cctx.fillStyle = '#cdd6f4'; cctx.font = '10px system-ui'; cctx.textAlign = 'center';
             cctx.fillText(d.count, X, Y - 7);
             cctx.fillStyle = '#a6e3a1';
           }
           // Date label
-          if (i % cShowEvery === 0 || i === cum.length - 1) {
+          if (cDateLabels.has(i)) {
             cctx.save();
             cctx.translate(X, cpad.top + cChartH + 14);
             cctx.rotate(-0.4);
