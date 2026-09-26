@@ -687,6 +687,24 @@ html.transparency-active .input-dialog {
   width: 100%;
 }
 
+.terminal-link-preview {
+  position: fixed;
+  z-index: 10000;
+  box-sizing: border-box;
+  max-width: min(560px, calc(100vw - 16px));
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+  font-family: var(--terminal-font-family, monospace);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
 .terminal-status-dot {
   width: 7px;
   height: 7px;
