@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-10-16T10:41:02.328Z",
-  "dau": 89,
+  "generatedAt": "2026-10-16T15:10:58.980Z",
+  "dau": 91,
   "wau": 185,
-  "mau": 269,
-  "total": 525,
+  "mau": 270,
+  "total": 526,
   "daily": [
     {
       "date": "2026-07-18",
-      "users": 92
+      "users": 89
     },
     {
       "date": "2026-07-19",
@@ -367,18 +367,18 @@
     },
     {
       "date": "2026-10-16",
-      "users": 89
+      "users": 91
     }
   ],
   "cumulative": [
     {
       "date": "2026-07-18",
-      "newUsers": 92,
-      "total": 92
+      "newUsers": 89,
+      "total": 89
     },
     {
       "date": "2026-07-19",
-      "newUsers": 81,
+      "newUsers": 84,
       "total": 173
     },
     {
@@ -738,76 +738,56 @@
     },
     {
       "date": "2026-10-16",
-      "newUsers": 1,
-      "total": 525
+      "newUsers": 2,
+      "total": 526
     }
   ],
   "byOs": {
-    "win32": 181,
+    "win32": 182,
     "darwin": 84,
     "linux": 4
   },
   "byVersion": {
-    "1.12.2": 253,
-    "1.11.4": 11,
+    "1.12.2": 254,
+    "1.11.4": 10,
     "1.12.1": 9,
     "1.12.0": 4,
     "1.12.3": 1
   },
   "byTimezone": {
-    "Asia/Jerusalem": 209,
+    "Asia/Jerusalem": 210,
     "America/Los_Angeles": 28,
-    "Europe/Berlin": 5,
-    "Europe/Tallinn": 3,
+    "Europe/Berlin": 6,
     "Europe/Stockholm": 3,
-    "Europe/Moscow": 2,
+    "Europe/Tallinn": 3,
     "Europe/Lisbon": 2,
-    "Asia/Calcutta": 2,
     "Asia/Amman": 2,
+    "Europe/Kiev": 2,
+    "Asia/Calcutta": 2,
     "America/Chicago": 2,
     "Asia/Shanghai": 2,
-    "Europe/Kiev": 2,
     "Europe/Zurich": 2,
+    "Europe/Moscow": 2,
     "Europe/London": 2,
-    "Etc/GMT-2": 1,
     "Europe/Prague": 1,
-    "Asia/Baghdad": 1,
     "America/Sao_Paulo": 1,
-    "Europe/Amsterdam": 1,
     "America/Santiago": 1,
-    "America/Buenos_Aires": 1,
     "Europe/Paris": 1,
-    "Europe/Budapest": 1,
+    "Asia/Bangkok": 1,
+    "Asia/Baghdad": 1,
+    "Etc/GMT-2": 1,
+    "Europe/Amsterdam": 1,
+    "Europe/Warsaw": 1,
     "Europe/Zagreb": 1,
     "Africa/Tunis": 1,
-    "Europe/Warsaw": 1,
-    "Asia/Bangkok": 1,
+    "America/Buenos_Aires": 1,
+    "Europe/Budapest": 1,
     "America/New_York": 1
   },
   "cumulativeByTimezone": [
     {
       "date": "2026-07-18",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 73
-    },
-    {
-      "date": "2026-07-18",
-      "tz": "Europe/Oslo",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-07-18",
-      "tz": "Europe/Berlin",
-      "newUsers": 2
-    },
-    {
-      "date": "2026-07-18",
-      "tz": "America/Los_Angeles",
-      "newUsers": 11
-    },
-    {
-      "date": "2026-07-18",
-      "tz": "America/Hermosillo",
+      "tz": "Australia/Sydney",
       "newUsers": 1
     },
     {
@@ -817,12 +797,17 @@
     },
     {
       "date": "2026-07-18",
-      "tz": "Australia/Sydney",
-      "newUsers": 1
+      "tz": "Europe/Berlin",
+      "newUsers": 2
     },
     {
       "date": "2026-07-18",
-      "tz": "America/New_York",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 70
+    },
+    {
+      "date": "2026-07-18",
+      "tz": "America/Hermosillo",
       "newUsers": 1
     },
     {
@@ -831,13 +816,23 @@
       "newUsers": 1
     },
     {
-      "date": "2026-07-19",
-      "tz": "Asia/Baghdad",
+      "date": "2026-07-18",
+      "tz": "America/Los_Angeles",
+      "newUsers": 11
+    },
+    {
+      "date": "2026-07-18",
+      "tz": "America/New_York",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-07-18",
+      "tz": "Europe/Oslo",
       "newUsers": 1
     },
     {
       "date": "2026-07-19",
-      "tz": "Europe/Budapest",
+      "tz": "Australia/Sydney",
       "newUsers": 1
     },
     {
@@ -847,17 +842,37 @@
     },
     {
       "date": "2026-07-19",
+      "tz": "Asia/Baghdad",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-07-19",
       "tz": "Asia/Tokyo",
       "newUsers": 1
     },
     {
       "date": "2026-07-19",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 74
+      "tz": "Europe/Budapest",
+      "newUsers": 1
     },
     {
       "date": "2026-07-19",
-      "tz": "Australia/Sydney",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 77
+    },
+    {
+      "date": "2026-07-20",
+      "tz": "Europe/Moscow",
+      "newUsers": 2
+    },
+    {
+      "date": "2026-07-20",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 18
+    },
+    {
+      "date": "2026-07-20",
+      "tz": "Europe/Kiev",
       "newUsers": 1
     },
     {
@@ -867,12 +882,12 @@
     },
     {
       "date": "2026-07-20",
-      "tz": "Europe/Moscow",
-      "newUsers": 2
+      "tz": "America/Los_Angeles",
+      "newUsers": 5
     },
     {
       "date": "2026-07-20",
-      "tz": "Europe/Kiev",
+      "tz": "Asia/Calcutta",
       "newUsers": 1
     },
     {
@@ -881,23 +896,18 @@
       "newUsers": 1
     },
     {
-      "date": "2026-07-20",
-      "tz": "America/Los_Angeles",
-      "newUsers": 5
-    },
-    {
-      "date": "2026-07-20",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 18
-    },
-    {
-      "date": "2026-07-20",
-      "tz": "Asia/Calcutta",
+      "date": "2026-07-21",
+      "tz": "Europe/Berlin",
       "newUsers": 1
     },
     {
       "date": "2026-07-21",
       "tz": "Asia/Calcutta",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-07-21",
+      "tz": "America/Los_Angeles",
       "newUsers": 1
     },
     {
@@ -906,24 +916,14 @@
       "newUsers": 12
     },
     {
-      "date": "2026-07-21",
-      "tz": "America/Los_Angeles",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-07-21",
-      "tz": "Europe/Berlin",
-      "newUsers": 1
-    },
-    {
       "date": "2026-07-22",
       "tz": "Europe/Madrid",
       "newUsers": 1
     },
     {
       "date": "2026-07-22",
-      "tz": "America/Los_Angeles",
-      "newUsers": 4
+      "tz": "Europe/Lisbon",
+      "newUsers": 1
     },
     {
       "date": "2026-07-22",
@@ -932,8 +932,8 @@
     },
     {
       "date": "2026-07-22",
-      "tz": "Europe/Lisbon",
-      "newUsers": 1
+      "tz": "America/Los_Angeles",
+      "newUsers": 4
     },
     {
       "date": "2026-07-23",
@@ -947,7 +947,7 @@
     },
     {
       "date": "2026-07-24",
-      "tz": "Asia/Shanghai",
+      "tz": "Europe/Dublin",
       "newUsers": 1
     },
     {
@@ -962,7 +962,7 @@
     },
     {
       "date": "2026-07-24",
-      "tz": "Europe/Dublin",
+      "tz": "Europe/Madrid",
       "newUsers": 1
     },
     {
@@ -972,12 +972,12 @@
     },
     {
       "date": "2026-07-24",
-      "tz": "America/Los_Angeles",
+      "tz": "Asia/Shanghai",
       "newUsers": 1
     },
     {
       "date": "2026-07-24",
-      "tz": "Europe/Madrid",
+      "tz": "America/Los_Angeles",
       "newUsers": 1
     },
     {
@@ -987,12 +987,12 @@
     },
     {
       "date": "2026-07-26",
-      "tz": "America/Santiago",
+      "tz": "Asia/Dhaka",
       "newUsers": 1
     },
     {
       "date": "2026-07-26",
-      "tz": "Asia/Dhaka",
+      "tz": "America/Santiago",
       "newUsers": 1
     },
     {
@@ -1012,18 +1012,13 @@
     },
     {
       "date": "2026-07-28",
-      "tz": "Asia/Shanghai",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-07-28",
-      "tz": "UTC",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-07-28",
       "tz": "Asia/Jerusalem",
       "newUsers": 9
+    },
+    {
+      "date": "2026-07-28",
+      "tz": "Asia/Shanghai",
+      "newUsers": 1
     },
     {
       "date": "2026-07-28",
@@ -1033,6 +1028,11 @@
     {
       "date": "2026-07-28",
       "tz": "Europe/London",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-07-28",
+      "tz": "UTC",
       "newUsers": 1
     },
     {
@@ -1062,17 +1062,17 @@
     },
     {
       "date": "2026-07-31",
+      "tz": "America/Los_Angeles",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-07-31",
       "tz": "Asia/Taipei",
       "newUsers": 1
     },
     {
       "date": "2026-07-31",
       "tz": "Asia/Jerusalem",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-07-31",
-      "tz": "America/Los_Angeles",
       "newUsers": 1
     },
     {
@@ -1092,23 +1092,18 @@
     },
     {
       "date": "2026-08-03",
-      "tz": "Asia/Taipei",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
       "date": "2026-08-03",
-      "tz": "Asia/Jerusalem",
+      "tz": "Asia/Taipei",
       "newUsers": 1
     },
     {
       "date": "2026-08-04",
       "tz": "Asia/Jerusalem",
       "newUsers": 5
-    },
-    {
-      "date": "2026-08-05",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 7
     },
     {
       "date": "2026-08-05",
@@ -1119,6 +1114,11 @@
       "date": "2026-08-05",
       "tz": "Asia/Hebron",
       "newUsers": 1
+    },
+    {
+      "date": "2026-08-05",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 7
     },
     {
       "date": "2026-08-06",
@@ -1137,6 +1137,11 @@
     },
     {
       "date": "2026-08-08",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-08-08",
       "tz": "Africa/Nairobi",
       "newUsers": 1
     },
@@ -1151,19 +1156,9 @@
       "newUsers": 1
     },
     {
-      "date": "2026-08-08",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 1
-    },
-    {
       "date": "2026-08-09",
       "tz": "Asia/Jerusalem",
       "newUsers": 7
-    },
-    {
-      "date": "2026-08-10",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 1
     },
     {
       "date": "2026-08-10",
@@ -1172,12 +1167,12 @@
     },
     {
       "date": "2026-08-10",
-      "tz": "Asia/Shanghai",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
-      "date": "2026-08-11",
-      "tz": "Europe/Warsaw",
+      "date": "2026-08-10",
+      "tz": "Asia/Shanghai",
       "newUsers": 1
     },
     {
@@ -1191,8 +1186,8 @@
       "newUsers": 5
     },
     {
-      "date": "2026-08-12",
-      "tz": "America/Los_Angeles",
+      "date": "2026-08-11",
+      "tz": "Europe/Warsaw",
       "newUsers": 1
     },
     {
@@ -1201,13 +1196,13 @@
       "newUsers": 5
     },
     {
-      "date": "2026-08-13",
-      "tz": "Europe/Kiev",
+      "date": "2026-08-12",
+      "tz": "America/Los_Angeles",
       "newUsers": 1
     },
     {
       "date": "2026-08-13",
-      "tz": "Asia/Jerusalem",
+      "tz": "Europe/Kiev",
       "newUsers": 1
     },
     {
@@ -1218,6 +1213,11 @@
     {
       "date": "2026-08-13",
       "tz": "Asia/Singapore",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-08-13",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
@@ -1237,23 +1237,13 @@
     },
     {
       "date": "2026-08-18",
-      "tz": "Europe/Berlin",
-      "newUsers": 2
-    },
-    {
-      "date": "2026-08-18",
       "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
-      "date": "2026-08-19",
-      "tz": "America/Los_Angeles",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-08-19",
-      "tz": "Africa/Casablanca",
-      "newUsers": 1
+      "date": "2026-08-18",
+      "tz": "Europe/Berlin",
+      "newUsers": 2
     },
     {
       "date": "2026-08-19",
@@ -1262,7 +1252,17 @@
     },
     {
       "date": "2026-08-19",
+      "tz": "Africa/Casablanca",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-08-19",
       "tz": "Asia/Bangkok",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-08-19",
+      "tz": "America/Los_Angeles",
       "newUsers": 1
     },
     {
@@ -1277,7 +1277,7 @@
     },
     {
       "date": "2026-08-22",
-      "tz": "Europe/Istanbul",
+      "tz": "Europe/Kiev",
       "newUsers": 1
     },
     {
@@ -1287,7 +1287,7 @@
     },
     {
       "date": "2026-08-22",
-      "tz": "Europe/Kiev",
+      "tz": "Europe/Istanbul",
       "newUsers": 1
     },
     {
@@ -1327,7 +1327,7 @@
     },
     {
       "date": "2026-08-26",
-      "tz": "UTC",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
@@ -1337,7 +1337,7 @@
     },
     {
       "date": "2026-08-26",
-      "tz": "Asia/Jerusalem",
+      "tz": "UTC",
       "newUsers": 1
     },
     {
@@ -1347,7 +1347,7 @@
     },
     {
       "date": "2026-08-27",
-      "tz": "Asia/Calcutta",
+      "tz": "Asia/Shanghai",
       "newUsers": 1
     },
     {
@@ -1357,12 +1357,12 @@
     },
     {
       "date": "2026-08-27",
-      "tz": "Asia/Shanghai",
+      "tz": "Asia/Calcutta",
       "newUsers": 1
     },
     {
       "date": "2026-08-28",
-      "tz": "Europe/Berlin",
+      "tz": "Asia/Shanghai",
       "newUsers": 1
     },
     {
@@ -1372,7 +1372,7 @@
     },
     {
       "date": "2026-08-28",
-      "tz": "Asia/Shanghai",
+      "tz": "Europe/Berlin",
       "newUsers": 1
     },
     {
@@ -1382,12 +1382,12 @@
     },
     {
       "date": "2026-08-31",
-      "tz": "Asia/Jerusalem",
+      "tz": "America/Los_Angeles",
       "newUsers": 1
     },
     {
       "date": "2026-08-31",
-      "tz": "America/Los_Angeles",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
@@ -1397,18 +1397,13 @@
     },
     {
       "date": "2026-09-01",
-      "tz": "Europe/Kiev",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
       "date": "2026-09-01",
-      "tz": "Asia/Jerusalem",
+      "tz": "Europe/Kiev",
       "newUsers": 1
-    },
-    {
-      "date": "2026-09-02",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 4
     },
     {
       "date": "2026-09-02",
@@ -1419,6 +1414,11 @@
       "date": "2026-09-02",
       "tz": "Asia/Rangoon",
       "newUsers": 1
+    },
+    {
+      "date": "2026-09-02",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 4
     },
     {
       "date": "2026-09-02",
@@ -1442,13 +1442,18 @@
     },
     {
       "date": "2026-09-06",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 3
+    },
+    {
+      "date": "2026-09-06",
       "tz": "Asia/Taipei",
       "newUsers": 1
     },
     {
-      "date": "2026-09-06",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 3
+      "date": "2026-09-07",
+      "tz": "Europe/Prague",
+      "newUsers": 1
     },
     {
       "date": "2026-09-07",
@@ -1461,26 +1466,21 @@
       "newUsers": 1
     },
     {
-      "date": "2026-09-07",
-      "tz": "Europe/Prague",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-09-08",
-      "tz": "Europe/Tallinn",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-09-08",
-      "tz": "America/New_York",
-      "newUsers": 1
-    },
-    {
       "date": "2026-09-08",
       "tz": "Asia/Jerusalem",
       "newUsers": 3
     },
     {
+      "date": "2026-09-08",
+      "tz": "Europe/Tallinn",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-09-08",
+      "tz": "America/New_York",
+      "newUsers": 1
+    },
+    {
       "date": "2026-09-09",
       "tz": "Asia/Jerusalem",
       "newUsers": 1
@@ -1497,7 +1497,7 @@
     },
     {
       "date": "2026-09-10",
-      "tz": "Europe/Istanbul",
+      "tz": "Europe/Tallinn",
       "newUsers": 1
     },
     {
@@ -1507,22 +1507,22 @@
     },
     {
       "date": "2026-09-10",
-      "tz": "Europe/Tallinn",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
       "date": "2026-09-10",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-09-11",
-      "tz": "Asia/Jerusalem",
+      "tz": "Europe/Istanbul",
       "newUsers": 1
     },
     {
       "date": "2026-09-11",
       "tz": "Europe/London",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-09-11",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
@@ -1597,12 +1597,7 @@
     },
     {
       "date": "2026-09-25",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-09-25",
-      "tz": "America/Los_Angeles",
+      "tz": "Europe/Prague",
       "newUsers": 1
     },
     {
@@ -1612,7 +1607,12 @@
     },
     {
       "date": "2026-09-25",
-      "tz": "Europe/Prague",
+      "tz": "America/Los_Angeles",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-09-25",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
@@ -1627,22 +1627,22 @@
     },
     {
       "date": "2026-09-30",
-      "tz": "America/Chicago",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-09-30",
       "tz": "Europe/Zurich",
       "newUsers": 2
     },
     {
-      "date": "2026-10-01",
-      "tz": "Europe/London",
+      "date": "2026-09-30",
+      "tz": "America/Chicago",
       "newUsers": 1
     },
     {
       "date": "2026-10-01",
       "tz": "Europe/Berlin",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-10-01",
+      "tz": "Europe/London",
       "newUsers": 1
     },
     {
@@ -1652,13 +1652,13 @@
     },
     {
       "date": "2026-10-06",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 6
+      "tz": "Europe/Warsaw",
+      "newUsers": 1
     },
     {
       "date": "2026-10-06",
-      "tz": "Europe/Warsaw",
-      "newUsers": 1
+      "tz": "Asia/Jerusalem",
+      "newUsers": 6
     },
     {
       "date": "2026-10-09",
@@ -1682,12 +1682,12 @@
     },
     {
       "date": "2026-10-13",
-      "tz": "America/Los_Angeles",
+      "tz": "Europe/Tallinn",
       "newUsers": 1
     },
     {
       "date": "2026-10-13",
-      "tz": "Europe/Tallinn",
+      "tz": "America/Los_Angeles",
       "newUsers": 1
     },
     {
@@ -1702,12 +1702,17 @@
     },
     {
       "date": "2026-10-14",
-      "tz": "Europe/London",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
       "date": "2026-10-14",
-      "tz": "Asia/Jerusalem",
+      "tz": "Europe/London",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-10-16",
+      "tz": "Europe/Berlin",
       "newUsers": 1
     },
     {
