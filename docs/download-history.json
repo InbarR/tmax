@@ -132269,26 +132269,26 @@
       }
     },
     {
-      "t": "2026-10-30T03:35:08.364Z",
+      "t": "2026-10-30T11:52:21.766Z",
       "releases": {
         "v1.12.2": {
-          "RELEASES": 11495,
+          "RELEASES": 11529,
           "RELEASES-arm64": 6,
           "RELEASES-x64": 6,
           "tmax-1.12.2-1.x86_64.rpm": 19,
           "tmax-1.12.2-arm64-full.nupkg": 4,
           "tmax-1.12.2-arm64-Setup.exe": 15,
-          "tmax-1.12.2-arm64.dmg": 355,
-          "tmax-1.12.2-full.nupkg": 228,
+          "tmax-1.12.2-arm64.dmg": 357,
+          "tmax-1.12.2-full.nupkg": 229,
           "tmax-1.12.2-x64-full.nupkg": 5,
-          "tmax-1.12.2-x64-Setup.exe": 181,
+          "tmax-1.12.2-x64-Setup.exe": 186,
           "tmax-1.12.2-x64.dmg": 9,
           "tmax-1.12.2.Setup.exe": 3,
-          "tmax-darwin-arm64-portable.zip": 38947,
+          "tmax-darwin-arm64-portable.zip": 39046,
           "tmax-darwin-x64-portable.zip": 5,
           "tmax-linux-x64-portable.zip": 26,
           "tmax-win32-arm64-portable.zip": 5,
-          "tmax-win32-x64-portable.zip": 29,
+          "tmax-win32-x64-portable.zip": 31,
           "tmax_1.12.2_amd64.deb": 26
         },
         "v1.12.1": {
@@ -132349,7 +132349,7 @@
           "tmax-linux-x64-portable.zip": 15,
           "tmax-win32-arm64-portable.zip": 4,
           "tmax-win32-x64-1.11.4.zip": 2,
-          "tmax-win32-x64-portable.zip": 13,
+          "tmax-win32-x64-portable.zip": 14,
           "tmax_1.11.4_amd64.deb": 9
         },
         "mac-update-test": {
