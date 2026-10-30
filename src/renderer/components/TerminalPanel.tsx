@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useCallback, useState, useReducer } from 'react';
 import ReactDOM from 'react-dom';
-import { Terminal } from '@xterm/xterm';
+import { Terminal, type ILink } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { SerializeAddon } from '@xterm/addon-serialize';
@@ -14,6 +14,7 @@ import { prepareClipboardPaste, resolveClipboardPaste } from '../utils/paste';
 import { smartUnwrapForCopy } from '../utils/smart-unwrap';
 import { detectCwdFromChunk } from '../utils/cwd-detect';
 import { MD_PATH_PATTERN } from '../utils/md-link-parser';
+import { createLinkHoverPreview } from '../utils/link-hover-preview';
 import { buildSessionHoverText } from '../utils/session-tooltip';
 import type { AppConfig } from '../state/types';
 import '@xterm/xterm/css/xterm.css';
@@ -564,6 +565,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
     // on the next row keeps over-stitching risk minimal even with the
     // broader char class.
     const URL_BODY = /^[A-Za-z0-9%\-._~!$&'()*+,;=:@/?#\[\]|\p{L}\p{N}\p{M}\p{S}]+$/u;
+    const linkHoverPreview = createLinkHoverPreview(() => term.element);
     term.registerLinkProvider({
       provideLinks(bufferLineNumber, callback) {
         const buf = term.buffer.active;
@@ -684,12 +686,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
           stitchedBack++;
         }
 
-        const links: Array<{
-          range: { start: { x: number; y: number }; end: { x: number; y: number } };
-          text: string;
-          activate: (e: MouseEvent, text: string) => void;
-          decorations?: { underline?: boolean; pointerCursor?: boolean };
-        }> = [];
+        const links: ILink[] = [];
 
         // Find the segment that contains a given offset in `logical`. Returns
         // (rowIdx, col) where col is 0-based within that visual row.
@@ -761,6 +758,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
               }
               win.__tmaxLinkLast = { uri, ts: now };
               window.open(uri, '_blank');
+            },
+            hover(e, uri) {
+              linkHoverPreview.show(e, uri);
+            },
+            leave() {
+              linkHoverPreview.leave();
             },
             decorations: { underline: true, pointerCursor: true },
           });
@@ -1398,10 +1401,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
         return false;
       } catch { return false; }
     };
-    const updateScrolledAway = () => setIsScrolledAway(computeScrolledAway());
-    const scrollDisposable = term.onScroll(updateScrolledAway);
+    const updateScrolledAway = () => {
+      setIsScrolledAway(computeScrolledAway());
+    };
+    const handleTerminalScroll = () => {
+      linkHoverPreview.hide();
+      updateScrolledAway();
+    };
+    const scrollDisposable = term.onScroll(handleTerminalScroll);
     const viewportScrollEl = containerRef.current?.querySelector('.xterm-viewport') as HTMLElement | null;
-    viewportScrollEl?.addEventListener('scroll', updateScrolledAway, { passive: true });
+    viewportScrollEl?.addEventListener('scroll', handleTerminalScroll, { passive: true });
     // Slow poll catches anything the two listeners missed (e.g. programmatic
     // scrolls from other handlers in this file that don't re-trigger events).
     const scrollPollTimer = setInterval(updateScrolledAway, 750);
@@ -2746,9 +2755,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ terminalId, floatTitleBar
 
     return () => {
       resizeObserver.disconnect();
+      linkHoverPreview.dispose();
       dataDisposable.dispose();
       scrollDisposable.dispose();
-      viewportScrollEl?.removeEventListener('scroll', updateScrolledAway);
+      viewportScrollEl?.removeEventListener('scroll', handleTerminalScroll);
       viewportScrollEl?.removeEventListener('scroll', syncBufferToScrollbar);
       clearInterval(scrollPollTimer);
       unsubscribePtyData();
