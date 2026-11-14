@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { isMac, isLetterShortcut } from './utils/platform';
 import { prepareClipboardPaste, resolveClipboardPaste } from './utils/paste';
 import { applyChromeVarsFromTheme } from './utils/theme-chrome';
+import { createLinkHoverPreview } from './utils/link-hover-preview';
 import '@xterm/xterm/css/xterm.css';
 
 function hexToTerminalRgba(hex: string, alpha: number): string {
@@ -98,7 +99,12 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
       term.loadAddon(fitAddon);
       // Custom URL regex: include | (pipe) in URLs (xterm.js default excludes it)
       const urlRegex = /(https?|HTTPS?):[/]{2}[^\s"'!*(){}\\\^<>`]*[^\s"':,.!?{}\\\^~\[\]`()<>]/;
-      term.loadAddon(new WebLinksAddon(undefined, { urlRegex }));
+      const linkHoverPreview = createLinkHoverPreview(() => term.element);
+      term.loadAddon(new WebLinksAddon(undefined, {
+        urlRegex,
+        hover: (event, url) => linkHoverPreview.show(event, url),
+        leave: () => linkHoverPreview.leave(),
+      }));
 
       // Clipboard paste/copy handling
       const pasteToPty = (text: string) => {
@@ -169,6 +175,7 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
         document.title = `tmax - ${title}`;
         if (title) setTitle(title);
       });
+      const scrollDisposable = term.onScroll(() => linkHoverPreview.hide());
 
       const resizeObserver = new ResizeObserver(() => {
         try {
@@ -355,7 +362,9 @@ const DetachedApp: React.FC<DetachedAppProps> = ({ terminalId }) => {
 
       cleanup = () => {
         resizeObserver.disconnect();
+        linkHoverPreview.dispose();
         dataDisposable.dispose();
+        scrollDisposable.dispose();
         unsubscribePtyData();
         unsubscribePtyExit();
         titleDisposable.dispose();
