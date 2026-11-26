@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-11-26T10:26:55.507Z",
-  "dau": 117,
-  "wau": 183,
-  "mau": 281,
-  "total": 464,
+  "generatedAt": "2026-11-26T19:58:41.881Z",
+  "dau": 124,
+  "wau": 180,
+  "mau": 282,
+  "total": 465,
   "daily": [
     {
       "date": "2026-08-28",
-      "users": 114
+      "users": 73
     },
     {
       "date": "2026-08-29",
@@ -367,443 +367,459 @@
     },
     {
       "date": "2026-11-26",
-      "users": 117
+      "users": 124
     }
   ],
   "cumulative": [
     {
       "date": "2026-08-28",
-      "newUsers": 114,
-      "total": 114
+      "newUsers": 73,
+      "total": 73
     },
     {
       "date": "2026-08-29",
-      "newUsers": 11,
-      "total": 125
+      "newUsers": 29,
+      "total": 102
     },
     {
       "date": "2026-08-30",
-      "newUsers": 28,
-      "total": 153
+      "newUsers": 37,
+      "total": 139
     },
     {
       "date": "2026-08-31",
-      "newUsers": 26,
-      "total": 179
+      "newUsers": 35,
+      "total": 174
     },
     {
       "date": "2026-09-01",
-      "newUsers": 13,
-      "total": 192
+      "newUsers": 14,
+      "total": 188
     },
     {
       "date": "2026-09-02",
       "newUsers": 15,
-      "total": 207
+      "total": 203
     },
     {
       "date": "2026-09-03",
-      "newUsers": 5,
-      "total": 212
+      "newUsers": 6,
+      "total": 209
     },
     {
       "date": "2026-09-04",
       "newUsers": 3,
-      "total": 215
+      "total": 212
     },
     {
       "date": "2026-09-05",
       "newUsers": 2,
-      "total": 217
+      "total": 214
     },
     {
       "date": "2026-09-06",
       "newUsers": 7,
-      "total": 224
+      "total": 221
     },
     {
       "date": "2026-09-07",
       "newUsers": 8,
-      "total": 232
+      "total": 229
     },
     {
       "date": "2026-09-08",
       "newUsers": 7,
-      "total": 239
+      "total": 236
     },
     {
       "date": "2026-09-09",
       "newUsers": 3,
-      "total": 242
+      "total": 239
     },
     {
       "date": "2026-09-10",
-      "newUsers": 7,
-      "total": 249
+      "newUsers": 8,
+      "total": 247
     },
     {
       "date": "2026-09-11",
       "newUsers": 4,
-      "total": 253
+      "total": 251
     },
     {
       "date": "2026-09-14",
       "newUsers": 11,
-      "total": 264
+      "total": 262
     },
     {
       "date": "2026-09-15",
       "newUsers": 8,
-      "total": 272
+      "total": 270
     },
     {
       "date": "2026-09-16",
       "newUsers": 3,
-      "total": 275
+      "total": 273
     },
     {
       "date": "2026-09-17",
       "newUsers": 5,
-      "total": 280
+      "total": 278
     },
     {
       "date": "2026-09-19",
       "newUsers": 1,
-      "total": 281
+      "total": 279
     },
     {
       "date": "2026-09-20",
       "newUsers": 1,
-      "total": 282
+      "total": 280
     },
     {
       "date": "2026-09-22",
       "newUsers": 4,
-      "total": 286
+      "total": 284
     },
     {
       "date": "2026-09-23",
       "newUsers": 2,
-      "total": 288
+      "total": 286
     },
     {
       "date": "2026-09-24",
       "newUsers": 3,
-      "total": 291
+      "total": 289
     },
     {
       "date": "2026-09-25",
       "newUsers": 4,
-      "total": 295
+      "total": 293
     },
     {
       "date": "2026-09-27",
       "newUsers": 2,
-      "total": 297
+      "total": 295
     },
     {
       "date": "2026-09-29",
       "newUsers": 2,
-      "total": 299
+      "total": 297
     },
     {
       "date": "2026-09-30",
       "newUsers": 3,
-      "total": 302
+      "total": 300
     },
     {
       "date": "2026-10-01",
       "newUsers": 2,
-      "total": 304
+      "total": 302
+    },
+    {
+      "date": "2026-10-03",
+      "newUsers": 1,
+      "total": 303
     },
     {
       "date": "2026-10-04",
       "newUsers": 1,
-      "total": 305
+      "total": 304
     },
     {
       "date": "2026-10-05",
       "newUsers": 6,
-      "total": 311
+      "total": 310
     },
     {
       "date": "2026-10-06",
       "newUsers": 8,
-      "total": 319
+      "total": 318
     },
     {
       "date": "2026-10-07",
       "newUsers": 2,
-      "total": 321
+      "total": 320
     },
     {
       "date": "2026-10-09",
       "newUsers": 5,
-      "total": 326
+      "total": 325
     },
     {
       "date": "2026-10-10",
       "newUsers": 3,
-      "total": 329
+      "total": 328
     },
     {
       "date": "2026-10-11",
       "newUsers": 3,
-      "total": 332
+      "total": 331
     },
     {
       "date": "2026-10-12",
       "newUsers": 2,
-      "total": 334
+      "total": 333
     },
     {
       "date": "2026-10-13",
       "newUsers": 8,
-      "total": 342
+      "total": 341
     },
     {
       "date": "2026-10-14",
       "newUsers": 2,
-      "total": 344
+      "total": 343
     },
     {
       "date": "2026-10-15",
       "newUsers": 1,
-      "total": 345
+      "total": 344
     },
     {
       "date": "2026-10-16",
       "newUsers": 3,
-      "total": 348
+      "total": 347
     },
     {
       "date": "2026-10-17",
       "newUsers": 1,
-      "total": 349
+      "total": 348
     },
     {
       "date": "2026-10-18",
       "newUsers": 2,
-      "total": 351
+      "total": 350
     },
     {
       "date": "2026-10-19",
       "newUsers": 1,
-      "total": 352
+      "total": 351
     },
     {
       "date": "2026-10-20",
       "newUsers": 5,
-      "total": 357
+      "total": 356
     },
     {
       "date": "2026-10-21",
       "newUsers": 1,
-      "total": 358
+      "total": 357
     },
     {
       "date": "2026-10-22",
       "newUsers": 4,
-      "total": 362
+      "total": 361
     },
     {
       "date": "2026-10-23",
       "newUsers": 1,
-      "total": 363
+      "total": 362
     },
     {
       "date": "2026-10-24",
       "newUsers": 2,
-      "total": 365
+      "total": 364
     },
     {
       "date": "2026-10-25",
       "newUsers": 2,
-      "total": 367
+      "total": 366
     },
     {
       "date": "2026-10-26",
       "newUsers": 2,
-      "total": 369
+      "total": 368
     },
     {
       "date": "2026-10-28",
       "newUsers": 3,
-      "total": 372
+      "total": 371
     },
     {
       "date": "2026-10-29",
       "newUsers": 4,
-      "total": 376
+      "total": 375
     },
     {
       "date": "2026-10-30",
       "newUsers": 2,
-      "total": 378
+      "total": 377
     },
     {
       "date": "2026-10-31",
       "newUsers": 4,
-      "total": 382
+      "total": 381
     },
     {
       "date": "2026-11-01",
       "newUsers": 2,
-      "total": 384
+      "total": 383
     },
     {
       "date": "2026-11-02",
       "newUsers": 8,
-      "total": 392
+      "total": 391
     },
     {
       "date": "2026-11-03",
       "newUsers": 5,
-      "total": 397
+      "total": 396
     },
     {
       "date": "2026-11-04",
       "newUsers": 4,
-      "total": 401
+      "total": 400
     },
     {
       "date": "2026-11-05",
       "newUsers": 5,
-      "total": 406
+      "total": 405
     },
     {
       "date": "2026-11-06",
       "newUsers": 3,
-      "total": 409
+      "total": 408
     },
     {
       "date": "2026-11-07",
       "newUsers": 1,
-      "total": 410
+      "total": 409
     },
     {
       "date": "2026-11-08",
       "newUsers": 3,
-      "total": 413
+      "total": 412
     },
     {
       "date": "2026-11-09",
       "newUsers": 4,
-      "total": 417
+      "total": 416
     },
     {
       "date": "2026-11-10",
       "newUsers": 7,
-      "total": 424
+      "total": 423
     },
     {
       "date": "2026-11-11",
       "newUsers": 3,
-      "total": 427
+      "total": 426
     },
     {
       "date": "2026-11-12",
       "newUsers": 4,
-      "total": 431
+      "total": 430
     },
     {
       "date": "2026-11-15",
       "newUsers": 2,
-      "total": 433
+      "total": 432
     },
     {
       "date": "2026-11-16",
       "newUsers": 5,
-      "total": 438
+      "total": 437
     },
     {
       "date": "2026-11-17",
       "newUsers": 5,
-      "total": 443
+      "total": 442
     },
     {
       "date": "2026-11-18",
       "newUsers": 2,
-      "total": 445
+      "total": 444
     },
     {
       "date": "2026-11-19",
       "newUsers": 2,
-      "total": 447
+      "total": 446
     },
     {
       "date": "2026-11-20",
       "newUsers": 2,
-      "total": 449
+      "total": 448
     },
     {
       "date": "2026-11-22",
       "newUsers": 4,
-      "total": 453
+      "total": 452
     },
     {
       "date": "2026-11-23",
       "newUsers": 6,
-      "total": 459
+      "total": 458
     },
     {
       "date": "2026-11-25",
       "newUsers": 4,
-      "total": 463
+      "total": 462
     },
     {
       "date": "2026-11-26",
-      "newUsers": 1,
-      "total": 464
+      "newUsers": 3,
+      "total": 465
     }
   ],
   "byOs": {
-    "win32": 178,
-    "darwin": 98,
-    "linux": 5
+    "win32": 177,
+    "darwin": 99,
+    "linux": 6
   },
   "byVersion": {
     "1.12.2": 271,
-    "1.12.1": 7,
+    "1.12.1": 8,
     "1.11.4": 4,
     "1.12.0": 3,
     "1.12.3": 1
   },
   "byTimezone": {
-    "Asia/Jerusalem": 203,
-    "America/Los_Angeles": 26,
+    "Asia/Jerusalem": 204,
+    "America/Los_Angeles": 25,
     "Asia/Shanghai": 21,
     "Europe/Berlin": 7,
     "America/Mexico_City": 3,
-    "Europe/Kiev": 3,
     "Europe/Tallinn": 3,
-    "Europe/Stockholm": 2,
+    "Europe/Kiev": 3,
     "Europe/Budapest": 2,
-    "Europe/Paris": 2,
     "America/New_York": 2,
-    "Asia/Calcutta": 2,
+    "Europe/Stockholm": 2,
+    "Europe/Paris": 2,
     "Europe/Prague": 2,
-    "America/Santiago": 1,
+    "Asia/Calcutta": 2,
     "Europe/Dublin": 1,
-    "Europe/Moscow": 1,
-    "Asia/Taipei": 1,
-    "Etc/GMT+3": 1,
     "Asia/Bangkok": 1,
-    "Europe/Zurich": 1,
-    "Europe/Vienna": 1,
-    "Europe/Zagreb": 1,
-    "Asia/Tokyo": 1,
+    "Europe/Moscow": 1,
+    "America/Santiago": 1,
     "Europe/London": 1,
+    "Europe/Zagreb": 1,
+    "America/Hermosillo": 1,
+    "Europe/Vienna": 1,
+    "Europe/Rome": 1,
     "Europe/Ljubljana": 1,
     "Etc/GMT-8": 1,
-    "Asia/Ulaanbaatar": 1,
-    "Europe/Rome": 1,
-    "Asia/Tehran": 1
+    "Asia/Tokyo": 1,
+    "Europe/Zurich": 1,
+    "Asia/Taipei": 1,
+    "Etc/GMT+3": 1,
+    "Asia/Tehran": 1,
+    "Asia/Ulaanbaatar": 1
   },
   "cumulativeByTimezone": [
     {
       "date": "2026-08-28",
-      "tz": "America/New_York",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 54
+    },
+    {
+      "date": "2026-08-28",
+      "tz": "America/Los_Angeles",
+      "newUsers": 11
+    },
+    {
+      "date": "2026-08-28",
+      "tz": "Europe/Berlin",
       "newUsers": 1
     },
     {
@@ -813,38 +829,8 @@
     },
     {
       "date": "2026-08-28",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 84
-    },
-    {
-      "date": "2026-08-28",
-      "tz": "Europe/Moscow",
+      "tz": "Australia/Sydney",
       "newUsers": 1
-    },
-    {
-      "date": "2026-08-28",
-      "tz": "Europe/Berlin",
-      "newUsers": 2
-    },
-    {
-      "date": "2026-08-28",
-      "tz": "America/Santiago",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-08-28",
-      "tz": "Europe/Zagreb",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-08-28",
-      "tz": "America/Los_Angeles",
-      "newUsers": 15
-    },
-    {
-      "date": "2026-08-28",
-      "tz": "Asia/Calcutta",
-      "newUsers": 2
     },
     {
       "date": "2026-08-28",
@@ -853,38 +839,48 @@
     },
     {
       "date": "2026-08-28",
-      "tz": "Europe/Oslo",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-08-28",
-      "tz": "Australia/Sydney",
+      "tz": "America/New_York",
       "newUsers": 1
     },
     {
       "date": "2026-08-28",
       "tz": "Asia/Shanghai",
-      "newUsers": 2
+      "newUsers": 1
+    },
+    {
+      "date": "2026-08-28",
+      "tz": "Europe/Oslo",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-08-29",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 24
+    },
+    {
+      "date": "2026-08-29",
+      "tz": "America/Santiago",
+      "newUsers": 1
     },
     {
       "date": "2026-08-29",
       "tz": "America/Los_Angeles",
-      "newUsers": 2
+      "newUsers": 3
     },
     {
       "date": "2026-08-29",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 9
+      "tz": "Asia/Shanghai",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-08-30",
+      "tz": "America/Los_Angeles",
+      "newUsers": 2
     },
     {
       "date": "2026-08-30",
       "tz": "Asia/Jerusalem",
-      "newUsers": 28
-    },
-    {
-      "date": "2026-08-31",
-      "tz": "America/Sao_Paulo",
-      "newUsers": 1
+      "newUsers": 35
     },
     {
       "date": "2026-08-31",
@@ -894,7 +890,7 @@
     {
       "date": "2026-08-31",
       "tz": "Asia/Calcutta",
-      "newUsers": 1
+      "newUsers": 3
     },
     {
       "date": "2026-08-31",
@@ -903,8 +899,13 @@
     },
     {
       "date": "2026-08-31",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 21
+      "tz": "Europe/Moscow",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-08-31",
+      "tz": "America/Sao_Paulo",
+      "newUsers": 1
     },
     {
       "date": "2026-08-31",
@@ -912,9 +913,19 @@
       "newUsers": 1
     },
     {
+      "date": "2026-08-31",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 27
+    },
+    {
+      "date": "2026-09-01",
+      "tz": "America/Los_Angeles",
+      "newUsers": 1
+    },
+    {
       "date": "2026-09-01",
       "tz": "Asia/Jerusalem",
-      "newUsers": 9
+      "newUsers": 10
     },
     {
       "date": "2026-09-01",
@@ -924,11 +935,6 @@
     {
       "date": "2026-09-01",
       "tz": "Europe/Kiev",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-09-01",
-      "tz": "America/Los_Angeles",
       "newUsers": 1
     },
     {
@@ -938,8 +944,8 @@
     },
     {
       "date": "2026-09-02",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 9
+      "tz": "America/Los_Angeles",
+      "newUsers": 1
     },
     {
       "date": "2026-09-02",
@@ -948,12 +954,12 @@
     },
     {
       "date": "2026-09-02",
-      "tz": "Asia/Shanghai",
-      "newUsers": 1
+      "tz": "Europe/Stockholm",
+      "newUsers": 2
     },
     {
       "date": "2026-09-02",
-      "tz": "America/Los_Angeles",
+      "tz": "Asia/Shanghai",
       "newUsers": 1
     },
     {
@@ -963,13 +969,13 @@
     },
     {
       "date": "2026-09-02",
-      "tz": "Europe/Stockholm",
-      "newUsers": 2
+      "tz": "Asia/Jerusalem",
+      "newUsers": 9
     },
     {
       "date": "2026-09-03",
       "tz": "Asia/Jerusalem",
-      "newUsers": 4
+      "newUsers": 5
     },
     {
       "date": "2026-09-03",
@@ -983,12 +989,12 @@
     },
     {
       "date": "2026-09-04",
-      "tz": "Europe/Athens",
+      "tz": "Europe/Lisbon",
       "newUsers": 1
     },
     {
       "date": "2026-09-04",
-      "tz": "Europe/Lisbon",
+      "tz": "Europe/Athens",
       "newUsers": 1
     },
     {
@@ -998,18 +1004,18 @@
     },
     {
       "date": "2026-09-06",
-      "tz": "Asia/Taipei",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-09-06",
       "tz": "Asia/Jerusalem",
       "newUsers": 6
     },
     {
+      "date": "2026-09-06",
+      "tz": "Asia/Taipei",
+      "newUsers": 1
+    },
+    {
       "date": "2026-09-07",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 5
+      "tz": "Europe/Prague",
+      "newUsers": 1
     },
     {
       "date": "2026-09-07",
@@ -1023,8 +1029,8 @@
     },
     {
       "date": "2026-09-07",
-      "tz": "Europe/Prague",
-      "newUsers": 1
+      "tz": "Asia/Jerusalem",
+      "newUsers": 5
     },
     {
       "date": "2026-09-08",
@@ -1053,27 +1059,27 @@
     },
     {
       "date": "2026-09-10",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 2
-    },
-    {
-      "date": "2026-09-10",
-      "tz": "Europe/Istanbul",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-09-10",
       "tz": "Europe/Tallinn",
       "newUsers": 1
     },
     {
       "date": "2026-09-10",
       "tz": "America/Los_Angeles",
-      "newUsers": 1
+      "newUsers": 2
+    },
+    {
+      "date": "2026-09-10",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 2
     },
     {
       "date": "2026-09-10",
       "tz": "America/New_York",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-09-10",
+      "tz": "Europe/Istanbul",
       "newUsers": 1
     },
     {
@@ -1083,7 +1089,7 @@
     },
     {
       "date": "2026-09-11",
-      "tz": "Europe/Vienna",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
@@ -1098,7 +1104,7 @@
     },
     {
       "date": "2026-09-11",
-      "tz": "Asia/Jerusalem",
+      "tz": "Europe/Vienna",
       "newUsers": 1
     },
     {
@@ -1123,23 +1129,23 @@
     },
     {
       "date": "2026-09-15",
+      "tz": "America/Los_Angeles",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-09-15",
       "tz": "Asia/Jerusalem",
       "newUsers": 7
     },
     {
-      "date": "2026-09-15",
-      "tz": "America/Los_Angeles",
+      "date": "2026-09-16",
+      "tz": "Europe/Madrid",
       "newUsers": 1
     },
     {
       "date": "2026-09-16",
       "tz": "Asia/Jerusalem",
       "newUsers": 2
-    },
-    {
-      "date": "2026-09-16",
-      "tz": "Europe/Madrid",
-      "newUsers": 1
     },
     {
       "date": "2026-09-17",
@@ -1158,13 +1164,13 @@
     },
     {
       "date": "2026-09-22",
-      "tz": "Europe/Amsterdam",
-      "newUsers": 1
+      "tz": "Asia/Jerusalem",
+      "newUsers": 3
     },
     {
       "date": "2026-09-22",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 3
+      "tz": "Europe/Amsterdam",
+      "newUsers": 1
     },
     {
       "date": "2026-09-23",
@@ -1178,7 +1184,7 @@
     },
     {
       "date": "2026-09-25",
-      "tz": "Europe/Prague",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
@@ -1193,7 +1199,7 @@
     },
     {
       "date": "2026-09-25",
-      "tz": "Asia/Jerusalem",
+      "tz": "Europe/Prague",
       "newUsers": 1
     },
     {
@@ -1203,12 +1209,12 @@
     },
     {
       "date": "2026-09-29",
-      "tz": "Asia/Baghdad",
+      "tz": "Africa/Tunis",
       "newUsers": 1
     },
     {
       "date": "2026-09-29",
-      "tz": "Africa/Tunis",
+      "tz": "Asia/Baghdad",
       "newUsers": 1
     },
     {
@@ -1232,6 +1238,11 @@
       "newUsers": 1
     },
     {
+      "date": "2026-10-03",
+      "tz": "Europe/Zagreb",
+      "newUsers": 1
+    },
+    {
       "date": "2026-10-04",
       "tz": "America/Buenos_Aires",
       "newUsers": 1
@@ -1243,12 +1254,12 @@
     },
     {
       "date": "2026-10-06",
-      "tz": "Europe/Warsaw",
+      "tz": "America/Los_Angeles",
       "newUsers": 1
     },
     {
       "date": "2026-10-06",
-      "tz": "America/Los_Angeles",
+      "tz": "Europe/Warsaw",
       "newUsers": 1
     },
     {
@@ -1293,8 +1304,8 @@
     },
     {
       "date": "2026-10-13",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 5
+      "tz": "Europe/Berlin",
+      "newUsers": 1
     },
     {
       "date": "2026-10-13",
@@ -1303,8 +1314,8 @@
     },
     {
       "date": "2026-10-13",
-      "tz": "Europe/Berlin",
-      "newUsers": 1
+      "tz": "Asia/Jerusalem",
+      "newUsers": 5
     },
     {
       "date": "2026-10-13",
@@ -1313,12 +1324,12 @@
     },
     {
       "date": "2026-10-14",
-      "tz": "Europe/London",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
       "date": "2026-10-14",
-      "tz": "Asia/Jerusalem",
+      "tz": "Europe/London",
       "newUsers": 1
     },
     {
@@ -1333,12 +1344,12 @@
     },
     {
       "date": "2026-10-16",
-      "tz": "Africa/Cairo",
+      "tz": "America/Sao_Paulo",
       "newUsers": 1
     },
     {
       "date": "2026-10-16",
-      "tz": "America/Sao_Paulo",
+      "tz": "Africa/Cairo",
       "newUsers": 1
     },
     {
@@ -1358,11 +1369,6 @@
     },
     {
       "date": "2026-10-20",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 3
-    },
-    {
-      "date": "2026-10-20",
       "tz": "America/Los_Angeles",
       "newUsers": 1
     },
@@ -1370,6 +1376,11 @@
       "date": "2026-10-20",
       "tz": "America/Grand_Turk",
       "newUsers": 1
+    },
+    {
+      "date": "2026-10-20",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 3
     },
     {
       "date": "2026-10-21",
@@ -1423,16 +1434,21 @@
     },
     {
       "date": "2026-10-28",
-      "tz": "Asia/Shanghai",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-10-28",
       "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
       "date": "2026-10-28",
+      "tz": "America/Los_Angeles",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-10-28",
+      "tz": "Asia/Shanghai",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-10-29",
       "tz": "America/Los_Angeles",
       "newUsers": 1
     },
@@ -1440,11 +1456,6 @@
       "date": "2026-10-29",
       "tz": "Asia/Jerusalem",
       "newUsers": 3
-    },
-    {
-      "date": "2026-10-29",
-      "tz": "America/Los_Angeles",
-      "newUsers": 1
     },
     {
       "date": "2026-10-30",
@@ -1478,17 +1489,22 @@
     },
     {
       "date": "2026-11-02",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 3
-    },
-    {
-      "date": "2026-11-02",
       "tz": "Asia/Shanghai",
       "newUsers": 4
     },
     {
       "date": "2026-11-02",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 3
+    },
+    {
+      "date": "2026-11-02",
       "tz": "America/Los_Angeles",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-11-03",
+      "tz": "Europe/Vienna",
       "newUsers": 1
     },
     {
@@ -1498,17 +1514,17 @@
     },
     {
       "date": "2026-11-03",
-      "tz": "Asia/Shanghai",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-11-03",
       "tz": "Etc/GMT-8",
       "newUsers": 1
     },
     {
       "date": "2026-11-03",
-      "tz": "Europe/Vienna",
+      "tz": "Asia/Shanghai",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-11-04",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
@@ -1527,19 +1543,14 @@
       "newUsers": 1
     },
     {
-      "date": "2026-11-04",
+      "date": "2026-11-05",
       "tz": "Asia/Jerusalem",
-      "newUsers": 1
+      "newUsers": 4
     },
     {
       "date": "2026-11-05",
       "tz": "Europe/Budapest",
       "newUsers": 1
-    },
-    {
-      "date": "2026-11-05",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 4
     },
     {
       "date": "2026-11-06",
@@ -1558,18 +1569,23 @@
     },
     {
       "date": "2026-11-08",
-      "tz": "Asia/Shanghai",
-      "newUsers": 2
+      "tz": "Asia/Jerusalem",
+      "newUsers": 1
     },
     {
       "date": "2026-11-08",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 1
+      "tz": "Asia/Shanghai",
+      "newUsers": 2
     },
     {
       "date": "2026-11-09",
       "tz": "Asia/Shanghai",
       "newUsers": 2
+    },
+    {
+      "date": "2026-11-09",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 1
     },
     {
       "date": "2026-11-09",
@@ -1577,19 +1593,14 @@
       "newUsers": 1
     },
     {
-      "date": "2026-11-09",
+      "date": "2026-11-10",
       "tz": "Asia/Jerusalem",
-      "newUsers": 1
+      "newUsers": 6
     },
     {
       "date": "2026-11-10",
       "tz": "Asia/Tokyo",
       "newUsers": 1
-    },
-    {
-      "date": "2026-11-10",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 6
     },
     {
       "date": "2026-11-11",
@@ -1608,12 +1619,12 @@
     },
     {
       "date": "2026-11-15",
-      "tz": "America/Mexico_City",
+      "tz": "Asia/Jerusalem",
       "newUsers": 1
     },
     {
       "date": "2026-11-15",
-      "tz": "Asia/Jerusalem",
+      "tz": "America/Mexico_City",
       "newUsers": 1
     },
     {
@@ -1668,18 +1679,18 @@
     },
     {
       "date": "2026-11-22",
-      "tz": "Asia/Jerusalem",
-      "newUsers": 3
-    },
-    {
-      "date": "2026-11-22",
       "tz": "Asia/Shanghai",
       "newUsers": 1
     },
     {
-      "date": "2026-11-23",
+      "date": "2026-11-22",
       "tz": "Asia/Jerusalem",
-      "newUsers": 4
+      "newUsers": 3
+    },
+    {
+      "date": "2026-11-23",
+      "tz": "Asia/Shanghai",
+      "newUsers": 1
     },
     {
       "date": "2026-11-23",
@@ -1688,13 +1699,8 @@
     },
     {
       "date": "2026-11-23",
-      "tz": "Asia/Shanghai",
-      "newUsers": 1
-    },
-    {
-      "date": "2026-11-25",
-      "tz": "Asia/Tehran",
-      "newUsers": 1
+      "tz": "Asia/Jerusalem",
+      "newUsers": 4
     },
     {
       "date": "2026-11-25",
@@ -1707,8 +1713,23 @@
       "newUsers": 2
     },
     {
+      "date": "2026-11-25",
+      "tz": "Asia/Tehran",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-11-26",
+      "tz": "Asia/Jerusalem",
+      "newUsers": 1
+    },
+    {
       "date": "2026-11-26",
       "tz": "Asia/Ulaanbaatar",
+      "newUsers": 1
+    },
+    {
+      "date": "2026-11-26",
+      "tz": "America/Hermosillo",
       "newUsers": 1
     }
   ]
